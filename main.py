@@ -182,7 +182,7 @@ async def passthrough(ctx):
 
     sink = StreamSink(user_sink, ctx, user, vc)
 
-    vc.listen(sink, ctx)
+    vc.listen(sink)
 
     # vc.play(discord.PCMAudio(stream))
     # vc.play(discord.FFmpegPCMAudio('test.wav'))
@@ -205,7 +205,8 @@ async def birthday(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    vc.play(discord.FFmpegPCMAudio(birthday_wave(text_to_wav(to_speak, ctx, 'birthday'))))
+    vc.play(discord.FFmpegPCMAudio(birthday_wave(
+                                     text_to_wav(to_speak, ctx, 'birthday_name'), ctx)))
 
 
 @bot.command()
@@ -283,11 +284,40 @@ async def on_testevent(ctx):
     await ctx.send('testevent triggered')
 
 
+@bot.event
+async def on_start_listen(ctx, listener):
+    while True:
+        print('starting to listen')
+        await listener.listen_for_keyword_loop(ctx, after=bot.dispatch)
+
+
+@bot.event
+async def on_finished_listen(ctx):
+    print('on_finished_listen')
+    #await ctx.disconnect()
+    await ctx.send(file=discord.File('soundclips\\temp\\test.wav'))
+
+
+@bot.event
+async def on_keyword_heard(ctx):
+    await ctx.send('keyword detected')
+
+
+@bot.event
+async def on_ready():
+    await bot.change_presence(activity=discord.Activity(name='rats lofi.',
+                                                        type=discord.ActivityType(2)))
+    print("Let's fucking go, bois.")
+
 def text_to_wav(text, ctx, label, speed=0):
-        soundclip = 'soundclips\\' + label + str(ctx.guild.id) + '.wav'
-        file = 'E:\\Documents\\Discord\\discord-listen\\' + soundclip
-        subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
-        return soundclip
+    soundclip = generate_id_path(label, ctx)
+    file = 'E:\\Documents\\Discord\\discord-jerma\\' + soundclip
+    subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
+    return soundclip
+
+
+def generate_id_path(label, ctx):
+    return 'soundclips\\temp\\' + label + str(ctx.guild.id) + '.wav'
 
 
 async def connect_to_user(ctx):
@@ -309,7 +339,7 @@ async def connect_to_user(ctx):
 def do_listen(ctx, vc):
     """Listen to users and execute commands as needed."""
     print('do_listen')
-    sink = discord.WaveSink('test.wav')
+    sink = discord.WaveSink('soundclips\\temp\\test.wav')
     user_sink = discord.UserFilter(sink, ctx.message.author)
     silence_sink = CustomTimedFilter(user_sink, 3)
     vc.listen(silence_sink, ctx)
@@ -327,43 +357,17 @@ def do_listen_keyword(ctx, vc):
     vc.listen(keyword_sink)
 
 
-@bot.event
-async def on_start_listen(ctx, listener):
-    while True:
-        print('starting to listen')
-        await listener.listen_for_keyword_loop(ctx, after=bot.dispatch)
-
-
-@bot.event
-async def on_finished_listen(ctx):
-    print('on_finished_listen')
-    #await ctx.disconnect()
-    await ctx.send(file=discord.File('test.wav'))
-
-
-@bot.event
-async def on_keyword_heard(ctx):
-    await ctx.send('keyword detected')
-
-
-@bot.event
-async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='rats lofi.',
-                                                        type=discord.ActivityType(2)))
-    print("Let's fucking go, bois.")
-
-
-def birthday_wave(name):
-    song = AudioSegment.from_wav('blank_birthday.wav')
+def birthday_wave(name, ctx):
+    song = AudioSegment.from_wav('soundclips\\blank_birthday.wav')
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
     for insert_time in insert_times:
     	song = song.overlay(name, position=insert_time)
 
-    song.export('soundclips\\birthday.wav')
-
-    return 'soundclips\\birthday.wav'
+    outpath = generate_id_path('birthday_name', ctx)
+    song.export(outpath)
+    return outpath
 
 
 class WaveSink(discord.AudioSink):
@@ -382,23 +386,6 @@ class WaveSink(discord.AudioSink):
             self._file.close()
         except:
             pass
-
-class SilenceFilter(discord.ConditionalFilter):
-    def __init__(self, destination, duration, *, start_on_init=False):
-        super().__init__(destination, self._predicate)
-        self.duration = duration   # seconds
-        self.timer = 0
-        self.threshold = 10  # heeh?
-        self.data_slice_length = .001  # ms?
-
-    def _predicate(self, data):
-        if self.timer > self.duration:
-            return False
-        elif get_amplitude(data) < self.threshold:
-            self.timer += self.data_slice_length
-        else:
-            self.timer = 0
-            return True
 
 
 class CustomTimedFilter(discord.ConditionalFilter):
@@ -496,8 +483,8 @@ class StreamSink(discord.AudioSink):
 
     def __init__(self, _sink, ctx, user, vc):
         #super().__init__(destination, self._predicate)
-        self.keyword_listener = LocalDecoder()
-        self.keyword_listener.start_streams(stream=self)
+        #self.keyword_listener = LocalDecoder()
+        #self.keyword_listener.start_streams(stream=self)
         self.ctx = ctx
         self.sink = bytearray()
         #self.stream = stream
@@ -519,7 +506,7 @@ class StreamSink(discord.AudioSink):
             #_sink.write(data)
             #print(len(data.data), len(new_data))
             #self.stream.write(data.data)
-            self.vc.send_audio_packet(new_data)
+            self.vc.send_audio_packet(data.data)
             #self.vc.send_audio_packet(self.testmorph(data.data))
             #stop = self.keyword_listener.listen_for_keyword(data.data)
 
