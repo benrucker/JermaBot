@@ -62,11 +62,6 @@ async def perish(ctx):
 
 
 @bot.command()
-async def sendfile(ctx):
-    await ctx.send(file=discord.File('test.png'))
-
-
-@bot.command()
 async def listen(ctx):
     vc = await connect_to_user(ctx)
     do_listen(ctx, vc)
