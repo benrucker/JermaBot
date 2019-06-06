@@ -1,0 +1,3 @@
+noice.mp3 1.500 3.3
+riprip.mp3 .050 1
+switch.mp3 .001 1.3
