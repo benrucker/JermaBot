@@ -4,8 +4,8 @@ from pocketsphinx.pocketsphinx import *
 from sphinxbase.sphinxbase import *
 import pyaudio
 
-modeldir = "E:\\Documents\\Discord\\discord-listen\\pocketsphinx\\model"
-datadir = "E:\\Documents\\Discord\\discord-listen\\pocketsphinx\\test\\data"
+modeldir = "E:\\Documents\\Discord\\discord-jerma\\pocketsphinx\\model"
+datadir = "E:\\Documents\\Discord\\discord-jerma\\pocketsphinx\\test\\data"
 
 
 class LocalDecoder():
