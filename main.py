@@ -11,9 +11,6 @@ from colorama import Fore as t
 from glob import glob
 from discord.ext import commands
 from discord.opus import Decoder
-import speech_recognition as sr
-from listen_local import LocalDecoder
-from pocketsphinx import LiveSpeech
 import subprocess
 from pydub import AudioSegment
 
