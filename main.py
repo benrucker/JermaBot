@@ -176,19 +176,18 @@ async def loopaudio(ctx, *args):
 
 @bot.command()
 async def play(ctx, sound):
-    # try:
-    vc = await connect_to_user(ctx)
-    current_sound = get_sound(sound)
-    # current_sound = ".\\sounds\\" + sound + '.wav'
-    print(current_sound)
-    #updateSource()
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
-    vc.play(source)
-    #source.volume = vol
-    print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
-    # except Exception as e:
-    #     print(type(e), e.message)
-    #     await ctx.send('That file doesn\'t exist, gamer.')
+    try:
+        vc = await connect_to_user(ctx)
+        current_sound = get_sound(sound)
+        if not current_sound:
+            raise IOError('Sound ' + current_sound + ' not found.')
+        print(current_sound)
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        vc.play(source)
+        print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
+    except IOError as e:
+        print(e)
+        await ctx.send('That file doesn\'t exist, gamer.')
 
 
 @bot.event
