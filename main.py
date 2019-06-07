@@ -176,17 +176,6 @@ async def loopaudio(ctx, *args):
 
 
 @bot.event
-async def on_testevent(ctx):
-    print('testevent event triggered')
-    await ctx.send('testevent triggered')
-
-
-@bot.event
-async def on_keyword_heard(ctx):
-    await ctx.send('keyword detected')
-
-
-@bot.event
 async def on_ready():
     await bot.change_presence(activity=discord.Activity(name='rats lofi.',
                                                         type=discord.ActivityType(2)))
