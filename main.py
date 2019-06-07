@@ -82,9 +82,9 @@ async def testsnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
     else:
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
 
 
 @bot.command()
@@ -111,9 +111,9 @@ async def jermasnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         await ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
     else:
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
 
 
 @bot.command()
@@ -180,14 +180,15 @@ async def play(ctx, sound):
         vc = await connect_to_user(ctx)
         current_sound = get_sound(sound)
         if not current_sound:
-            raise IOError('Sound ' + current_sound + ' not found.')
+            raise IOError('Sound ' + sound + ' not found.')
         print(current_sound)
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
         vc.play(source)
-        print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
+        print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
     except IOError as e:
         print(e)
-        await ctx.send('That file doesn\'t exist, gamer.')
+        await ctx.send('That sound doesn\'t exist, gamer. Try being a pro like me next time.')
+        raise JermaException('Invalid sound name.')
 
 
 @bot.event
@@ -214,7 +215,10 @@ def make_sounds_dict():
 
 def get_sound(sound):
     sounds = make_sounds_dict()
-    return os.path.join('sounds', sounds[sound])
+    try:
+        return os.path.join('sounds', sounds[sound])
+    except KeyError as e:
+        return None
 
 
 def get_soul_stone_channel(ctx):
@@ -272,7 +276,7 @@ async def connect_to_user(ctx):
 
 
 def birthday_wave(name, ctx):
-    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav')
+    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav'))
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
@@ -300,6 +304,10 @@ class LoopingSource(discord.AudioSource):
 
 
 class JermaException(BaseException):
+    """Use this exception to halt command processing if a different error is found.
+
+    Only use if the original error is gracefully handled and you need to stop
+    the rest of the command from processing. E.g. a file is not found."""
     pass
 
 
