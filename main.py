@@ -82,9 +82,9 @@ async def testsnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio('soundclips\\moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav'))
     else:
-        vc.play(discord.FFmpegPCMAudio('soundclips\\snaps\\up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3'))
 
 
 @bot.command()
@@ -111,16 +111,16 @@ async def jermasnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         await ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio('soundclips\\moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav'))
     else:
-        vc.play(discord.FFmpegPCMAudio('soundclips\\snaps\\up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3'))
 
 
 @bot.command()
 async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
-    vc.play(LoopingSource('soundclips\\birthdayloop.wav', loop_factory))
+    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), loop_factory))
 
 
 @bot.command()
@@ -176,18 +176,19 @@ async def loopaudio(ctx, *args):
 
 @bot.command()
 async def play(ctx, sound):
-    try:
-        vc = await connect_to_user(ctx)
-        current_sound = get_sound(sound)
-        # current_sound = ".\\sounds\\" + sound + '.wav'
-        print(current_sound)
-        #updateSource()
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
-        vc.play(source)
-        #source.volume = vol
-        print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
-    except:
-        await ctx.send('That file doesn\'t exist, gamer.')
+    # try:
+    vc = await connect_to_user(ctx)
+    current_sound = get_sound(sound)
+    # current_sound = ".\\sounds\\" + sound + '.wav'
+    print(current_sound)
+    #updateSource()
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+    vc.play(source)
+    #source.volume = vol
+    print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
+    # except Exception as e:
+    #     print(type(e), e.message)
+    #     await ctx.send('That file doesn\'t exist, gamer.')
 
 
 @bot.event
@@ -203,17 +204,18 @@ def loop_factory(filename):
 
 def make_sounds_dict():
     sounds = {}
-    print('Finding sounds in:', os.path.join(source_path, 'sounds'))
-    for filepath in glob(os.path.join(source_path, 'sounds', '*')):
-        filename = filepath.split('\\')[-1]
+    sound_folder = os.path.join(source_path, 'sounds')
+    print('Finding sounds in:', sound_folder)
+    for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
+        # should probably make it only .mp3 or .wav later
+        filename = os.path.basename(filepath)
         sounds[filename.split('.')[0]] = filename
     return sounds
 
 
 def get_sound(sound):
     sounds = make_sounds_dict()
-    print(sounds)
-    return 'sounds\\' + sounds[sound]
+    return os.path.join('sounds', sounds[sound])
 
 
 def get_soul_stone_channel(ctx):
@@ -232,12 +234,14 @@ def is_major(member):
 
 def get_snap_sound():
     sounds = []
-    with open('soundclips\\snaps\\sounds.txt', 'r', encoding='utf-8') as file:
+    snaps_folder = os.path.join('soundclips', 'snaps')
+    snaps_db = os.path.join(snaps_folder, 'sounds.txt')
+    with open(snaps_db, 'r', encoding='utf-8') as file:
         for sound in file.read().split('\n'):
             sounds.append(sound.split(' '))
     print(sounds)
     choice = random.choice(sounds)
-    choice[0] = 'soundclips\\snaps\\' + choice[0]
+    choice[0] = os.path.join(snaps_folder, choice[0])
     choice[1] = float(choice[1])
     choice[2] = float(choice[2])
     return choice
@@ -251,7 +255,7 @@ def text_to_wav(text, ctx, label, speed=0):
 
 
 def generate_id_path(label, ctx):
-    return 'soundclips\\temp\\' + label + str(ctx.guild.id) + '.wav'
+    return os.path.join('soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
 
 
 async def connect_to_user(ctx):
@@ -269,7 +273,7 @@ async def connect_to_user(ctx):
 
 
 def birthday_wave(name, ctx):
-    song = AudioSegment.from_wav('soundclips\\blank_birthday.wav')
+    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav')
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
