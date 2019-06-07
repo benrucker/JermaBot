@@ -8,6 +8,8 @@ from colorama import Fore as t
 from glob import glob
 from discord.ext import commands
 import subprocess
+from pydub import AudioSegment
+
 
 # TODO:
 #  - say something upon join
@@ -98,9 +100,6 @@ async def jermasnap(ctx):
     users.remove(ctx.me)
     snapees = random.sample(users, k=len(users) // 2)
 
-    vc = await connect_to_user(ctx)
-    soul_stone = get_soul_stone_channel(ctx)
-
     sound, delay, length = get_snap_sound()
     vc.play(discord.FFmpegPCMAudio(sound))
     time.sleep(delay)
@@ -175,15 +174,46 @@ async def loopaudio(ctx, *args):
     vc.play(LoopingSource(args, loop_factory))
 
 
+@bot.command()
+async def play(ctx, sound):
+    try:
+        vc = await connect_to_user(ctx)
+        current_sound = get_sound(sound)
+        # current_sound = ".\\sounds\\" + sound + '.wav'
+        print(current_sound)
+        #updateSource()
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        vc.play(source)
+        #source.volume = vol
+        print('Playing', currentSound, '| at volume:', source.volume, '| In:', ctx.guild)
+    except:
+        await ctx.send('That file doesn\'t exist, gamer.')
+
+
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='rats lofi.',
+    await bot.change_presence(activity=discord.Activity(name='birthday.wav',
                                                         type=discord.ActivityType(2)))
     print("Let's fucking go, bois.")
 
 
 def loop_factory(filename):
     return discord.FFmpegPCMAudio(filename)
+
+
+def make_sounds_dict():
+    sounds = {}
+    print('Finding sounds in:', os.path.join(source_path, 'sounds'))
+    for filepath in glob(os.path.join(source_path, 'sounds', '*')):
+        filename = filepath.split('\\')[-1]
+        sounds[filename.split('.')[0]] = filename
+    return sounds
+
+
+def get_sound(sound):
+    sounds = make_sounds_dict()
+    print(sounds)
+    return 'sounds\\' + sounds[sound]
 
 
 def get_soul_stone_channel(ctx):
@@ -215,7 +245,7 @@ def get_snap_sound():
 
 def text_to_wav(text, ctx, label, speed=0):
     soundclip = generate_id_path(label, ctx)
-    file = source_path + soundclip
+    file = os.path.join(source_path, soundclip)
     subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
     return soundclip
 
@@ -234,11 +264,8 @@ async def connect_to_user(ctx):
             await ctx.guild.voice_client.move_to(user_channel)
         return vc
     except:
-        #print('Caught ' + type(e) + ':', e.message)
-        #print('User was probably not in a channel or something.')
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
         raise JermaException("User was not in a voice channel or something.")
-
 
 
 def birthday_wave(name, ctx):
@@ -275,7 +302,8 @@ class JermaException(BaseException):
 
 if __name__ == '__main__':
     global source_path
-    source_path = os.path.dirname(os.path.abspath(__file__)) + '\\' # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
+    #print(make_sounds_dict())
     file = open('secret.txt')
     secret = file.read()
     file.close()
