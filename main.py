@@ -14,7 +14,7 @@ import subprocess
 
 colorama.init(autoreset=True)
 
-tts_path = 'C:\\Program Files (x86)\\eSpeak\\command_line\\voice.exe'
+tts_path = 'voice.exe'
 #source_path = None
 
 prefix = '$'
