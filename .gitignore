@@ -1,5 +1,6 @@
-# Temp files
+# Custom files
 soundclips/temp/
+secret.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -19,7 +19,6 @@ tts_path = 'C:\\Program Files (x86)\\eSpeak\\command_line\\voice.exe'
 
 prefix = '$'
 bot = commands.Bot(prefix)
-r = sr.Recognizer()
 
 
 @bot.event
@@ -323,6 +322,8 @@ def get_amplitude():
 
 if __name__ == '__main__':
     global source_path
-    source_path = os.path.dirname(os.path.abspath(__file__)) + '\\'# /a/b/c/d/e
-    #print(source_path)
-    bot.run('NTc5NDQ1ODMzOTM4NzYzODE2.XOCRFw.nRRo7WhDAPHYjtffNkHyFrH7zpY')
+    source_path = os.path.dirname(os.path.abspath(__file__)) + '\\' # /a/b/c/d/e
+    file = open('secret.txt')
+    secret = file.read()
+    file.close()
+    bot.run(secret)
