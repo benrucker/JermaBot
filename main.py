@@ -182,20 +182,6 @@ async def on_testevent(ctx):
 
 
 @bot.event
-async def on_start_listen(ctx, listener):
-    while True:
-        print('starting to listen')
-        await listener.listen_for_keyword_loop(ctx, after=bot.dispatch)
-
-
-@bot.event
-async def on_finished_listen(ctx):
-    print('on_finished_listen')
-    #await ctx.disconnect()
-    await ctx.send(file=discord.File('soundclips\\temp\\test.wav'))
-
-
-@bot.event
 async def on_keyword_heard(ctx):
     await ctx.send('keyword detected')
 
@@ -265,26 +251,6 @@ async def connect_to_user(ctx):
         raise JermaException("User was not in a voice channel or something.")
 
 
-def do_listen(ctx, vc):
-    """Listen to users and execute commands as needed."""
-    print('do_listen')
-    sink = discord.WaveSink('soundclips\\temp\\test.wav')
-    user_sink = discord.UserFilter(sink, ctx.message.author)
-    silence_sink = CustomTimedFilter(user_sink, 3)
-    vc.listen(silence_sink, ctx)
-    #sink.cleanup()
-    #print('done listening')
-    #await ctx.send(file='test.wav')
-
-
-def do_listen_keyword(ctx, vc):
-    """Listen to users and execute commands as needed."""
-    print('do_listen_keyword')
-    sink = discord.AudioSink()
-    user_sink = discord.UserFilter(sink, ctx.message.author)
-    keyword_sink = KeywordFilter(user_sink, ctx, ctx.message.author, vc)
-    vc.listen(keyword_sink)
-
 
 def birthday_wave(name, ctx):
     song = AudioSegment.from_wav('soundclips\\blank_birthday.wav')
@@ -317,8 +283,6 @@ class LoopingSource(discord.AudioSource):
 class JermaException(BaseException):
     pass
 
-def get_amplitude():
-    return 10
 
 if __name__ == '__main__':
     global source_path
