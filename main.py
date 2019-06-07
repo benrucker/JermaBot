@@ -1,6 +1,5 @@
 import sys
 import time
-import pyaudio
 import discord
 import random
 import os
