@@ -192,7 +192,7 @@ async def play(ctx, sound):
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='birthday.wav',
+    await bot.change_presence(activity=discord.Activity(name='Darude - Sandstorm',
                                                         type=discord.ActivityType(2)))
     print("Let's fucking go, bois.")
 
