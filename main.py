@@ -1,18 +1,14 @@
 import sys
 import time
 import pyaudio
-import wave
 import discord
-import audioop
 import random
 import os
 import colorama
 from colorama import Fore as t
 from glob import glob
 from discord.ext import commands
-from discord.opus import Decoder
 import subprocess
-from pydub import AudioSegment
 
 # TODO:
 #  - say something upon join
