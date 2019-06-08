@@ -147,7 +147,7 @@ async def adderall(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    vc.play(discord.FFmpegPCMAudio(text_to_wav(to_speak, ctx, 'adderall', speed=7)))
+    play_text(vc, to_speak, ctx, 'adderall', speed=7)
 
 
 @bot.command()
@@ -156,7 +156,7 @@ async def speak(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    vc.play(discord.FFmpegPCMAudio(text_to_wav(to_speak, ctx, 'speak')))
+    play_text(vc, to_speak, ctx, 'speak')
 
 
 @bot.command()
@@ -165,7 +165,7 @@ async def speakdrunk(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ''.join(args)
     vc = await connect_to_user(ctx)
-    vc.play(discord.FFmpegPCMAudio(text_to_wav(to_speak, ctx, 'speakdrunk', speed=-10)))
+    play_text(vc, to_speak, ctx, 'speakdrunk', speed=-10)
 
 
 @bot.command()
@@ -207,6 +207,11 @@ async def on_ready():
     #     await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
 
+
+def play_text(vc, to_speak, ctx, label, _speed=0):
+    # vc.play(discord.FFmpegPCMAudio(text_to_wav(to_speak, ctx, 'speakdrunk', speed=-10)))
+    sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
+    vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
 
 def stop_audio(vc):
     if vc.is_playing():
