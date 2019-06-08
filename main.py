@@ -8,6 +8,8 @@ from colorama import Fore as t
 from glob import glob
 from discord.ext import commands
 import subprocess
+from pydub import AudioSegment
+
 
 # TODO:
 #  - say something upon join
@@ -80,9 +82,9 @@ async def testsnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio('soundclips\\moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
     else:
-        vc.play(discord.FFmpegPCMAudio('soundclips\\snaps\\up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
 
 
 @bot.command()
@@ -98,9 +100,6 @@ async def jermasnap(ctx):
     users.remove(ctx.me)
     snapees = random.sample(users, k=len(users) // 2)
 
-    vc = await connect_to_user(ctx)
-    soul_stone = get_soul_stone_channel(ctx)
-
     sound, delay, length = get_snap_sound()
     vc.play(discord.FFmpegPCMAudio(sound))
     time.sleep(delay)
@@ -112,16 +111,16 @@ async def jermasnap(ctx):
     do_moonlight = random.random() < 0.25
     if do_moonlight:
         await ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio('soundclips\\moonlight.wav'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
     else:
-        vc.play(discord.FFmpegPCMAudio('soundclips\\snaps\\up in smoke.mp3'))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
 
 
 @bot.command()
 async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
-    vc.play(LoopingSource('soundclips\\birthdayloop.wav', loop_factory))
+    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), loop_factory))
 
 
 @bot.command()
@@ -175,15 +174,51 @@ async def loopaudio(ctx, *args):
     vc.play(LoopingSource(args, loop_factory))
 
 
+@bot.command()
+async def play(ctx, sound):
+    try:
+        vc = await connect_to_user(ctx)
+        current_sound = get_sound(sound)
+        if not current_sound:
+            raise IOError('Sound ' + sound + ' not found.')
+        print(current_sound)
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        vc.play(source)
+        print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
+    except IOError as e:
+        print(e)
+        await ctx.send('That sound doesn\'t exist, gamer. Try being a pro like me next time.')
+        raise JermaException('Invalid sound name.')
+
+
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='rats lofi.',
+    await bot.change_presence(activity=discord.Activity(name='Darude - Sandstorm',
                                                         type=discord.ActivityType(2)))
     print("Let's fucking go, bois.")
 
 
 def loop_factory(filename):
     return discord.FFmpegPCMAudio(filename)
+
+
+def make_sounds_dict():
+    sounds = {}
+    sound_folder = os.path.join(source_path, 'sounds')
+    print('Finding sounds in:', sound_folder)
+    for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
+        # should probably make it only .mp3 or .wav later
+        filename = os.path.basename(filepath)
+        sounds[filename.split('.')[0]] = filename
+    return sounds
+
+
+def get_sound(sound):
+    sounds = make_sounds_dict()
+    try:
+        return os.path.join('sounds', sounds[sound])
+    except KeyError as e:
+        return None
 
 
 def get_soul_stone_channel(ctx):
@@ -202,12 +237,14 @@ def is_major(member):
 
 def get_snap_sound():
     sounds = []
-    with open('soundclips\\snaps\\sounds.txt', 'r', encoding='utf-8') as file:
+    snaps_folder = os.path.join('soundclips', 'snaps')
+    snaps_db = os.path.join(snaps_folder, 'sounds.txt')
+    with open(snaps_db, 'r', encoding='utf-8') as file:
         for sound in file.read().split('\n'):
             sounds.append(sound.split(' '))
     print(sounds)
     choice = random.choice(sounds)
-    choice[0] = 'soundclips\\snaps\\' + choice[0]
+    choice[0] = os.path.join(snaps_folder, choice[0])
     choice[1] = float(choice[1])
     choice[2] = float(choice[2])
     return choice
@@ -215,13 +252,13 @@ def get_snap_sound():
 
 def text_to_wav(text, ctx, label, speed=0):
     soundclip = generate_id_path(label, ctx)
-    file = source_path + soundclip
+    file = os.path.join(source_path, soundclip)
     subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
     return soundclip
 
 
 def generate_id_path(label, ctx):
-    return 'soundclips\\temp\\' + label + str(ctx.guild.id) + '.wav'
+    return os.path.join('soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
 
 
 async def connect_to_user(ctx):
@@ -234,15 +271,12 @@ async def connect_to_user(ctx):
             await ctx.guild.voice_client.move_to(user_channel)
         return vc
     except:
-        #print('Caught ' + type(e) + ':', e.message)
-        #print('User was probably not in a channel or something.')
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
         raise JermaException("User was not in a voice channel or something.")
 
 
-
 def birthday_wave(name, ctx):
-    song = AudioSegment.from_wav('soundclips\\blank_birthday.wav')
+    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav'))
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
@@ -270,12 +304,17 @@ class LoopingSource(discord.AudioSource):
 
 
 class JermaException(BaseException):
+    """Use this exception to halt command processing if a different error is found.
+
+    Only use if the original error is gracefully handled and you need to stop
+    the rest of the command from processing. E.g. a file is not found."""
     pass
 
 
 if __name__ == '__main__':
     global source_path
-    source_path = os.path.dirname(os.path.abspath(__file__)) + '\\' # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
+    #print(make_sounds_dict())
     file = open('secret.txt')
     secret = file.read()
     file.close()
