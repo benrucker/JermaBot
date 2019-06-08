@@ -203,14 +203,15 @@ async def stop(ctx):
 async def on_ready():
     await bot.change_presence(activity=discord.Activity(name='my heart.',
                                                         type=discord.ActivityType(2)))
-    with open('avatar.png', 'rb') as file:
-        await bot.user.edit(avatar=file.read())
+    # with open('avatar.png', 'rb') as file:
+    #     await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
 
 
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
+        vc.send_audio_packet(b'0')
 
 
 def loop_factory(filename):
@@ -223,6 +224,9 @@ def make_sounds_dict():
     print('Finding sounds in:', sound_folder)
     for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
         filename = os.path.basename(filepath)
+        extension = filename.split('.')[1]
+        if extension not in ['.mp3', '.wav']:
+            continue
         sounds[filename.split('.')[0]] = filename
     return sounds
 
