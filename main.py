@@ -183,6 +183,7 @@ async def play(ctx, sound):
             raise IOError('Sound ' + sound + ' not found.')
         print(current_sound)
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        stop_audio(vc)
         vc.play(source)
         print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
     except IOError as e:
@@ -191,11 +192,25 @@ async def play(ctx, sound):
         raise JermaException('Invalid sound name.')
 
 
+@bot.command()
+async def stop(ctx):
+    """Stops any currently playing audio."""
+    vc = ctx.voice_client
+    stop_audio(vc)
+
+
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='Darude - Sandstorm',
+    await bot.change_presence(activity=discord.Activity(name='my heart.',
                                                         type=discord.ActivityType(2)))
+    with open('avatar.png', 'rb') as file:
+        await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
+
+
+def stop_audio(vc):
+    if vc.is_playing():
+        vc.stop()
 
 
 def loop_factory(filename):
@@ -207,7 +222,6 @@ def make_sounds_dict():
     sound_folder = os.path.join(source_path, 'sounds')
     print('Finding sounds in:', sound_folder)
     for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
-        # should probably make it only .mp3 or .wav later
         filename = os.path.basename(filepath)
         sounds[filename.split('.')[0]] = filename
     return sounds
@@ -263,12 +277,12 @@ def generate_id_path(label, ctx):
 
 async def connect_to_user(ctx):
     try:
-        vc = ctx.guild.voice_client
+        vc = ctx.voice_client
         user_channel = ctx.author.voice.channel
         if not vc:
             vc = await ctx.author.voice.channel.connect()
         elif not vc.channel == user_channel:
-            await ctx.guild.voice_client.move_to(user_channel)
+            await ctx.voice_client.move_to(user_channel)
         return vc
     except:
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
