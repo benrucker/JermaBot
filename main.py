@@ -183,6 +183,7 @@ async def play(ctx, sound):
             raise IOError('Sound ' + sound + ' not found.')
         print(current_sound)
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        stop_audio(vc)
         vc.play(source)
         print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
     except IOError as e:
