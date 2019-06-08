@@ -193,8 +193,10 @@ async def play(ctx, sound):
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='Darude - Sandstorm',
+    await bot.change_presence(activity=discord.Activity(name='my heart.',
                                                         type=discord.ActivityType(2)))
+    with open('avatar.png', 'rb') as file:
+        await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
 
 
