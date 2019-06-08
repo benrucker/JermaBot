@@ -225,7 +225,7 @@ def make_sounds_dict():
     for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
         filename = os.path.basename(filepath)
         extension = filename.split('.')[1]
-        if extension not in ['.mp3', '.wav']:
+        if extension not in ['mp3', 'wav']:
             continue
         sounds[filename.split('.')[0]] = filename
     return sounds
