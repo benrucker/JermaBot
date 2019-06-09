@@ -31,14 +31,14 @@ async def on_message(message):
 
     if message.content.startswith(prefix):
         print(f'{message.author.name} - {message.guild} #{message.channel}: {t.CYAN}{message.content}')
-    elif message.author == message.guild.me:
+    elif message.author == bot.user:
         print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
     try:
         await bot.process_commands(message)
     except JermaException as e:
         print('Caught JermaException: ' + str(e))
-    except AttributeError as _:
-        pass
+    #except AttributeError as _:
+    #    pass # ignore embed-only messages
     #except Exception as e:
     #    print(e)
 
@@ -59,7 +59,7 @@ async def perish(ctx):
 
 
 @bot.command()
-async def jermahelp(ctx): 
+async def jermahelp(ctx):
     help_files = [discord.File("avatar.png", filename="avatar.png"),
                   discord.File("thumbnail.png", filename="thumbnail.png")]
     await ctx.author.send(files=help_files, embed=helpEmbed)
