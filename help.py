@@ -1,5 +1,7 @@
 import discord
+from discord import Activity, ActivityType, Embed
 import os
+import random
 from glob import glob
 
 source_path = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +18,10 @@ def make_sounds_dict():
         sounds[filename.split('.')[0]] = filename
     return sounds
 
-helpEmbed=discord.Embed(title=" help | list of all useful commands", description="Fueling epic gamer moments since 2011", color=0x66c3cb)
+
+"""Embed information."""
+
+helpEmbed = Embed(title=" help | list of all useful commands", description="Fueling epic gamer moments since 2011", color=0x66c3cb)
 helpEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
 helpEmbed.set_thumbnail(url="attachment://thumbnail.png")
 helpEmbed.add_field(name="speak <words>", value="Jerma joins the channel and says what you input in the command using voice.exe .", inline=True)
@@ -31,12 +36,26 @@ helpEmbed.set_footer(text="Message @bebenebenebeb#9414 or @fops#1969 with any qu
 
 sounds = make_sounds_dict()
 
-soundEmbed = discord.Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
+soundEmbed = Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
 soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
 soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
-
-# for sound in sounds:
-#     soundEmbed.add_field(name='\u200b', value=sound, inline=True)
 soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
-
 soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
+
+
+"""Activity options."""
+
+activities = [(ActivityType.listening, 'my heart.'),
+              (ActivityType.listening, 'rats lofi'),
+              (ActivityType.listening, 'Shigurain.'),
+              (ActivityType.listening, 'to Kim!'),
+              (ActivityType.streaming, 'DARK SOULS 3'),
+              (ActivityType.streaming, 'Just Cause 4 for 3DS'),
+              (ActivityType.watching, 'chat make fun of me.'),
+              (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
+              (ActivityType.watching, 'the byeahs.'), # comma on last item is good
+              ]
+
+def get_rand_activity():
+    info = random.choice(activities)
+    return Activity(name=info[1], type=info[0])

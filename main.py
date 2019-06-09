@@ -10,7 +10,7 @@ from discord.ext import commands
 import subprocess
 from pydub import AudioSegment
 
-from help import helpEmbed, soundEmbed, make_sounds_dict
+from help import helpEmbed, soundEmbed, make_sounds_dict, get_rand_activity
 
 # TODO:
 #  - say something upon join
@@ -220,8 +220,9 @@ async def stop(ctx):
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Activity(name='my heart.',
-                                                        type=discord.ActivityType(2)))
+    #await bot.change_presence(activity=discord.Activity(name='my heart.',
+    #                                                    type=discord.ActivityType(2)))
+    await bot.change_presence(activity=get_rand_activity())
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
