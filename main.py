@@ -192,13 +192,15 @@ async def loopaudio(ctx, *args):
 
 
 @bot.command()
-async def play(ctx, sound):
+async def play(ctx, *args):
     try:
         vc = await connect_to_user(ctx)
+        sound = ' '.join(args)
         current_sound = get_sound(sound)
+
         if not current_sound:
             raise IOError('Sound ' + sound + ' not found.')
-        print(current_sound)
+
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
         stop_audio(vc)
         vc.play(source)
@@ -226,7 +228,6 @@ async def on_ready():
 
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
-    # vc.play(discord.FFmpegPCMAudio(text_to_wav(to_speak, ctx, 'speakdrunk', speed=-10)))
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
     vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
 
