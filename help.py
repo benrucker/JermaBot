@@ -2,7 +2,7 @@ import discord
 
 helpEmbed=discord.Embed(title=" help | list of all useful commands", description="Fueling epic gamer moments since 2011", color=0x66c3cb)
 helpEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
-#helpEmbed.set_thumbnail(url="attachment://thumbnail.png")
+helpEmbed.set_thumbnail(url="attachment://thumbnail.png")
 helpEmbed.add_field(name="speak <words>", value="Jerma joins the channel and says what you input in the command using voice.exe .", inline=True)
 helpEmbed.add_field(name="speakdrunk <stuff>", value="Same as speak but more like a streamer during a Labo build.", inline=True)
 helpEmbed.add_field(name="adderall <things>", value="Same as speak but more like a streamer during a bitcoin joke.", inline=True)
