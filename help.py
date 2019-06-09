@@ -7,7 +7,7 @@ source_path = os.path.dirname(os.path.abspath(__file__))
 def make_sounds_dict():
     sounds = {}
     sound_folder = os.path.join(source_path, 'sounds')
-    print('Finding sounds in:', sound_folder)
+    #print('Finding sounds in:', sound_folder)
     for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
         filename = os.path.basename(filepath)
         extension = filename.split('.')[1]
