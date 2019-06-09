@@ -10,8 +10,7 @@ from discord.ext import commands
 import subprocess
 from pydub import AudioSegment
 
-from help import helpEmbed
-
+from help import helpEmbed, soundEmbed, make_sounds_dict
 
 # TODO:
 #  - say something upon join
@@ -66,6 +65,12 @@ async def jermahelp(ctx):
     await ctx.author.send(files=help_files, embed=helpEmbed)
     await ctx.message.add_reaction("✉")
 
+@bot.command()
+async def list(ctx):
+    help_files = [discord.File("avatar.png", filename="avatar.png"),
+                  discord.File("thumbnail.png", filename="thumbnail.png")]
+    await ctx.author.send(files=help_files, embed=soundEmbed)
+    await ctx.message.add_reaction("✉")
 
 @bot.command()
 async def testsnap(ctx):
@@ -233,19 +238,6 @@ def stop_audio(vc):
 
 def loop_factory(filename):
     return discord.FFmpegPCMAudio(filename)
-
-
-def make_sounds_dict():
-    sounds = {}
-    sound_folder = os.path.join(source_path, 'sounds')
-    print('Finding sounds in:', sound_folder)
-    for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
-        filename = os.path.basename(filepath)
-        extension = filename.split('.')[1]
-        if extension not in ['mp3', 'wav']:
-            continue
-        sounds[filename.split('.')[0]] = filename
-    return sounds
 
 
 def get_sound(sound):
