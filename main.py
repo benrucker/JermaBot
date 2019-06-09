@@ -10,6 +10,8 @@ from discord.ext import commands
 import subprocess
 from pydub import AudioSegment
 
+from help import helpEmbed
+
 
 # TODO:
 #  - say something upon join
@@ -54,6 +56,14 @@ async def leave(ctx):
 async def perish(ctx):
     await bot.close()
 
+
+@bot.command()
+async def jermahelp(ctx): # when the thumbnail image is added the code can be replaced with the commented out code
+    help_files = discord.File("avatar.png", filename="avatar.png")
+    await ctx.author.send(file=help_files,embed=helpEmbed)
+    # help_files = [discord.File("avatar.png", filename="avatar.png"),discord.File("thumnail.png", filename="thumbnail.png")]
+    # await ctx.author.send(files=help_files,embed=helpEmbed)
+    await ctx.message.add_reaction("✉")
 
 @bot.command()
 async def testsnap(ctx):
@@ -231,7 +241,7 @@ def get_sound(sound):
     sounds = make_sounds_dict()
     try:
         return os.path.join('sounds', sounds[sound])
-    except KeyError as e:
+    except KeyError as _:
         return None
 
 
