@@ -16,6 +16,7 @@ All commands are prefixed with `$` by default.
 * `join` - Jerma joins the channel.
 * `leave` - Jerma leaves the channel.
 * `jermalofi` - Jerma joins the channel and plays some rats lofi.
+* `help` - Lists all commands available to users.
 
 
 ### WIP Commands
