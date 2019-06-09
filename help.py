@@ -35,7 +35,8 @@ soundEmbed = discord.Embed(title=" list | all of the sounds in Jerma's directory
 soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
 soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
 
-for sound in sounds:
-    soundEmbed.add_field(name=" ",value=sound,inline=True)
+# for sound in sounds:
+#     soundEmbed.add_field(name='\u200b', value=sound, inline=True)
+soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
 
 soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
