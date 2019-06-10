@@ -17,6 +17,7 @@ All commands are prefixed with `$` by default.
 * `leave` - Jerma leaves the channel.
 * `jermalofi` - Jerma joins the channel and plays some rats lofi.
 * `help` - Lists all commands available to users.
+* `stop` - Stops audio from playing, if any.
 
 
 ### WIP Commands
