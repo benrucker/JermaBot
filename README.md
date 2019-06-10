@@ -24,6 +24,5 @@ All commands are prefixed with `$` by default.
 These commands are not guaranteed to work.
 
 * `jermasnap` - Jerma joins the server and moves half the server to a different channel. 1/4 chance of Jerma following the snapped and playing bass boosted Moonlight to rub salt in the wound. Currently hard coded for a specific server, so it will not work on other servers.
-* `testsnap` - Same as above but doesn't move anyone.
 * `loopaudio <filepath>` - Plays an audio file forever. Send command `leave` to make it stop.
 * `speakfile <words>` - Uses tts to say the words and sends it in a file to the text channel.

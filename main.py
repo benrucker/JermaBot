@@ -82,38 +82,6 @@ async def _list(ctx):
 
 
 @bot.command()
-async def testsnap(ctx):
-    print('testjermasnap')
-    if not is_major(ctx.author):
-        return
-
-    vc = await connect_to_user(ctx)
-    soul_stone = get_soul_stone_channel(ctx)
-
-    users = ctx.author.voice.channel.members
-    users.remove(ctx.me)
-    snapees = random.sample(users, k=len(users) // 2)
-
-    vc = await connect_to_user(ctx)
-    soul_stone = get_soul_stone_channel(ctx)
-
-    sound, delay, length = get_snap_sound()
-    vc.play(discord.FFmpegPCMAudio(sound))
-    time.sleep(delay)
-
-    #for snapee in snapees:
-    #    await snapee.move_to(soul_stone)
-
-    time.sleep(length - delay)
-    do_moonlight = random.random() < 0.25
-    if do_moonlight:
-        ctx.guild.voice_client.move_to(soul_stone)
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
-    else:
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
-
-
-@bot.command()
 async def jermasnap(ctx):
     print('jermasnap')
     if not is_major(ctx.author):
