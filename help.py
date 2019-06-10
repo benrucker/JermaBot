@@ -48,7 +48,7 @@ soundEmbed.set_footer(text="Message your server owner to get custom sounds added
 activities = [(ActivityType.listening, 'my heart.'),
               (ActivityType.listening, 'rats lofi'),
               (ActivityType.listening, 'Shigurain.'),
-              (ActivityType.listening, 'to Kim!'),
+              (ActivityType.listening, 'Kim!'),
               (ActivityType.streaming, 'DARK SOULS 3'),
               (ActivityType.streaming, 'Just Cause 4 for 3DS'),
               (ActivityType.watching, 'chat make fun of me.'),
