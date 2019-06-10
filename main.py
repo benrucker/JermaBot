@@ -178,7 +178,7 @@ async def play(ctx, *args):
         if not current_sound:
             raise IOError('Sound ' + sound + ' not found.')
 
-        play_sound_file(ctx, current_sound, vc)
+        play_sound_file(current_sound, vc)
         # source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
         # stop_audio(vc)
         # vc.play(source)
@@ -206,11 +206,25 @@ async def on_ready():
     print("Let's fucking go, bois.")
 
 
-def play_sound_file(ctx, sound, vc):
+@bot.event
+async def on_voice_state_update(member, before, after):
+    # member (Member) – The member whose voice states changed.
+    # before (VoiceState) – The voice state prior to the changes.
+    # after (VoiceState) – The voice state after the changes.
+    if member.id is bot.user.id:
+        return
+
+    if after.channel and after.channel is not before.channel:
+        vc = await connect_to_channel(member.voice.channel)
+        play_sound_file(get_sound(member.name), vc)
+
+
+def play_sound_file(sound, vc):
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound))
     stop_audio(vc)
     vc.play(source)
-    print('Playing', sound, '| at volume:', source.volume, '| In:', ctx.guild)
+    print('Playing', sound, '| at volume:', source.volume, '| In:', vc.guild)
+
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
@@ -221,6 +235,8 @@ def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
         vc.play(discord.FFmpegPCMAudio('soundclips\\silence.wav'))
+        time.sleep(.07)
+        #asyncio.sleep(.051)
         #vc.send_audio_packet(1024*b'\x00')
 
 
@@ -288,6 +304,27 @@ async def connect_to_user(ctx):
     except:
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
         raise JermaException("User was not in a voice channel or something.")
+
+
+async def connect_to_channel(channel, vc=None):
+    if not channel:
+        raise AttributeError('channel cannot be None.')
+
+    if not vc:
+        vc = get_existing_voice_client(channel.guild)
+        if not vc:
+            vc = await channel.connect()
+
+    if vc.channel is not channel:
+        await vc.move_to(channel)
+
+    return vc
+
+
+def get_existing_voice_client(guild):
+    for vc in bot.voice_clients:
+        if vc.guild is guild:
+            return vc
 
 
 def birthday_wave(name, ctx):
