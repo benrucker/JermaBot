@@ -50,7 +50,14 @@ async def join(ctx):
 
 @bot.command()
 async def leave(ctx):
-    await ctx.guild.voice_client.disconnect()
+    if ctx.voice_client:
+        loc = os.path.join('soundclips', 'leave')
+        sounds = make_sounds_dict(loc)
+        soundname = random.choice(list(sounds.values()))
+        sound = os.path.join(loc, soundname)
+        play_sound_file(ctx, sound, ctx.voice_client)
+        time.sleep(1)
+        await ctx.guild.voice_client.disconnect()
 
 
 @bot.command()
@@ -65,12 +72,14 @@ async def jermahelp(ctx):
     await ctx.author.send(files=help_files, embed=helpEmbed)
     await ctx.message.add_reaction("✉")
 
-@bot.command()
-async def list(ctx):
+
+@bot.command(name='list')
+async def _list(ctx):
     help_files = [discord.File("avatar.png", filename="avatar.png"),
                   discord.File("thumbnail.png", filename="thumbnail.png")]
     await ctx.author.send(files=help_files, embed=soundEmbed)
     await ctx.message.add_reaction("✉")
+
 
 @bot.command()
 async def testsnap(ctx):
@@ -201,10 +210,11 @@ async def play(ctx, *args):
         if not current_sound:
             raise IOError('Sound ' + sound + ' not found.')
 
-        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
-        stop_audio(vc)
-        vc.play(source)
-        print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
+        play_sound_file(ctx, current_sound, vc)
+        # source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
+        # stop_audio(vc)
+        # vc.play(source)
+        # print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
     except IOError as e:
         print(e)
         await ctx.send('That sound doesn\'t exist, gamer. Try being a pro like me next time.')
@@ -228,6 +238,12 @@ async def on_ready():
     print("Let's fucking go, bois.")
 
 
+def play_sound_file(ctx, sound, vc):
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound))
+    stop_audio(vc)
+    vc.play(source)
+    print('Playing', sound, '| at volume:', source.volume, '| In:', ctx.guild)
+
 def play_text(vc, to_speak, ctx, label, _speed=0):
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
     vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
@@ -245,7 +261,7 @@ def loop_factory(filename):
 
 
 def get_sound(sound):
-    sounds = make_sounds_dict()
+    sounds = make_sounds_dict('sounds')
     try:
         return os.path.join('sounds', sounds[sound])
     except KeyError as _:
