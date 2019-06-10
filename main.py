@@ -215,7 +215,8 @@ async def on_voice_state_update(member, before, after):
         return
 
     if after.channel and after.channel is not before.channel:
-        vc = await connect_to_channel(member.voice.channel)
+        old_vc = get_existing_voice_client(member.guild)
+        vc = await connect_to_channel(member.voice.channel, old_vc)
         play_sound_file(get_sound(member.name), vc)
 
 
@@ -296,11 +297,12 @@ async def connect_to_user(ctx):
     try:
         vc = ctx.voice_client
         user_channel = ctx.author.voice.channel
-        if not vc:
-            vc = await ctx.author.voice.channel.connect()
-        elif not vc.channel == user_channel:
-            await ctx.voice_client.move_to(user_channel)
-        return vc
+        return await connect_to_channel(user_channel, vc)
+        # if not vc:
+        #     vc = await user_channel.connect()
+        # elif not vc.channel == user_channel:
+        #     await vc.move_to(user_channel)
+        # return vc
     except:
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
         raise JermaException("User was not in a voice channel or something.")
@@ -311,9 +313,7 @@ async def connect_to_channel(channel, vc=None):
         raise AttributeError('channel cannot be None.')
 
     if not vc:
-        vc = get_existing_voice_client(channel.guild)
-        if not vc:
-            vc = await channel.connect()
+        vc = await channel.connect()
 
     if vc.channel is not channel:
         await vc.move_to(channel)
