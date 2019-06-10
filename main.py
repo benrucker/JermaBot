@@ -3,6 +3,7 @@ import time
 import discord
 import random
 import os
+import logging
 import colorama
 from colorama import Fore as t
 from glob import glob
@@ -22,7 +23,6 @@ tts_path = 'voice.exe'
 
 prefix = '$'
 bot = commands.Bot(prefix)
-
 
 @bot.event
 async def on_message(message):
@@ -45,7 +45,7 @@ async def on_message(message):
 
 @bot.command()
 async def join(ctx):
-    vc = await connect_to_user(ctx)
+    _ = await connect_to_user(ctx)
 
 
 @bot.command()
@@ -232,10 +232,12 @@ def play_text(vc, to_speak, ctx, label, _speed=0):
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
     vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
 
+
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
-        vc.send_audio_packet(b'0')
+        vc.play(discord.FFmpegPCMAudio('soundclips\\silence.wav'))
+        #vc.send_audio_packet(1024*b'\x00')
 
 
 def loop_factory(filename):
@@ -344,7 +346,11 @@ if __name__ == '__main__':
     global source_path
     source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
     #print(make_sounds_dict())
+
+    #logging.basicConfig(level=logging.INFO)
+
     file = open('secret.txt')
     secret = file.read()
     file.close()
+
     bot.run(secret)
