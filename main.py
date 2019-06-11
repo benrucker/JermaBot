@@ -170,23 +170,15 @@ async def loopaudio(ctx, *args):
 
 @bot.command()
 async def play(ctx, *args):
-    try:
-        vc = await connect_to_user(ctx)
-        sound = ' '.join(args)
-        current_sound = get_sound(sound)
-
-        if not current_sound:
-            raise IOError('Sound ' + sound + ' not found.')
-
-        play_sound_file(current_sound, vc)
-        # source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(current_sound))
-        # stop_audio(vc)
-        # vc.play(source)
-        # print('Playing', current_sound, '| at volume:', source.volume, '| In:', ctx.guild)
-    except IOError as e:
-        print(e)
-        await ctx.send('That sound doesn\'t exist, gamer. Try being a pro like me next time.')
-        raise JermaException('Invalid sound name.')
+    if not args:
+        raise JermaException('No sound specified in play command.')
+    sound = ' '.join(args)
+    current_sound = get_sound(sound)
+    if not current_sound:
+        raise JermaException('Sound ' + sound + ' not found.')
+    
+    vc = await connect_to_user(ctx)
+    play_sound_file(current_sound, vc)
 
 
 @bot.command()
@@ -253,7 +245,7 @@ def get_sound(sound):
     sounds = make_sounds_dict('sounds')
     try:
         return os.path.join('sounds', sounds[sound.lower()])
-    except KeyError as _:
+    except KeyError:
         return None
 
 
