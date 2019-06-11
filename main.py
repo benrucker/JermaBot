@@ -208,6 +208,7 @@ async def on_ready():
 
 @bot.event
 async def on_voice_state_update(member, before, after):
+    """Play a join noise when a user joins a channel."""
     # member (Member) – The member whose voice states changed.
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
@@ -215,9 +216,12 @@ async def on_voice_state_update(member, before, after):
         return
 
     if after.channel and after.channel is not before.channel:
-        old_vc = get_existing_voice_client(member.guild)
-        vc = await connect_to_channel(member.voice.channel, old_vc)
-        play_sound_file(get_sound(member.name), vc)
+        join_sound = get_sound(member.name)
+        if join_sound:
+            print('Playing join sound for', member.name, 'in', member.guild)
+            old_vc = get_existing_voice_client(member.guild)
+            vc = await connect_to_channel(member.voice.channel, old_vc)
+            play_sound_file(join_sound, vc)
 
 
 def play_sound_file(sound, vc):
@@ -236,7 +240,7 @@ def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
         vc.play(discord.FFmpegPCMAudio('soundclips\\silence.wav'))
-        time.sleep(.07)
+        time.sleep(.065)
         #asyncio.sleep(.051)
         #vc.send_audio_packet(1024*b'\x00')
 
@@ -248,7 +252,7 @@ def loop_factory(filename):
 def get_sound(sound):
     sounds = make_sounds_dict('sounds')
     try:
-        return os.path.join('sounds', sounds[sound])
+        return os.path.join('sounds', sounds[sound.lower()])
     except KeyError as _:
         return None
 
