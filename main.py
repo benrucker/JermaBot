@@ -235,8 +235,6 @@ async def on_voice_state_update(member, before, after):
         c = t.CYAN
         print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
         await old_vc.disconnect()
-#    else:
-#        print(old_vc, old_vc.channel, old_vc.channel.members)
 
 
 def play_sound_file(sound, vc):
@@ -386,7 +384,7 @@ if __name__ == '__main__':
     global source_path
     source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
 
-    #logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
 
     file = open('secret.txt')
     secret = file.read()
