@@ -7,6 +7,7 @@ import os
 import logging
 import colorama
 from colorama import Fore as t
+from colorama import Back, Style
 from glob import glob
 from discord.ext import commands
 import subprocess
@@ -15,13 +16,10 @@ from guild_info import GuildInfo
 
 from help import helpEmbed, soundEmbed, make_sounds_dict, get_rand_activity
 
-# TODO:
-#  - say something upon join
 
-colorama.init(autoreset=True)
+colorama.init(autoreset=True) # set up colored console out
 
 tts_path = 'voice.exe'
-#source_path = None
 
 prefix = '$'
 bot = commands.Bot(prefix)
@@ -38,7 +36,7 @@ async def on_message(message):
     try:
         await bot.process_commands(message)
     except JermaException as e:
-        print('Caught JermaException: ' + str(e))
+        print(f'{t.RED}Caught JermaException: ' + str(e))
     #except AttributeError as _:
     #    pass # ignore embed-only messages
     #except Exception as e:
@@ -224,20 +222,28 @@ async def on_voice_state_update(member, before, after):
     if guilds[member.guild.id].is_snapping:
         return
 
-    if after.channel and after.channel is not before.channel:
+    old_vc = get_existing_voice_client(member.guild)
+
+    if after.channel and after.channel is not before.channel: # join sound
         join_sound = get_sound(member.name)
         if join_sound:
             print('Playing join sound for', member.name, 'in', member.guild)
-            old_vc = get_existing_voice_client(member.guild)
             vc = await connect_to_channel(member.voice.channel, old_vc)
             play_sound_file(join_sound, vc)
+    elif old_vc and len(old_vc.channel.members): # leave if server empty
+        y = t.YELLOW + Style.BRIGHT
+        c = t.CYAN
+        print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+        await old_vc.disconnect()
+#    else:
+#        print(old_vc, old_vc.channel, old_vc.channel.members)
 
 
 def play_sound_file(sound, vc):
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound))
     stop_audio(vc)
     vc.play(source)
-    print('Playing', sound, '| at volume:', source.volume, '| In:', vc.guild)
+    print(f'Playing {sound} | at volume: {source.volume} | in: {vc.guild}')
 
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
