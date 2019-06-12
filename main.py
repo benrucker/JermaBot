@@ -227,7 +227,6 @@ async def on_voice_state_update(member, before, after):
     if after.channel and after.channel is not before.channel: # join sound
         join_sound = get_sound(member.name)
         if join_sound:
-            print('Playing join sound for', member.name, 'in', member.guild)
             vc = await connect_to_channel(member.voice.channel, old_vc)
             play_sound_file(join_sound, vc)
     elif old_vc and len(old_vc.channel.members): # leave if server empty
@@ -238,10 +237,13 @@ async def on_voice_state_update(member, before, after):
 
 
 def play_sound_file(sound, vc):
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound))
+    op = '-guess_layout_max 0'
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
     stop_audio(vc)
     vc.play(source)
-    print(f'Playing {sound} | at volume: {source.volume} | in: {vc.guild}')
+
+    c = t.CYAN
+    print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
 
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
