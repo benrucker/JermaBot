@@ -231,7 +231,7 @@ async def on_voice_state_update(member, before, after):
             play_sound_file(join_sound, vc)
     elif old_vc and len(old_vc.channel.members): # leave if server empty
         y = t.YELLOW + Style.BRIGHT
-        c = t.CYAN
+        c = t.CYAN + Style.NORMAL
         print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
         await old_vc.disconnect()
 
