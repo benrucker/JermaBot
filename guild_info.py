@@ -7,4 +7,4 @@ class GuildInfo():
 
     def __init__(self, id):
         self.id = id
-        self.snapping = False
+        self.is_snapping = False

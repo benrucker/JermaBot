@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import time
 import discord
@@ -10,6 +11,7 @@ from glob import glob
 from discord.ext import commands
 import subprocess
 from pydub import AudioSegment
+from guild_info import GuildInfo
 
 from help import helpEmbed, soundEmbed, make_sounds_dict, get_rand_activity
 
@@ -55,7 +57,7 @@ async def leave(ctx):
         sounds = make_sounds_dict(loc)
         soundname = random.choice(list(sounds.values()))
         sound = os.path.join(loc, soundname)
-        play_sound_file(ctx, sound, ctx.voice_client)
+        play_sound_file(sound, ctx.voice_client)
         time.sleep(1)
         await ctx.guild.voice_client.disconnect()
 
@@ -94,6 +96,8 @@ async def jermasnap(ctx):
     users.remove(ctx.me)
     snapees = random.sample(users, k=len(users) // 2)
 
+    guilds[ctx.guild.id].is_snapping = True
+
     sound, delay, length = get_snap_sound()
     vc.play(discord.FFmpegPCMAudio(sound))
     time.sleep(delay)
@@ -106,8 +110,12 @@ async def jermasnap(ctx):
     if do_moonlight:
         await ctx.guild.voice_client.move_to(soul_stone)
         vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
+        await asyncio.sleep(1)
+        guilds[ctx.guild.id].is_snapping = False
     else:
         vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
+        await asyncio.sleep(1)
+        guilds[ctx.guild.id].is_snapping = False
 
 
 @bot.command()
@@ -176,7 +184,7 @@ async def play(ctx, *args):
     current_sound = get_sound(sound)
     if not current_sound:
         raise JermaException('Sound ' + sound + ' not found.')
-    
+
     vc = await connect_to_user(ctx)
     play_sound_file(current_sound, vc)
 
@@ -190,9 +198,15 @@ async def stop(ctx):
 
 @bot.event
 async def on_ready():
+    global guilds
     #await bot.change_presence(activity=discord.Activity(name='my heart.',
     #                                                    type=discord.ActivityType(2)))
     await bot.change_presence(activity=get_rand_activity())
+
+    guilds = dict()
+    for guild in bot.guilds:
+        guilds[guild.id] = GuildInfo(guild.id)
+
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read())
     print("Let's fucking go, bois.")
@@ -205,6 +219,9 @@ async def on_voice_state_update(member, before, after):
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
     if member.id is bot.user.id:
+        return
+
+    if guilds[member.guild.id].is_snapping:
         return
 
     if after.channel and after.channel is not before.channel:
@@ -362,7 +379,6 @@ class JermaException(BaseException):
 if __name__ == '__main__':
     global source_path
     source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
-    #print(make_sounds_dict())
 
     #logging.basicConfig(level=logging.INFO)
 
