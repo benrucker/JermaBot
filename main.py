@@ -228,6 +228,7 @@ async def on_voice_state_update(member, before, after):
         join_sound = get_sound(member.name)
         if join_sound:
             vc = await connect_to_channel(member.voice.channel, old_vc)
+            await asyncio.sleep(0.05)
             play_sound_file(join_sound, vc)
     elif old_vc and len(old_vc.channel.members): # leave if server empty
         y = t.YELLOW + Style.BRIGHT
@@ -236,25 +237,27 @@ async def on_voice_state_update(member, before, after):
         await old_vc.disconnect()
 
 
-def play_sound_file(sound, vc):
+def play_sound_file(sound, vc, output=True):
     op = '-guess_layout_max 0'
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
     stop_audio(vc)
     vc.play(source)
 
-    c = t.CYAN
-    print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
+    if output:
+        c = t.CYAN
+        print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
 
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
-    vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
+    #vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
+    play_sound_file(sound_file, vc)
 
 
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
-        vc.play(discord.FFmpegPCMAudio('soundclips\\silence.wav'))
+        play_sound_file('soundclips\\silence.wav', vc, output=False)
         time.sleep(.065)
         #asyncio.sleep(.051)
         #vc.send_audio_packet(1024*b'\x00')
