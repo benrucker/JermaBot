@@ -228,7 +228,7 @@ async def on_voice_state_update(member, before, after):
         join_sound = get_sound(member.name)
         if join_sound:
             vc = await connect_to_channel(member.voice.channel, old_vc)
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
             play_sound_file(join_sound, vc)
     elif old_vc and len(old_vc.channel.members): # leave if server empty
         y = t.YELLOW + Style.BRIGHT
