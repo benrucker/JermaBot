@@ -194,6 +194,14 @@ async def stop(ctx):
     stop_audio(vc)
 
 
+@bot.command()
+async def volume(ctx, vol: int):
+    vol = vol / 100
+    ginfo = guilds[ctx.guild.id]
+    ginfo.volume = vol
+    ctx.voice_client.source.volume = vol
+
+
 @bot.event
 async def on_ready():
     global guilds
@@ -230,16 +238,17 @@ async def on_voice_state_update(member, before, after):
             vc = await connect_to_channel(member.voice.channel, old_vc)
             await asyncio.sleep(0.1)
             play_sound_file(join_sound, vc)
-    elif old_vc and len(old_vc.channel.members): # leave if server empty
-        y = t.YELLOW + Style.BRIGHT
-        c = t.CYAN + Style.NORMAL
-        print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-        await old_vc.disconnect()
+    # elif old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
+    #     y = t.YELLOW + Style.BRIGHT
+    #     c = t.CYAN + Style.NORMAL
+    #     print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+    #     await old_vc.disconnect()
 
 
 def play_sound_file(sound, vc, output=True):
     op = '-guess_layout_max 0'
     source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
+    source.volume = guilds[vc.channel.guild.id].volume
     stop_audio(vc)
     vc.play(source)
 

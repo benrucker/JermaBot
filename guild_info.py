@@ -8,3 +8,4 @@ class GuildInfo():
     def __init__(self, id):
         self.id = id
         self.is_snapping = False
+        self.volume = .6
