@@ -198,8 +198,16 @@ async def stop(ctx):
 async def volume(ctx, vol: int):
     vol = vol / 100
     ginfo = guilds[ctx.guild.id]
+    old_vol = ginfo.volume
     ginfo.volume = vol
-    ctx.voice_client.source.volume = vol
+    if ctx.voice_client and ctx.voice_client.source: # short-circuit statement
+        ctx.voice_client.source.volume = vol
+
+    react = ctx.message.add_reaction
+    speakers = ['🔈','🔉','🔊']
+    await react('🔇' if vol is 0 else speakers[int(vol * len(speakers))])
+    await react('⬆' if vol > old_vol else '⬇')
+    await react('✅')
 
 
 @bot.event
