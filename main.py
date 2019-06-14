@@ -24,6 +24,7 @@ tts_path = 'voice.exe'
 prefix = '$'
 bot = commands.Bot(prefix)
 
+
 @bot.event
 async def on_message(message):
     if message.content.startswith('$$'):
@@ -50,7 +51,7 @@ async def join(ctx):
 
 @bot.command()
 async def leave(ctx):
-    if ctx.voice_client:
+    if ctx.voice_client and ctx.voice_client.is_connected():
         loc = os.path.join('soundclips', 'leave')
         sounds = make_sounds_dict(loc)
         soundname = random.choice(list(sounds.values()))
@@ -120,7 +121,8 @@ async def jermasnap(ctx):
 async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
-    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), loop_factory))
+    id = ctx.guild.id
+    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), loop_factory, id))
 
 
 @bot.command()
@@ -196,24 +198,22 @@ async def stop(ctx):
 
 @bot.command()
 async def volume(ctx, vol: int):
-    vol = vol / 100
+    fvol = vol / 100
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
-    ginfo.volume = vol
+    ginfo.volume = fvol
     if ctx.voice_client and ctx.voice_client.source: # short-circuit statement
-        ctx.voice_client.source.volume = vol
+        ctx.voice_client.source.volume = fvol
 
     react = ctx.message.add_reaction
-    speakers = ['🔈','🔉','🔊','🔊']
-    await react('🔇' if vol is 0 else speakers[int(vol * 3)])
-    await react('⬆' if vol > old_vol else '⬇')
+    speakers = ['🔈','🔉','🔊']
+    await react('🔇' if vol is 0 else speakers[min(int(fvol * len(speakers)), 2)])
+    await react('⬆' if fvol > old_vol else '⬇')
 
 
 @bot.event
 async def on_ready():
     global guilds
-    #await bot.change_presence(activity=discord.Activity(name='my heart.',
-    #                                                    type=discord.ActivityType(2)))
     await bot.change_presence(activity=get_rand_activity())
 
     guilds = dict()
@@ -221,7 +221,7 @@ async def on_ready():
         guilds[guild.id] = GuildInfo(guild.id)
 
     # with open('avatar.png', 'rb') as file:
-    #     await bot.user.edit(avatar=file.read())
+    #     await bot.user.edit(avatar=file.read()) # move to on_guild_add
     print("Let's fucking go, bois.")
 
 
@@ -266,7 +266,6 @@ def play_sound_file(sound, vc, output=True):
 
 def play_text(vc, to_speak, ctx, label, _speed=0):
     sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
-    #vc.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound_file)))
     play_sound_file(sound_file, vc)
 
 
@@ -275,12 +274,11 @@ def stop_audio(vc):
         vc.stop()
         play_sound_file('soundclips\\silence.wav', vc, output=False)
         time.sleep(.07)
-        #asyncio.sleep(.051)
-        #vc.send_audio_packet(1024*b'\x00')
 
 
 def loop_factory(filename):
-    return discord.FFmpegPCMAudio(filename)
+    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename,
+                                                before_options='-guess_layout_max 0'))
 
 
 def get_sound(sound):
@@ -379,16 +377,20 @@ def birthday_wave(name, ctx):
 
 
 class LoopingSource(discord.AudioSource):
-    def __init__(self, param, source_factory):
+    def __init__(self, param, source_factory, guild_id):
         self.factory = source_factory
         self.param = param
         self.source = source_factory(self.param)
+        self.source.volume = guilds[guild_id].volume
+        self.guild_id = guild_id
 
     def read(self):
+        self.source.volume = guilds[self.guild_id].volume
         ret = self.source.read()
         if not ret:
             self.source.cleanup()
             self.source = self.factory(self.param)
+            self.source.volume = guilds[self.guild_id].volume
             ret = self.source.read()
         return ret
 
