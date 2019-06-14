@@ -274,7 +274,7 @@ def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
         play_sound_file('soundclips\\silence.wav', vc, output=False)
-        time.sleep(.065)
+        time.sleep(.07)
         #asyncio.sleep(.051)
         #vc.send_audio_packet(1024*b'\x00')
 
