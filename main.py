@@ -149,7 +149,7 @@ async def adderall(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'adderall', speed=7)
+    play_text(vc, to_speak, ctx, 'adderall', _speed=7)
 
 
 @bot.command()
@@ -167,7 +167,7 @@ async def speakdrunk(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ''.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'speakdrunk', speed=-10)
+    play_text(vc, to_speak, ctx, 'speakdrunk', _speed=-10)
 
 
 @bot.command()
