@@ -31,7 +31,7 @@ async def on_message(message):
         return # protection against hackerbot commands
 
     if message.content.startswith(prefix):
-        print(f'{message.author.name} - {message.guild} #{message.channel}: {t.CYAN}{message.content}')
+        print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
     elif message.author == bot.user:
         print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
     try:
@@ -338,11 +338,6 @@ async def connect_to_user(ctx):
         vc = ctx.voice_client
         user_channel = ctx.author.voice.channel
         return await connect_to_channel(user_channel, vc)
-        # if not vc:
-        #     vc = await user_channel.connect()
-        # elif not vc.channel == user_channel:
-        #     await vc.move_to(user_channel)
-        # return vc
     except:
         await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
         raise JermaException("User was not in a voice channel or something.")
