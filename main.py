@@ -179,10 +179,13 @@ async def loopaudio(ctx, *args):
 @bot.command()
 async def play(ctx, *args):
     if not args:
+        await ctx.send('Gamer, you gotta tell me which sound to play.')
         raise JermaException('No sound specified in play command.')
+
     sound = ' '.join(args)
     current_sound = get_sound(sound)
     if not current_sound:
+        await ctx.send('Hey gamer, that sound doesn\'t exist.')
         raise JermaException('Sound ' + sound + ' not found.')
 
     vc = await connect_to_user(ctx)
@@ -277,7 +280,7 @@ def stop_audio(vc):
 
 def source_factory(filename):
     op = '-guess_layout_max 0'
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
+    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
 
 
 def get_sound(sound):
