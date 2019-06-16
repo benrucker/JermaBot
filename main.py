@@ -275,7 +275,9 @@ def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
         play_sound_file('soundclips\\silence.wav', vc, output=False)
-        time.sleep(.07)
+        #time.sleep(.07)
+        while vc.is_playing():
+            continue
 
 
 def source_factory(filename):
