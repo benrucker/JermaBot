@@ -122,7 +122,7 @@ async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
     id = ctx.guild.id
-    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), loop_factory, id))
+    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), source_factory, id))
 
 
 @bot.command()
@@ -173,7 +173,7 @@ async def speakdrunk(ctx, *args):
 @bot.command()
 async def loopaudio(ctx, *args):
     vc = await connect_to_user(ctx)
-    vc.play(LoopingSource(args, loop_factory))
+    vc.play(LoopingSource(args, source_factory))
 
 
 @bot.command()
@@ -253,8 +253,7 @@ async def on_voice_state_update(member, before, after):
 
 
 def play_sound_file(sound, vc, output=True):
-    op = '-guess_layout_max 0'
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
+    source = source_factory(sound)
     source.volume = guilds[vc.channel.guild.id].volume
     stop_audio(vc)
     vc.play(source)
@@ -276,9 +275,9 @@ def stop_audio(vc):
         time.sleep(.07)
 
 
-def loop_factory(filename):
-    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename,
-                                                before_options='-guess_layout_max 0'))
+def source_factory(filename):
+    op = '-guess_layout_max 0'
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
 
 
 def get_sound(sound):
