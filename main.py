@@ -221,7 +221,7 @@ async def on_ready():
 
     guilds = dict()
     for guild in bot.guilds:
-        guilds[guild.id] = GuildInfo(guild.id)
+        guilds[guild.id] = GuildInfo(guild)
 
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read()) # move to on_guild_add
