@@ -277,7 +277,7 @@ def stop_audio(vc):
 
 def source_factory(filename):
     op = '-guess_layout_max 0'
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(sound, before_options=op))
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
 
 
 def get_sound(sound):
@@ -348,7 +348,7 @@ async def connect_to_channel(channel, vc=None):
         raise AttributeError('channel cannot be None.')
 
     if not vc:
-        vc = await channel.connect()
+        vc = await channel.connect(reconnect=False)
 
     if vc.channel is not channel:
         await vc.move_to(channel)
