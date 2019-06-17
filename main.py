@@ -237,13 +237,15 @@ async def on_voice_state_update(member, before, after):
     # member (Member) – The member whose voice states changed.
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
+    old_vc = get_existing_voice_client(member.guild)
+
     if member.id is bot.user.id:
+        if not after.channel:
+            await old_vc.disconnect()
         return
 
     if guilds[member.guild.id].is_snapping:
         return
-
-    old_vc = get_existing_voice_client(member.guild)
 
     if after.channel and after.channel is not before.channel: # join sound
         join_sound = get_sound(member.name)
@@ -256,6 +258,7 @@ async def on_voice_state_update(member, before, after):
         c = t.CYAN + Style.NORMAL
         print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
         await old_vc.disconnect()
+
 
 
 def play_sound_file(sound, vc, output=True):
