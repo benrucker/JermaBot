@@ -10,3 +10,6 @@ class GuildInfo():
         self.id = guild.id
         self.is_snapping = False
         self.volume = .6
+
+    def __repr__(self):
+        return 'GuildInfo Object: ' + self.name + ':' + self.id
