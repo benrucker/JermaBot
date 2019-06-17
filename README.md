@@ -4,6 +4,10 @@ Introduce some real gamer moments to your Discord server. This bot is inspired b
 ## Setup
 Clone this repo then store your bot token in a file called `secret.txt` in the base directory. Custom files should be stored in `discord-jerma\sounds\`. Currently only works on Windows due to reliance on `voice.exe`. Commands that don't use `voice.exe` should work on other platforms (**not tested**).
 
+## Requirements:
+* ffmpeg to be on your system path.
+* discord.py version >= 1.0.0
+
 ## Commands
 All commands are prefixed with `$` by default.
 
@@ -18,6 +22,9 @@ All commands are prefixed with `$` by default.
 * `jermalofi` - Jerma joins the channel and plays some rats lofi.
 * `help` - Lists all commands available to users.
 * `stop` - Stops audio from playing, if any.
+* `jermahelp` - Sends a DM to the command caller detailing commands.
+* `list` - Lists the sounds available in the `play` command.
+* `volume` - Change the volume for sounds to be played at.
 
 
 ### WIP Commands
