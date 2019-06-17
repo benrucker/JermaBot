@@ -225,6 +225,9 @@ async def on_ready():
 
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read()) # move to on_guild_add
+    print(f'Logged into {str(len(guilds))} guilds:')
+    for guild in list(guilds.values()):
+        print(f'\t{guild.name}:{guild.id}')
     print("Let's fucking go, bois.")
 
 
