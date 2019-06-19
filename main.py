@@ -34,10 +34,8 @@ async def on_message(message):
         print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
     elif message.author == bot.user:
         print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
-    try:
-        await bot.process_commands(message)
-    except JermaException as e:
-        print(f'{t.RED}Caught JermaException: ' + str(e))
+
+    await bot.process_commands(message)
     #except AttributeError as _:
     #    pass # ignore embed-only messages
     #except Exception as e:
@@ -179,14 +177,14 @@ async def loopaudio(ctx, *args):
 @bot.command()
 async def play(ctx, *args):
     if not args:
-        await ctx.send('Gamer, you gotta tell me which sound to play.')
-        raise JermaException('No sound specified in play command.')
+        raise JermaException('No sound specified in play command.',
+                             'Gamer, you gotta tell me which sound to play.')
 
     sound = ' '.join(args)
     current_sound = get_sound(sound)
     if not current_sound:
-        await ctx.send('Hey gamer, that sound doesn\'t exist.')
-        raise JermaException('Sound ' + sound + ' not found.')
+        raise JermaException('Sound ' + sound + ' not found.',
+                             'Hey gamer, that sound doesn\'t exist.')
 
     vc = await connect_to_user(ctx)
     play_sound_file(current_sound, vc)
@@ -239,12 +237,12 @@ async def on_voice_state_update(member, before, after):
     # after (VoiceState) – The voice state after the changes.
     old_vc = get_existing_voice_client(member.guild)
 
-    if member.id is bot.user.id:
-        if not after.channel:
-            await old_vc.disconnect()
+    if guilds[member.guild.id].is_snapping:
         return
 
-    if guilds[member.guild.id].is_snapping:
+    if member.id is bot.user.id:
+        if old_vc and not after.channel:
+            await old_vc.disconnect()
         return
 
     if after.channel and after.channel is not before.channel: # join sound
@@ -253,12 +251,49 @@ async def on_voice_state_update(member, before, after):
             vc = await connect_to_channel(member.voice.channel, old_vc)
             await asyncio.sleep(0.1)
             play_sound_file(join_sound, vc)
-    elif old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
+        return
+
+    if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
         y = t.YELLOW + Style.BRIGHT
         c = t.CYAN + Style.NORMAL
         print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
         await old_vc.disconnect()
+        return
 
+
+@bot.event
+async def on_command_error(ctx, e):
+    if type(e) is commands.errors.CommandInvokeError:
+        e = e.original
+        if e.message:
+            await ctx.send(e.message)
+        else:
+            ben = get_ben()
+            mention = ben.mention + ' something went bonkers.'
+            await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
+        print(f'{t.RED}Caught JermaException: ' + str(e))
+    else:
+        raise e
+
+
+def is_valid_url(url):
+    raise NotImplementedError()
+
+
+def download_audio(url):
+    raise NotImplementedError()
+
+
+def is_sound_file(sound):
+    raise NotImplementedError()
+
+
+def add_sound_to_guild(sound, guild):
+    raise NotImplementedError()
+
+
+def get_ben():
+    return bot.get_user(bot.owner_id)
 
 
 def play_sound_file(sound, vc, output=True):
@@ -303,7 +338,7 @@ def get_soul_stone_channel(ctx):
     for channel in ctx.guild.voice_channels:
         if channel.id == 343939767068655616:
             return channel
-    raise BaseException('channel not found')
+    raise Exception('channel not found')
 
 
 def is_major(member):
@@ -345,8 +380,8 @@ async def connect_to_user(ctx):
         user_channel = ctx.author.voice.channel
         return await connect_to_channel(user_channel, vc)
     except:
-        await ctx.send("Hey gamer, you're not in a voice channel. Totally uncool.")
-        raise JermaException("User was not in a voice channel or something.")
+        raise JermaException('User was not in a voice channel or something.',
+                             msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
 
 
 async def connect_to_channel(channel, vc=None):
@@ -400,12 +435,19 @@ class LoopingSource(discord.AudioSource):
         return ret
 
 
-class JermaException(BaseException):
+class JermaException(Exception):
     """Use this exception to halt command processing if a different error is found.
 
     Only use if the original error is gracefully handled and you need to stop
-    the rest of the command from processing. E.g. a file is not found."""
-    pass
+    the rest of the command from processing. E.g. a file is not found or args
+    are invalid."""
+    def __init__(self, error, msg):
+        self.error = error
+        self.message = msg
+        #super.__init__(error)
+
+    def __str__(self):
+        return self.error
 
 
 if __name__ == '__main__':
