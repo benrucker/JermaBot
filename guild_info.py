@@ -1,4 +1,4 @@
-
+import os
 
 
 class GuildInfo():
@@ -10,6 +10,7 @@ class GuildInfo():
         self.id = guild.id
         self.is_snapping = False
         self.volume = .6
+        self.sound_folder = os.path.join('guilds', str(self.id), 'sounds')
 
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id

@@ -181,7 +181,7 @@ async def play(ctx, *args):
                              'Gamer, you gotta tell me which sound to play.')
 
     sound = ' '.join(args)
-    current_sound = get_sound(sound)
+    current_sound = get_sound(sound, ctx.guild)
     if not current_sound:
         raise JermaException('Sound ' + sound + ' not found.',
                              'Hey gamer, that sound doesn\'t exist.')
@@ -246,7 +246,7 @@ async def on_voice_state_update(member, before, after):
         return
 
     if after.channel and after.channel is not before.channel: # join sound
-        join_sound = get_sound(member.name)
+        join_sound = get_sound(member.name, member.guild)
         if join_sound:
             vc = await connect_to_channel(member.voice.channel, old_vc)
             await asyncio.sleep(0.1)
@@ -267,29 +267,43 @@ async def on_command_error(ctx, e):
         e = e.original
         if e.message:
             await ctx.send(e.message)
-        else:
-            ben = get_ben()
-            mention = ben.mention + ' something went bonkers.'
-            await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
+        #else:
+            #ben = get_ben()
+            #mention = ben.mention + ' something went bonkers.'
+            #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
         print(f'{t.RED}Caught JermaException: ' + str(e))
     else:
         raise e
 
 
-def is_valid_url(url):
-    raise NotImplementedError()
+def check_perms(user, action):
+    if action is 'addsound':
+        if is_major(user):
+            return
+        else:
+            raise JermaException('invalid permissions to do ' + addsound,
+                                 'You don\'t got permission to do that, pardner.')
+    else:
+        raise NotImplementedError()
 
 
-def download_audio(url):
-    raise NotImplementedError()
-
-
-def is_sound_file(sound):
-    raise NotImplementedError()
+def has_sound_file(message):
+    attachment = message.attachments[0]
+    return attachment.ends_with('.mp3') or attachment.ends_with('.wav')
 
 
 def add_sound_to_guild(sound, guild):
-    raise NotImplementedError()
+    folder = get_guild_sound_path(guild)
+    filename = sound.filename.lower()
+
+    path = os.path.join(folder, filename)
+
+    sound.save(path)
+
+
+def get_guild_sound_path(guild):
+    ginfo = guilds[guild.id]
+    return ginfo.sound_folder
 
 
 def get_ben():
@@ -326,10 +340,11 @@ def source_factory(filename):
     return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
 
 
-def get_sound(sound):
-    sounds = make_sounds_dict('sounds')
+def get_sound(sound, guild):
+    ginfo = guilds[guild.id]
+    sounds = make_sounds_dict(ginfo.sound_folder)
     try:
-        return os.path.join('sounds', sounds[sound.lower()])
+        return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
     except KeyError:
         return None
 
