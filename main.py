@@ -456,18 +456,17 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_command_error(ctx, e):
-    # if type(e) is commands.errors.CommandInvokeError:
-    #     e = e.original
-    #     if hasattr(e, 'message'):
-    #         await ctx.send(e.message)
-    #     #else:
-    #         #ben = get_ben()
-    #         #mention = ben.mention + ' something went bonkers.'
-    #         #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
-    #     print(f'{t.RED}Caught JermaException: ' + str(e))
-    # else:
-    #     raise e
-    raise e
+    if type(e) is commands.errors.CommandInvokeError:
+        e = e.original
+        if type(e) is JermaException:
+            print(f'{t.RED}Caught JermaException: ' + str(e))
+            await ctx.send(e.message)
+        #else:
+            #ben = get_ben()
+            #mention = ben.mention + ' something went bonkers.'
+            #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
+    else:
+        raise e
 
 
 class LoopingSource(discord.AudioSource):
