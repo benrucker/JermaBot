@@ -360,18 +360,12 @@ async def play(ctx, *args):
 @bot.command()
 @commands.check(is_major)
 async def addsound(ctx):
-
-    #check_perms(ctx.author, 'addsound')
-
     await ctx.send('Alright gamer, send the new sound.')
 
     def check(message):
         return message.author is ctx.author and has_sound_file(message)
 
-    message = await bot.wait_for('message', timeout=10, check=check)
-
-    #if not has_sound_file(ctx.message):
-    #    raise JermaException('Not sound file.')
+    message = await bot.wait_for('message', timeout=20, check=check)
 
     await add_sound_to_guild(message.attachments[0], ctx.guild)
     await ctx.send('Sound added, gamer.')
