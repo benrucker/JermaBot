@@ -105,11 +105,9 @@ def get_soul_stone_channel(ctx):
     raise Exception('channel not found')
 
 
-def is_major(ctx):
-    return is_major(ctx.author)
-
-
 def is_major(member):
+    if type(member) is commands.Context:
+        member = member.author
     for role in member.roles:
         if role.id == 374095810868019200:
             return True
@@ -347,6 +345,26 @@ async def play(ctx, *args):
 
     vc = await connect_to_user(ctx)
     play_sound_file(current_sound, vc)
+
+
+@bot.command()
+@commands.check(is_major)
+async def addsound(ctx):
+
+    #check_perms(ctx.author, 'addsound')
+
+    await ctx.send('Alright gamer, send the new sound.')
+
+    def check(message):
+        return message.author is ctx.author and has_sound_file(message)
+
+    message = await bot.wait_for('message', timeout=10, check=check)
+
+    #if not has_sound_file(ctx.message):
+    #    raise JermaException('Not sound file.')
+
+    await add_sound_to_guild(message.attachments[0], ctx.guild)
+    await ctx.send('Sound added, gamer.')
 
 
 @bot.command()
