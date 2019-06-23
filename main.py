@@ -98,6 +98,11 @@ def get_sound(sound, guild):
         return None
 
 
+def delete_sound(sound, guild):
+    path = guilds[guild.id].sound_folder
+    os.remove(sound)
+
+
 def get_soul_stone_channel(ctx):
     for channel in ctx.guild.voice_channels:
         if channel.id == 343939767068655616:
@@ -366,6 +371,17 @@ async def addsound(ctx):
     await add_sound_to_guild(message.attachments[0], ctx.guild)
     await ctx.send('Sound added, gamer.')
 
+
+@bot.command()
+async def remove(ctx, *args):
+    if not args:
+        raise JermaException('No sound specified in play command.',
+                             'Gamer, you gotta tell me which sound to remove.')
+
+    sound_name = ' '.join(args)
+    sound = get_sound(sound_name, ctx.guild)
+    if sound:
+        delete_sound(sound, ctx.guild)
 
 @bot.command()
 async def stop(ctx):
