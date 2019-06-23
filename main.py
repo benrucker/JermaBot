@@ -14,7 +14,7 @@ import subprocess
 from pydub import AudioSegment
 from guild_info import GuildInfo
 
-from help import helpEmbed, soundEmbed, make_sounds_dict, get_rand_activity
+from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 
 colorama.init(autoreset=True) # set up colored console out
@@ -242,7 +242,8 @@ async def jermahelp(ctx):
 async def _list(ctx):
     help_files = [discord.File("avatar.png", filename="avatar.png"),
                   discord.File("thumbnail.png", filename="thumbnail.png")]
-    await ctx.author.send(files=help_files, embed=soundEmbed)
+    ginfo = guilds[ctx.guild.id]
+    await ctx.author.send(files=help_files, embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
 
 

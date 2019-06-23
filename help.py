@@ -34,13 +34,17 @@ helpEmbed.add_field(name="leave", value="Jerma leaves the channel.", inline=True
 helpEmbed.add_field(name="jermalofi", value="Jerma joins the channel and plays some rats lofi.", inline=True)
 helpEmbed.set_footer(text="Message @bebenebenebeb#9414 or @fops#1969 with any questions")
 
-sounds = make_sounds_dict('sounds\\')
 
-soundEmbed = Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
-soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
-soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
-soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
-soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
+def get_list_embed(guild_info):
+    sounds = make_sounds_dict(guild_info.sound_folder)
+
+    soundEmbed = Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
+    soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
+    soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
+    soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
+    soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
+
+    return soundEmbed
 
 
 """Activity options."""
