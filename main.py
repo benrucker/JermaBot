@@ -103,6 +103,10 @@ def delete_sound(sound, guild):
     os.remove(sound)
 
 
+def rename_file(old_filepath, new_filepath):
+    os.rename(old_filepath, new_filepath)
+
+
 def get_soul_stone_channel(ctx):
     for channel in ctx.guild.voice_channels:
         if channel.id == 343939767068655616:
@@ -382,6 +386,22 @@ async def remove(ctx, *args):
     sound = get_sound(sound_name, ctx.guild)
     if sound:
         delete_sound(sound, ctx.guild)
+
+
+@commands.check(is_major)
+@bot.command()
+async def rename(ctx, *args):
+    if not args:
+        raise JermaException('No sound specified in play command.',
+                             'Gamer, you gotta tell me which sound to rename.')
+
+    old, new = ' '.join(args).split(', ')
+
+    old_filename = get_sound(old, ctx.guild)
+    if old_filename:
+        new_filename = old_filename[:33] + new + old_filename[-4:]
+        rename_file(old_filename, new_filename)
+
 
 @bot.command()
 async def stop(ctx):
