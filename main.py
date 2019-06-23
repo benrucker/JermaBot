@@ -25,6 +25,165 @@ prefix = '$'
 bot = commands.Bot(prefix)
 
 
+def check_perms(user, action):
+    if action is 'addsound':
+        if is_major(user):
+            return
+        else:
+            raise JermaException('invalid permissions to do ' + addsound,
+                                 'You don\'t got permission to do that, pardner.')
+    else:
+        raise NotImplementedError()
+
+
+def has_sound_file(message):
+    attachment = message.attachments[0]
+    return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
+
+
+async def add_sound_to_guild(sound, guild):
+    folder = get_guild_sound_path(guild)
+    filename = sound.filename.lower()
+
+    path = os.path.join(folder, filename)
+
+    await sound.save(path)
+
+
+def get_guild_sound_path(guild):
+    ginfo = guilds[guild.id]
+    return ginfo.sound_folder
+
+
+def get_ben():
+    return bot.get_user(bot.owner_id)
+
+
+def play_sound_file(sound, vc, output=True):
+    source = source_factory(sound)
+    source.volume = guilds[vc.channel.guild.id].volume
+    stop_audio(vc)
+    vc.play(source)
+
+    if output:
+        c = t.CYAN
+        print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
+
+
+def play_text(vc, to_speak, ctx, label, _speed=0):
+    sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
+    play_sound_file(sound_file, vc)
+
+
+def stop_audio(vc):
+    if vc.is_playing():
+        vc.stop()
+        play_sound_file('soundclips\\silence.wav', vc, output=False)
+        #time.sleep(.07)
+        while vc.is_playing():
+            continue
+
+
+def source_factory(filename):
+    op = '-guess_layout_max 0'
+    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
+
+
+def get_sound(sound, guild):
+    ginfo = guilds[guild.id]
+    sounds = make_sounds_dict(ginfo.sound_folder)
+    try:
+        return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
+    except KeyError:
+        return None
+
+
+def get_soul_stone_channel(ctx):
+    for channel in ctx.guild.voice_channels:
+        if channel.id == 343939767068655616:
+            return channel
+    raise Exception('channel not found')
+
+
+def is_major(ctx):
+    return is_major(ctx.author)
+
+
+def is_major(member):
+    for role in member.roles:
+        if role.id == 374095810868019200:
+            return True
+    return False
+
+
+def get_snap_sound():
+    sounds = []
+    snaps_folder = os.path.join('soundclips', 'snaps')
+    snaps_db = os.path.join(snaps_folder, 'sounds.txt')
+    with open(snaps_db, 'r', encoding='utf-8') as file:
+        for sound in file.read().split('\n'):
+            sounds.append(sound.split(' '))
+    print(sounds)
+    choice = random.choice(sounds)
+    choice[0] = os.path.join(snaps_folder, choice[0])
+    choice[1] = float(choice[1])
+    choice[2] = float(choice[2])
+    return choice
+
+
+def text_to_wav(text, ctx, label, speed=0):
+    soundclip = generate_id_path(label, ctx)
+    file = os.path.join(source_path, soundclip)
+    subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
+    return soundclip
+
+
+def generate_id_path(label, ctx):
+    return os.path.join('soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
+
+
+async def connect_to_user(ctx):
+    try:
+        vc = ctx.voice_client
+        user_channel = ctx.author.voice.channel
+        return await connect_to_channel(user_channel, vc)
+    except:
+        raise JermaException('User was not in a voice channel or something.',
+                             msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
+
+
+async def connect_to_channel(channel, vc=None):
+    if not channel:
+        raise AttributeError('channel cannot be None.')
+
+    if not vc:
+        vc = await channel.connect(reconnect=False)
+
+    if vc.channel is not channel:
+        await vc.move_to(channel)
+
+    return vc
+
+
+def get_existing_voice_client(guild):
+    for vc in bot.voice_clients:
+        if vc.guild is guild:
+            return vc
+
+
+def birthday_wave(name, ctx):
+    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav'))
+    name = AudioSegment.from_wav(name)
+    insert_times = [7.95 * 1000, 12.1 * 1000]
+
+    for insert_time in insert_times:
+    	song = song.overlay(name, position=insert_time)
+
+    outpath = generate_id_path('birthday_name', ctx)
+    song.export(outpath)
+    return outpath
+
+
 @bot.event
 async def on_message(message):
     if message.content.startswith('$$'):
@@ -263,172 +422,18 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_command_error(ctx, e):
-    if type(e) is commands.errors.CommandInvokeError:
-        e = e.original
-        if e.message:
-            await ctx.send(e.message)
-        #else:
-            #ben = get_ben()
-            #mention = ben.mention + ' something went bonkers.'
-            #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
-        print(f'{t.RED}Caught JermaException: ' + str(e))
-    else:
-        raise e
-
-
-def check_perms(user, action):
-    if action is 'addsound':
-        if is_major(user):
-            return
-        else:
-            raise JermaException('invalid permissions to do ' + addsound,
-                                 'You don\'t got permission to do that, pardner.')
-    else:
-        raise NotImplementedError()
-
-
-def has_sound_file(message):
-    attachment = message.attachments[0]
-    return attachment.ends_with('.mp3') or attachment.ends_with('.wav')
-
-
-def add_sound_to_guild(sound, guild):
-    folder = get_guild_sound_path(guild)
-    filename = sound.filename.lower()
-
-    path = os.path.join(folder, filename)
-
-    sound.save(path)
-
-
-def get_guild_sound_path(guild):
-    ginfo = guilds[guild.id]
-    return ginfo.sound_folder
-
-
-def get_ben():
-    return bot.get_user(bot.owner_id)
-
-
-def play_sound_file(sound, vc, output=True):
-    source = source_factory(sound)
-    source.volume = guilds[vc.channel.guild.id].volume
-    stop_audio(vc)
-    vc.play(source)
-
-    if output:
-        c = t.CYAN
-        print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
-
-
-def play_text(vc, to_speak, ctx, label, _speed=0):
-    sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
-    play_sound_file(sound_file, vc)
-
-
-def stop_audio(vc):
-    if vc.is_playing():
-        vc.stop()
-        play_sound_file('soundclips\\silence.wav', vc, output=False)
-        #time.sleep(.07)
-        while vc.is_playing():
-            continue
-
-
-def source_factory(filename):
-    op = '-guess_layout_max 0'
-    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
-
-
-def get_sound(sound, guild):
-    ginfo = guilds[guild.id]
-    sounds = make_sounds_dict(ginfo.sound_folder)
-    try:
-        return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
-    except KeyError:
-        return None
-
-
-def get_soul_stone_channel(ctx):
-    for channel in ctx.guild.voice_channels:
-        if channel.id == 343939767068655616:
-            return channel
-    raise Exception('channel not found')
-
-
-def is_major(member):
-    for role in member.roles:
-        if role.id == 374095810868019200:
-            return True
-    return False
-
-
-def get_snap_sound():
-    sounds = []
-    snaps_folder = os.path.join('soundclips', 'snaps')
-    snaps_db = os.path.join(snaps_folder, 'sounds.txt')
-    with open(snaps_db, 'r', encoding='utf-8') as file:
-        for sound in file.read().split('\n'):
-            sounds.append(sound.split(' '))
-    print(sounds)
-    choice = random.choice(sounds)
-    choice[0] = os.path.join(snaps_folder, choice[0])
-    choice[1] = float(choice[1])
-    choice[2] = float(choice[2])
-    return choice
-
-
-def text_to_wav(text, ctx, label, speed=0):
-    soundclip = generate_id_path(label, ctx)
-    file = os.path.join(source_path, soundclip)
-    subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
-    return soundclip
-
-
-def generate_id_path(label, ctx):
-    return os.path.join('soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
-
-
-async def connect_to_user(ctx):
-    try:
-        vc = ctx.voice_client
-        user_channel = ctx.author.voice.channel
-        return await connect_to_channel(user_channel, vc)
-    except:
-        raise JermaException('User was not in a voice channel or something.',
-                             msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
-
-
-async def connect_to_channel(channel, vc=None):
-    if not channel:
-        raise AttributeError('channel cannot be None.')
-
-    if not vc:
-        vc = await channel.connect(reconnect=False)
-
-    if vc.channel is not channel:
-        await vc.move_to(channel)
-
-    return vc
-
-
-def get_existing_voice_client(guild):
-    for vc in bot.voice_clients:
-        if vc.guild is guild:
-            return vc
-
-
-def birthday_wave(name, ctx):
-    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav'))
-    name = AudioSegment.from_wav(name)
-    insert_times = [7.95 * 1000, 12.1 * 1000]
-
-    for insert_time in insert_times:
-    	song = song.overlay(name, position=insert_time)
-
-    outpath = generate_id_path('birthday_name', ctx)
-    song.export(outpath)
-    return outpath
+    # if type(e) is commands.errors.CommandInvokeError:
+    #     e = e.original
+    #     if hasattr(e, 'message'):
+    #         await ctx.send(e.message)
+    #     #else:
+    #         #ben = get_ben()
+    #         #mention = ben.mention + ' something went bonkers.'
+    #         #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
+    #     print(f'{t.RED}Caught JermaException: ' + str(e))
+    # else:
+    #     raise e
+    raise e
 
 
 class LoopingSource(discord.AudioSource):
