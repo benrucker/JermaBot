@@ -385,8 +385,13 @@ async def remove(ctx, *args):
 
     sound_name = ' '.join(args)
     sound = get_sound(sound_name, ctx.guild)
-    if sound:
-        delete_sound(sound, ctx.guild)
+
+    if not sound:
+        raise JermaException('Sound ' + sound + ' not found.',
+                             'Hey gamer, that sound doesn\'t exist.')
+
+    delete_sound(sound, ctx.guild)
+    await ctx.send('The sound has been eliminated, gamer.')
 
 
 @commands.check(is_major)
