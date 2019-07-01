@@ -191,6 +191,24 @@ def birthday_wave(name, ctx):
     return outpath
 
 
+async def help_loop(ctx, msg):
+    def check(reaction, user):
+	return str(reaction.emoji) in ['⬅', '➡']
+    while True: # seconds
+        try:
+            reaction, _ = await bot.wait_for('reaction_add', timeout=30,
+                                             message=msg, check=check)
+        except asyncio.TimeoutError:
+            return
+        else:
+            if str(reaction.emoji) is '⬅':
+                msg.edit(embed=helpEmbed)
+                msg.remove_reaction(reaction.emoji, reaction.author)
+            if str(reaction.emoji) is '➡':
+                msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
+                meg.remove_reaction(reaction.emoji, reaction.author)
+
+
 @bot.event
 async def on_message(message):
     if message.content.startswith('$$'):
