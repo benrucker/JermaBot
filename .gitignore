@@ -3,6 +3,7 @@ soundclips/temp/
 sounds/
 secret.txt
 guilds/
+*.bat
 
 # VS
 .vc/
