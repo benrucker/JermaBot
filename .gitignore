@@ -4,6 +4,7 @@ sounds/
 secret.txt
 guilds/
 *.bat
+*.py.*
 
 # VS
 .vc/
