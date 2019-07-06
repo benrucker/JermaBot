@@ -1,6 +1,6 @@
 # Jerma985 Bot
 
-<img src="thumbnail.png" width="200" height="200" align="right" />
+<img src="resources/images/thumbnail.png" width="200" height="200" align="right" />
 
 This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently a bot geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
