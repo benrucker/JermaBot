@@ -19,7 +19,7 @@ from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 colorama.init(autoreset=True) # set up colored console out
 
-tts_path = 'voice.exe'
+tts_path = 'resources/voice.exe'
 
 prefix = '$'
 bot = commands.Bot(prefix)
@@ -78,7 +78,8 @@ def play_text(vc, to_speak, ctx, label, _speed=0):
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
-        play_sound_file('soundclips\\silence.wav', vc, output=False)
+        silence = os.path.join('resources', 'soundclips', 'silence.wav')
+        play_sound_file(silence, vc, output=False)
         #time.sleep(.07)
         while vc.is_playing():
             continue
@@ -125,7 +126,7 @@ def is_major(member):
 
 def get_snap_sound():
     sounds = []
-    snaps_folder = os.path.join('soundclips', 'snaps')
+    snaps_folder = os.path.join('resources', 'soundclips', 'snaps')
     snaps_db = os.path.join(snaps_folder, 'sounds.txt')
     with open(snaps_db, 'r', encoding='utf-8') as file:
         for sound in file.read().split('\n'):
@@ -146,7 +147,7 @@ def text_to_wav(text, ctx, label, speed=0):
 
 
 def generate_id_path(label, ctx):
-    return os.path.join('soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
+    return os.path.join('resources', 'soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
 
 
 async def connect_to_user(ctx):
@@ -179,7 +180,7 @@ def get_existing_voice_client(guild):
 
 
 def birthday_wave(name, ctx):
-    song = AudioSegment.from_wav(os.path.join('soundclips', 'blank_birthday.wav'))
+    song = AudioSegment.from_wav(os.path.join('resources', 'soundclips', 'blank_birthday.wav'))
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
@@ -189,6 +190,24 @@ def birthday_wave(name, ctx):
     outpath = generate_id_path('birthday_name', ctx)
     song.export(outpath)
     return outpath
+
+
+async def help_loop(ctx, msg):
+    def check(reaction, user):
+        return str(reaction.emoji) in ['⬅', '➡']
+    while True: # seconds
+        try:
+            reaction, _ = await bot.wait_for('reaction_add', timeout=30,
+                                             message=msg, check=check)
+        except asyncio.TimeoutError:
+            return
+        else:
+            if str(reaction.emoji) is '⬅':
+                msg.edit(embed=helpEmbed)
+                msg.remove_reaction(reaction.emoji, reaction.author)
+            if str(reaction.emoji) is '➡':
+                msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
+                meg.remove_reaction(reaction.emoji, reaction.author)
 
 
 @bot.event
@@ -216,7 +235,7 @@ async def join(ctx):
 @bot.command()
 async def leave(ctx):
     if ctx.voice_client and ctx.voice_client.is_connected():
-        loc = os.path.join('soundclips', 'leave')
+        loc = os.path.join('resources', 'soundclips', 'leave')
         sounds = make_sounds_dict(loc)
         soundname = random.choice(list(sounds.values()))
         sound = os.path.join(loc, soundname)
@@ -232,18 +251,17 @@ async def perish(ctx):
 
 @bot.command()
 async def jermahelp(ctx):
-    help_files = [discord.File("avatar.png", filename="avatar.png"),
-                  discord.File("thumbnail.png", filename="thumbnail.png")]
-    await ctx.author.send(files=help_files, embed=helpEmbed)
+    avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
+    thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
+    await ctx.author.send(files=[avatar, thumbnail], embed=helpEmbed)
     await ctx.message.add_reaction("✉")
 
 
 @bot.command(name='list')
 async def _list(ctx):
-    help_files = [discord.File("avatar.png", filename="avatar.png"),
-                  discord.File("thumbnail.png", filename="thumbnail.png")]
-    ginfo = guilds[ctx.guild.id]
-    await ctx.author.send(files=help_files, embed=get_list_embed(ginfo))
+    avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
+    thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
+    await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
 
 
@@ -277,7 +295,7 @@ async def jermasnap(ctx):
         await asyncio.sleep(1)
         guilds[ctx.guild.id].is_snapping = False
     else:
-        vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'snaps', 'up in smoke.mp3')))
+        vc.play(discord.FFmpegPCMAudio(os.path.join('resources', 'soundclips', 'snaps', 'up in smoke.mp3')))
         await asyncio.sleep(1)
         guilds[ctx.guild.id].is_snapping = False
 
@@ -287,7 +305,7 @@ async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
     id = ctx.guild.id
-    vc.play(LoopingSource(os.path.join('soundclips', 'birthdayloop.wav'), source_factory, id))
+    vc.play(LoopingSource(os.path.join('resources', 'soundclips', 'birthdayloop.wav'), source_factory, id))
 
 
 @bot.command()
@@ -532,5 +550,10 @@ if __name__ == '__main__':
     file = open('secret.txt')
     secret = file.read()
     file.close()
+
+    try:
+        os.makedirs(os.path.join('resources','soundclips','temp'))
+    except:
+        pass
 
     bot.run(secret)
