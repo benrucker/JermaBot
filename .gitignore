@@ -1,7 +1,6 @@
 # Custom files
-soundclips/temp/
-sounds/
-secret.txt
+jerma/resources/soundclips/temp/
+secret*
 guilds/
 *.bat
 *.py.*
