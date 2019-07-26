@@ -551,4 +551,9 @@ if __name__ == '__main__':
     secret = file.read()
     file.close()
 
+    try:
+        os.makedirs(os.path.join('resources','soundclips','temp'))
+    except:
+        pass
+
     bot.run(secret)
