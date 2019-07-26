@@ -195,7 +195,6 @@ def birthday_wave(name, ctx):
 async def help_loop(ctx, msg):
     def check(reaction, user):
         return str(reaction.emoji) in ['⬅', '➡']
-
     while True: # seconds
         try:
             reaction, _ = await bot.wait_for('reaction_add', timeout=30,

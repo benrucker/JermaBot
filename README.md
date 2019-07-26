@@ -1,15 +1,17 @@
 # Jerma985 Bot
 
-<img src="jerma/resources/images/thumbnail.png" width="200" height="200" align="right" />
+<img src="thumbnail.png" width="200" height="200" align="right" />
 
-This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently a bot geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
+This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
 ## Setup
 Clone this repo then store your bot token in a file called `secret.txt` in the base directory. Custom files should be stored in `discord-jerma\sounds\`. Currently only works on Windows due to reliance on `voice.exe`. Commands that don't use `voice.exe` should work on other platforms (**not tested**).
 
 #### Requirements:
-* ffmpeg to be on your system path.
-* discord.py version >= 1.0.0
+Install the needed python packages by running this command in the repo:
+```pip install -r requirements.txt```
+
+You will also need ffmpeg to be on your system path.
 
 ## Commands
 All commands are prefixed with `$` by default.
