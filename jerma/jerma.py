@@ -12,9 +12,9 @@ from glob import glob
 from discord.ext import commands
 import subprocess
 from pydub import AudioSegment
-from .guild_info import GuildInfo
+from guild_info import GuildInfo
 
-from .help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
+from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 
 colorama.init(autoreset=True) # set up colored console out
@@ -78,7 +78,7 @@ def play_text(vc, to_speak, ctx, label, _speed=0):
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
-	silence = os.path.join('resources', 'soundclips', 'silence.wav')
+        silence = os.path.join('resources', 'soundclips', 'silence.wav')
         play_sound_file(silence, vc, output=False)
         #time.sleep(.07)
         while vc.is_playing():
@@ -194,7 +194,8 @@ def birthday_wave(name, ctx):
 
 async def help_loop(ctx, msg):
     def check(reaction, user):
-	return str(reaction.emoji) in ['⬅', '➡']
+        return str(reaction.emoji) in ['⬅', '➡']
+
     while True: # seconds
         try:
             reaction, _ = await bot.wait_for('reaction_add', timeout=30,
