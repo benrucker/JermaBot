@@ -411,7 +411,7 @@ async def remove(ctx, *args):
 async def rename(ctx, *args):
     if not args:
         raise JermaException('No sound specified in play command.',
-                             'Gamer, you gotta tell me which sound to rename.')
+                             'Gamer, this is the usage: `rename <original name>, <new name>`')
 
     old, new = ' '.join(args).split(', ')
 
