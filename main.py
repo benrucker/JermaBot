@@ -393,14 +393,19 @@ async def remove(ctx, *args):
 async def rename(ctx, *args):
     if not args:
         raise JermaException('No sound specified in play command.',
-                             'Gamer, you gotta tell me which sound to rename.')
+                             'Gamer, do it like this: `$rename old name, new name`')
 
     old, new = ' '.join(args).split(', ')
 
     old_filename = get_sound(old, ctx.guild)
     if old_filename:
         new_filename = old_filename[:33] + new + old_filename[-4:]
-        rename_file(old_filename, new_filename)
+        try:
+            rename_file(old_filename, new_filename)
+            await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
+        except Exception as e:
+            raise JermaException(f'Error {e.type} while renaming sound',
+                                  'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
 
 
 @bot.command()
@@ -527,7 +532,7 @@ if __name__ == '__main__':
     global source_path
     source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
 
-    logging.basicConfig(level=logging.ERROR)
+    logging.basicConfig(level=logging.INFO)
 
     file = open('secret.txt')
     secret = file.read()
