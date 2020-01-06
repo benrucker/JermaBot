@@ -6,6 +6,8 @@ This bot is inspired by Jerma985 and I promise that it's slightly taller than th
 
 ## Setup
 
+_**Note:** Use the `stable` branch if you're going to use JermaBot. The master branch is currently bunked._
+
 You can add this bot to your server or install it locally.
 
 ### Adding JermaBot to your server
