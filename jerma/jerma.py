@@ -261,6 +261,7 @@ async def jermahelp(ctx):
 async def _list(ctx):
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
+    ginfo = guilds[ctx.guild.id]
     await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
 
