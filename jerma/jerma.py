@@ -431,7 +431,7 @@ async def rename(ctx, *args):
     """Rename a sound clip."""
     if not args:
         raise JermaException('No sound specified in play command.',
-                             'Gamer, you gotta tell me which sound to rename.')
+                             'Gamer, this is the usage: `rename <original name>, <new name>`')
 
     old, new = ' '.join(args).split(', ')
 
@@ -488,30 +488,33 @@ async def on_voice_state_update(member, before, after):
     # member (Member) – The member whose voice states changed.
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
-    old_vc = get_existing_voice_client(member.guild)
+    try:
+        old_vc = get_existing_voice_client(member.guild)
 
-    if guilds[member.guild.id].is_snapping:
-        return
+        if guilds[member.guild.id].is_snapping:
+            return
 
-    if member.id is bot.user.id:
-        if old_vc and not after.channel:
+        if member.id is bot.user.id:
+            if old_vc and not after.channel:
+                await old_vc.disconnect()
+            return
+
+        if after.channel and after.channel is not before.channel: # join sound
+            join_sound = get_sound(member.name, member.guild)
+            if join_sound:
+                vc = await connect_to_channel(member.voice.channel, old_vc)
+                await asyncio.sleep(0.1)
+                play_sound_file(join_sound, vc)
+            return
+
+        if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
+            y = t.YELLOW + Style.BRIGHT
+            c = t.CYAN + Style.NORMAL
+            print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
-        return
-
-    if after.channel and after.channel is not before.channel: # join sound
-        join_sound = get_sound(member.name, member.guild)
-        if join_sound:
-            vc = await connect_to_channel(member.voice.channel, old_vc)
-            await asyncio.sleep(0.1)
-            play_sound_file(join_sound, vc)
-        return
-
-    if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
-        y = t.YELLOW + Style.BRIGHT
-        c = t.CYAN + Style.NORMAL
-        print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-        await old_vc.disconnect()
-        return
+            return
+    except discord.errors.ClientException as e:
+        perish(None)
 
 
 @bot.event

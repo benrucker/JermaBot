@@ -5,6 +5,19 @@
 This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
 ## Setup
+
+_**Note:** Use the `stable` branch if you're going to use JermaBot. The master branch is currently bunked._
+
+You can add this bot to your server or install it locally.
+
+### Adding JermaBot to your server
+
+Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is around 60% with plans to be at 99% by the end of 2019.
+
+Note: **some commands will be broken this way**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
+
+### Installing JermaBot locally
+
 Clone this repo then store your bot token in a file called `secret.txt` in the base directory. Custom files should be stored in `discord-jerma\sounds\`. Currently only works on Windows due to reliance on `voice.exe`. Commands that don't use `voice.exe` should work on other platforms (**not tested**).
 
 #### Requirements:
