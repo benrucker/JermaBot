@@ -7,6 +7,7 @@ guilds/
 
 # VS
 .vc/
+.vscode/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
