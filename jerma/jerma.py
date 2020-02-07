@@ -180,6 +180,7 @@ def get_existing_voice_client(guild):
 
 
 def birthday_wave(name, ctx):
+    """Construct birthday sound."""
     song = AudioSegment.from_wav(os.path.join('resources', 'soundclips', 'blank_birthday.wav'))
     name = AudioSegment.from_wav(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
@@ -193,6 +194,7 @@ def birthday_wave(name, ctx):
 
 
 async def help_loop(ctx, msg):
+    """WIP"""
     def check(reaction, user):
         return str(reaction.emoji) in ['⬅', '➡']
     while True: # seconds
@@ -212,6 +214,7 @@ async def help_loop(ctx, msg):
 
 @bot.event
 async def on_message(message):
+    """Log info about recevied messages and send to process."""
     if message.content.startswith('$$'):
         return # protection against hackerbot commands
 
@@ -229,11 +232,13 @@ async def on_message(message):
 
 @bot.command()
 async def join(ctx):
+    """Join the user's voice channel."""
     _ = await connect_to_user(ctx)
 
 
 @bot.command()
 async def leave(ctx):
+    """Leave the voice channel, if any."""
     if ctx.voice_client and ctx.voice_client.is_connected():
         loc = os.path.join('resources', 'soundclips', 'leave')
         sounds = make_sounds_dict(loc)
@@ -246,11 +251,13 @@ async def leave(ctx):
 
 @bot.command()
 async def perish(ctx):
+    """Shut down the bot."""
     await bot.close()
 
 
 @bot.command()
 async def jermahelp(ctx):
+    """Send the user important info about JermaBot."""
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=helpEmbed)
@@ -259,6 +266,7 @@ async def jermahelp(ctx):
 
 @bot.command(name='list')
 async def _list(ctx):
+    """Send the user a list of sounds that can be played."""
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     ginfo = guilds[ctx.guild.id]
@@ -268,6 +276,7 @@ async def _list(ctx):
 
 @bot.command()
 async def jermasnap(ctx):
+    """Snap the user's voice channel."""
     print('jermasnap')
     if not is_major(ctx.author):
         return
@@ -303,6 +312,7 @@ async def jermasnap(ctx):
 
 @bot.command()
 async def jermalofi(ctx):
+    """Chill with a sick jam."""
     print('jermalofi')
     vc = await connect_to_user(ctx)
     id = ctx.guild.id
@@ -311,6 +321,7 @@ async def jermalofi(ctx):
 
 @bot.command()
 async def birthday(ctx, *args):
+    """Wish someone a happy birthday!"""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
@@ -321,6 +332,7 @@ async def birthday(ctx, *args):
 
 @bot.command()
 async def speakfile(ctx, *args):
+    """Send the input text as a sound file from text-to-speech."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
@@ -329,6 +341,7 @@ async def speakfile(ctx, *args):
 
 @bot.command()
 async def adderall(ctx, *args):
+    """Text-to-speech but f a s t."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
@@ -338,6 +351,7 @@ async def adderall(ctx, *args):
 
 @bot.command()
 async def speak(ctx, *args):
+    """Play your input text through text-to-speech."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
@@ -347,6 +361,7 @@ async def speak(ctx, *args):
 
 @bot.command()
 async def speakdrunk(ctx, *args):
+    """Text-to-speech but more drunk."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ''.join(args)
@@ -356,12 +371,14 @@ async def speakdrunk(ctx, *args):
 
 @bot.command()
 async def loopaudio(ctx, *args):
+    """Play a sound and loop it forever."""
     vc = await connect_to_user(ctx)
     vc.play(LoopingSource(args, source_factory))
 
 
 @bot.command()
 async def play(ctx, *args):
+    """Play a sound."""
     if not args:
         raise JermaException('No sound specified in play command.',
                              'Gamer, you gotta tell me which sound to play.')
@@ -379,6 +396,7 @@ async def play(ctx, *args):
 @bot.command()
 @commands.check(is_major)
 async def addsound(ctx):
+    """Add a sound to the sounds list."""
     await ctx.send('Alright gamer, send the new sound.')
 
     def check(message):
@@ -392,6 +410,7 @@ async def addsound(ctx):
 
 @bot.command()
 async def remove(ctx, *args):
+    """Remove a sound clip."""
     if not args:
         raise JermaException('No sound specified in play command.',
                              'Gamer, you gotta tell me which sound to remove.')
@@ -410,6 +429,7 @@ async def remove(ctx, *args):
 @commands.check(is_major)
 @bot.command()
 async def rename(ctx, *args):
+    """Rename a sound clip."""
     if not args:
         raise JermaException('No sound specified in play command.',
                              'Gamer, do it like this: `$rename old name, new name`')
@@ -436,6 +456,7 @@ async def stop(ctx):
 
 @bot.command()
 async def volume(ctx, vol: int):
+    """Allow the user to change the volume of all played sounds."""
     fvol = vol / 100
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
@@ -451,6 +472,7 @@ async def volume(ctx, vol: int):
 
 @bot.event
 async def on_ready():
+    """Initialize some important data and indicate startup success."""
     global guilds
     await bot.change_presence(activity=get_rand_activity())
 
@@ -472,34 +494,38 @@ async def on_voice_state_update(member, before, after):
     # member (Member) – The member whose voice states changed.
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
-    old_vc = get_existing_voice_client(member.guild)
+    try:
+        old_vc = get_existing_voice_client(member.guild)
 
-    if guilds[member.guild.id].is_snapping:
-        return
+        if guilds[member.guild.id].is_snapping:
+            return
 
-    if member.id is bot.user.id:
-        if old_vc and not after.channel:
+        if member.id is bot.user.id:
+            if old_vc and not after.channel:
+                await old_vc.disconnect()
+            return
+
+        if after.channel and after.channel is not before.channel: # join sound
+            join_sound = get_sound(member.name, member.guild)
+            if join_sound:
+                vc = await connect_to_channel(member.voice.channel, old_vc)
+                await asyncio.sleep(0.1)
+                play_sound_file(join_sound, vc)
+            return
+
+        if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
+            y = t.YELLOW + Style.BRIGHT
+            c = t.CYAN + Style.NORMAL
+            print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
-        return
-
-    if after.channel and after.channel is not before.channel: # join sound
-        join_sound = get_sound(member.name, member.guild)
-        if join_sound:
-            vc = await connect_to_channel(member.voice.channel, old_vc)
-            await asyncio.sleep(0.1)
-            play_sound_file(join_sound, vc)
-        return
-
-    if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
-        y = t.YELLOW + Style.BRIGHT
-        c = t.CYAN + Style.NORMAL
-        print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-        await old_vc.disconnect()
-        return
+            return
+    except discord.errors.ClientException as e:
+        perish(None)
 
 
 @bot.event
 async def on_command_error(ctx, e):
+    """Catch errors and handle them."""
     if type(e) is commands.errors.CommandInvokeError:
         e = e.original
         if type(e) is JermaException:
@@ -514,6 +540,8 @@ async def on_command_error(ctx, e):
 
 
 class LoopingSource(discord.AudioSource):
+    """This class acts the same as a discord.py AudioSource except it will loop
+    forever."""
     def __init__(self, param, source_factory, guild_id):
         self.factory = source_factory
         self.param = param
