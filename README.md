@@ -1,30 +1,12 @@
 # Jerma985 Bot
-
-<img src="jerma/resources/images/thumbnail.png" width="200" height="250" align="right" />
-
-This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
+Introduce some real gamer moments to your Discord server. This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing.
 
 ## Setup
-
-_**Note:** Use the `stable` branch if you're going to use JermaBot. The master branch is currently bunked._
-
-You can add this bot to your server or install it locally.
-
-### Adding JermaBot to your server
-
-Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is around 60% with plans to be at 99% by the end of 2019.
-
-Note: **some commands will be broken this way**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
-
-### Installing JermaBot locally
-
 Clone this repo then store your bot token in a file called `secret.txt` in the base directory. Custom files should be stored in `discord-jerma\sounds\`. Currently only works on Windows due to reliance on `voice.exe`. Commands that don't use `voice.exe` should work on other platforms (**not tested**).
 
-#### Requirements:
-Install the needed python packages by running this command in the repo:
-```pip install -r requirements.txt```
-
-You will also need ffmpeg to be on your system path.
+### Requirements:
+* ffmpeg to be on your system path.
+* discord.py version >= 1.0.0
 
 ## Commands
 All commands are prefixed with `$` by default.
@@ -44,4 +26,10 @@ All commands are prefixed with `$` by default.
 * `list` - Lists the sounds available in the `play` command.
 * `volume` - Change the volume for sounds to be played at.
 
-Good luck, gamer!
+
+### WIP Commands
+These commands are not guaranteed to work.
+
+* `jermasnap` - Jerma joins the server and moves half the server to a different channel. 1/4 chance of Jerma following the snapped and playing bass boosted Moonlight to rub salt in the wound. Currently hard coded for a specific server, so it will not work on other servers.
+* `loopaudio <filepath>` - Plays an audio file forever. Send command `leave` to make it stop.
+* `speakfile <words>` - Uses tts to say the words and sends it in a file to the text channel.
