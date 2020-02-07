@@ -200,7 +200,7 @@ async def help_loop(ctx, msg):
     while True: # seconds
         try:
             reaction, _ = await bot.wait_for('reaction_add', timeout=30,
-                                             message=msg, check=check)
+                                             check=check)
         except asyncio.TimeoutError:
             return
         else:
@@ -209,7 +209,7 @@ async def help_loop(ctx, msg):
                 msg.remove_reaction(reaction.emoji, reaction.author)
             if str(reaction.emoji) is '➡':
                 msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
-                meg.remove_reaction(reaction.emoji, reaction.author)
+                msg.remove_reaction(reaction.emoji, reaction.author)
 
 
 @bot.event
@@ -267,6 +267,7 @@ async def jermahelp(ctx):
 @bot.command(name='list')
 async def _list(ctx):
     """Send the user a list of sounds that can be played."""
+    ginfo = guilds[ctx.guild.id]
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
@@ -372,7 +373,7 @@ async def speakdrunk(ctx, *args):
 async def loopaudio(ctx, *args):
     """Play a sound and loop it forever."""
     vc = await connect_to_user(ctx)
-    vc.play(LoopingSource(args, source_factory))
+    vc.play(LoopingSource(args, source_factory, ctx.guild.id))
 
 
 @bot.command()
