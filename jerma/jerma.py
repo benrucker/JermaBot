@@ -438,7 +438,7 @@ async def rename(ctx, *args):
 
     old_filename = get_sound(old, ctx.guild)
     if old_filename:
-        new_filename = old_filename[:33] + new + old_filename[-4:]
+        new_filename = old_filename[:33] + new.lower() + old_filename[-4:]
         try:
             rename_file(old_filename, new_filename)
             await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
