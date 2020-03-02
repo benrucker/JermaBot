@@ -139,6 +139,14 @@ def get_snap_sound():
     return choice
 
 
+def get_smash_sound():
+    sound = os.path.join('resources', 'soundclips', 'smash_kill.wav')
+    with open(os.path.join('resources','soundclips','smash_kill.txt'), 'r', encoding='utf-8') as file:
+        a = file.readline().split(' ')
+    return [sound, float(a[0]), float(a[1])]
+
+
+
 def text_to_wav(text, ctx, label, speed=0):
     soundclip = generate_id_path(label, ctx)
     file = os.path.join(source_path, soundclip)
@@ -308,6 +316,41 @@ async def jermasnap(ctx):
         vc.play(discord.FFmpegPCMAudio(os.path.join('resources', 'soundclips', 'snaps', 'up in smoke.mp3')))
         await asyncio.sleep(1)
         guilds[ctx.guild.id].is_snapping = False
+
+
+@bot.command()
+async def fsmash(ctx, *args):
+    """Killem."""
+    if not args:
+        raise discord.InvalidArgument
+
+    name = ' '.join(args[0:])
+
+    vc = await connect_to_user(ctx)
+    dest_channel = get_soul_stone_channel(ctx)
+
+    users = ctx.author.voice.channel.members
+    user = None
+    for u in users:
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    if not user:
+        return
+
+
+    sound, delay, length = get_smash_sound()
+
+
+    guilds[ctx.guild.id].is_snapping = True
+
+    play_sound_file(sound, vc, output=True)
+    time.sleep(delay)
+
+    await user.move_to(dest_channel)
+
+    time.sleep(length - delay)
+    guilds[ctx.guild.id].is_snapping = False
 
 
 @bot.command()
