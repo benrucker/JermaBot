@@ -290,6 +290,7 @@ async def drake(ctx, *args):
         msg = await ctx.channel.fetch_message(args[0])
     except:
         pass
+    await ctx.message.delete(delay=1)
     await msg.add_reaction('drake:679179726740258826')
     await asyncio.sleep(5)
     await msg.remove_reaction('drake:679179726740258826',bot.user)
