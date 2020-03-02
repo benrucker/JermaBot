@@ -12,7 +12,7 @@ You can add this bot to your server or install it locally.
 
 ### Adding JermaBot to your server
 
-Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is around 60% with plans to be at 99% by the end of 2019.
+Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is around 60% with plans to be at 99% by summer 2020.
 
 Note: **some commands will be broken this way**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
 
