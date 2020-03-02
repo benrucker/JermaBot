@@ -283,6 +283,19 @@ async def _list(ctx):
 
 
 @bot.command()
+async def drake(ctx, *args):
+    if not args:
+        return
+    try:
+        msg = await ctx.channel.fetch_message(args[0])
+    except:
+        pass
+    await msg.add_reaction('drake:679179726740258826')
+    await asyncio.sleep(5)
+    await msg.remove_reaction('drake:679179726740258826',bot.user)
+
+
+@bot.command()
 async def jermasnap(ctx):
     """Snap the user's voice channel."""
     print('jermasnap')
@@ -338,17 +351,12 @@ async def fsmash(ctx, *args):
     if not user:
         return
 
-
     sound, delay, length = get_smash_sound()
-
-
+    
     guilds[ctx.guild.id].is_snapping = True
-
     play_sound_file(sound, vc, output=True)
     time.sleep(delay)
-
     await user.move_to(dest_channel)
-
     time.sleep(length - delay)
     guilds[ctx.guild.id].is_snapping = False
 
