@@ -363,6 +363,36 @@ async def fsmash(ctx, *args):
 
 
 @bot.command()
+async def downsmash(ctx, *args):
+    """Killem."""
+    if not args:
+        raise discord.InvalidArgument
+
+    name = ' '.join(args[0:])
+
+    vc = await connect_to_user(ctx)
+    dest_channel = get_soul_stone_channel(ctx)
+
+    users = ctx.author.voice.channel.members
+    user = None
+    for u in users:
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    if not user:
+        return
+
+    sound, delay, length = get_smash_sound()
+    
+    guilds[ctx.guild.id].is_snapping = True
+    play_sound_file(sound, vc, output=True)
+    time.sleep(delay)
+    await user.move_to(None)
+    time.sleep(length - delay)
+    guilds[ctx.guild.id].is_snapping = False
+
+
+@bot.command()
 async def jermalofi(ctx):
     """Chill with a sick jam."""
     print('jermalofi')
