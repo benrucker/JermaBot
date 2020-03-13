@@ -366,7 +366,7 @@ async def fsmash(ctx, *args):
 async def downsmash(ctx, *args):
     """Killem."""
     if not args:
-        raise discord.InvalidArgument
+        raise discord.InvalidArgument #malformed statement?
 
     name = ' '.join(args[0:])
 
@@ -525,7 +525,7 @@ async def rename(ctx, *args):
             rename_file(old_filename, new_filename)
             await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
         except Exception as e:
-            raise JermaException(f'Error {e.type} while renaming sound',
+            raise JermaException(f'Error {type(e)} while renaming sound',
                                   'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
 
 
