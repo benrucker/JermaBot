@@ -340,6 +340,11 @@ async def jermasnap(ctx):
 
 
 @bot.command()
+async def q(ctx, *args):
+    await quarantine(ctx, args)
+
+
+@bot.command()
 async def quarantine(ctx, *args):
     """Save'm."""
     if not args:
