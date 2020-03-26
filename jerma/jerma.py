@@ -644,7 +644,8 @@ async def on_voice_state_update(member, before, after):
             await old_vc.disconnect()
             return
     except discord.errors.ClientException as e:
-        perish(None)
+        print(type(e), e)
+        await perish(None)
 
 
 @bot.event
