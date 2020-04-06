@@ -406,14 +406,13 @@ async def fsmash(ctx, *args):
 
 @bot.command()
 async def downsmash(ctx, *args):
-    """Killem."""
+    """Killem even more."""
     if not args:
         raise discord.InvalidArgument #malformed statement?
 
     name = ' '.join(args[0:])
 
     vc = await connect_to_user(ctx)
-    dest_channel = get_soul_stone_channel(ctx)
 
     users = ctx.author.voice.channel.members
     user = None
@@ -432,6 +431,15 @@ async def downsmash(ctx, *args):
     await user.move_to(None)
     time.sleep(length - delay)
     guilds[ctx.guild.id].is_snapping = False
+
+
+@bot.command()
+async def snooze(ctx):
+    r = guilds[ctx.guild.id].snooze()
+    if r:
+        ctx.say(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
+    else:
+        ctx.say(f'**I HAVE AWOKEN**')
 
 
 @bot.command()
@@ -594,6 +602,20 @@ async def volume(ctx, vol: int):
     await react('⬆' if fvol > old_vol else '⬇')
 
 
+# @commands.check(is_major)
+@bot.command()
+async def update(ctx):
+    """Update the bot."""
+    result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
+    if result.returncode != 0:
+        await ctx.send('Uhh, gamer? Something didn\'t go right.')
+    elif 'Already up to date' in result.stdout:
+        await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+    else:
+        await ctx.send('Patch applied, sister.')
+        await perish(ctx)
+
+
 @bot.event
 async def on_ready():
     """Initialize some important data and indicate startup success."""
@@ -621,7 +643,8 @@ async def on_voice_state_update(member, before, after):
     try:
         old_vc = get_existing_voice_client(member.guild)
 
-        if guilds[member.guild.id].is_snapping:
+        g = guilds[member.guild.id]
+        if g.is_snapping or g.is_snoozed():
             return
 
         if member.id is bot.user.id:
@@ -643,7 +666,7 @@ async def on_voice_state_update(member, before, after):
             print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
             return
-    except discord.errors.ClientException as e:
+    except discord.errors.ClientException as _:
         perish(None)
 
 
