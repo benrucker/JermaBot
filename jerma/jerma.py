@@ -237,7 +237,7 @@ async def process_scoreboard(ctx):
 
     name = ' '.join(ctx.message.content.split(' ')[1:])
     user = None
-    
+
     async for u in ctx.guild.fetch_members():
         if name.lower() in [u.name.lower(), u.display_name.lower()]:
             user = u
@@ -770,11 +770,13 @@ async def stop(ctx):
 
 
 @bot.command()
-async def volume(ctx, vol: int):
+async def volume(ctx, vol):
     """Allow the user to change the volume of all played sounds."""
-    fvol = vol / 100
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
+    if not vol:
+        await ctx.send(f'Volume is currently at {old_vol}, bro.')
+    fvol = vol / 100
     ginfo.volume = fvol
     if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
         ctx.voice_client.source.volume = fvol
