@@ -15,18 +15,22 @@ from pydub import AudioSegment
 from guild_info import GuildInfo
 
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
+import traceback
+from collections import OrderedDict
 
 
-colorama.init(autoreset=True) # set up colored console out
+colorama.init(autoreset=True)  # set up colored console out
 
 tts_path = 'resources/voice.exe'
 
-prefix = '$'
-bot = commands.Bot(prefix)
+prefixes = ['$', '+']
+bot = commands.Bot(tuple(prefixes))
+
+guilds = list()
 
 
 def check_perms(user, action):
-    if action is 'addsound':
+    if action == 'addsound':
         if is_major(user):
             return
         else:
@@ -100,7 +104,7 @@ def get_sound(sound, guild):
 
 
 def delete_sound(sound, guild):
-    path = guilds[guild.id].sound_folder
+    _ = guilds[guild.id].sound_folder
     os.remove(sound)
 
 
@@ -141,17 +145,16 @@ def get_snap_sound():
 
 def get_quarantine_sound():
     sound = os.path.join('resources', 'soundclips', '2319.wav')
-    with open(os.path.join('resources','soundclips','2319.txt'), 'r', encoding='utf-8') as file:
+    with open(os.path.join('resources', 'soundclips', '2319.txt'), 'r', encoding='utf-8') as file:
         a = file.readline().split(' ')
     return [sound, float(a[0]), float(a[1])]
 
 
 def get_smash_sound():
     sound = os.path.join('resources', 'soundclips', 'smash_kill.wav')
-    with open(os.path.join('resources','soundclips','smash_kill.txt'), 'r', encoding='utf-8') as file:
+    with open(os.path.join('resources', 'soundclips', 'smash_kill.txt'), 'r', encoding='utf-8') as file:
         a = file.readline().split(' ')
     return [sound, float(a[0]), float(a[1])]
-
 
 
 def text_to_wav(text, ctx, label, speed=0):
@@ -170,7 +173,8 @@ async def connect_to_user(ctx):
         vc = ctx.voice_client
         user_channel = ctx.author.voice.channel
         return await connect_to_channel(user_channel, vc)
-    except:
+    except Exception as e:
+        print(e)
         raise JermaException('User was not in a voice channel or something.',
                              msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
 
@@ -180,7 +184,7 @@ async def connect_to_channel(channel, vc=None):
         raise AttributeError('channel cannot be None.')
 
     if not vc:
-        vc = await channel.connect(reconnect=False)
+        vc = await channel.connect()
 
     if vc.channel is not channel:
         await vc.move_to(channel)
@@ -201,7 +205,7 @@ def birthday_wave(name, ctx):
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
     for insert_time in insert_times:
-    	song = song.overlay(name, position=insert_time)
+        song = song.overlay(name, position=insert_time)
 
     outpath = generate_id_path('birthday_name', ctx)
     song.export(outpath)
@@ -212,38 +216,170 @@ async def help_loop(ctx, msg):
     """WIP"""
     def check(reaction, user):
         return str(reaction.emoji) in ['⬅', '➡']
-    while True: # seconds
+    while True:  # seconds
         try:
             reaction, _ = await bot.wait_for('reaction_add', timeout=30,
                                              check=check)
         except asyncio.TimeoutError:
             return
         else:
-            if str(reaction.emoji) is '⬅':
+            if str(reaction.emoji) == '⬅':
                 msg.edit(embed=helpEmbed)
                 msg.remove_reaction(reaction.emoji, reaction.author)
-            if str(reaction.emoji) is '➡':
+            if str(reaction.emoji) == '➡':
                 msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
                 msg.remove_reaction(reaction.emoji, reaction.author)
+
+
+async def process_scoreboard(ctx):
+    """Add points to person's score"""
+    score = int(ctx.command)
+
+    name = ' '.join(ctx.message.content.split(' ')[1:])
+    user = None
+
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    if not name or not user:
+        return
+
+    g = guilds[ctx.guild.id]
+    g.add_point(user.id, amount=score)
+
+    if user.nick:
+        name = user.nick
+    else:
+        name = user.name
+    await ctx.send(name + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+
+
+async def get_context_no_command(message, cls=commands.Context):
+    """Constructs a context object from a given message."""
+
+    view = discord.ext.commands.view.StringView(message.content)
+    ctx = cls(prefix=None, view=view, bot=bot, message=message)
+
+    if bot._skip_check(message.author.id, bot.user.id):
+        return ctx
+
+    prefix = await bot.get_prefix(message)
+    invoked_prefix = prefix
+
+    if isinstance(prefix, str):
+        if not view.skip_string(prefix):
+            return ctx
+    else:
+        try:
+            # if the context class' __init__ consumes something from the view this
+            # will be wrong.  That seems unreasonable though.
+            if message.content.startswith(tuple(prefix)):
+                invoked_prefix = discord.utils.find(view.skip_string, prefix)
+            else:
+                return ctx
+
+        except TypeError:
+            if not isinstance(prefix, list):
+                raise TypeError("get_prefix must return either a string or a list of string, "
+                                "not {}".format(prefix.__class__.__name__))
+
+            # It's possible a bad command_prefix got us here.
+            for value in prefix:
+                if not isinstance(value, str):
+                    raise TypeError("Iterable command_prefix or list returned from get_prefix must "
+                                    "contain only strings, not {}".format(value.__class__.__name__))
+
+            # Getting here shouldn't happen
+            raise
+
+    invoker = view.get_word()
+    ctx.invoked_with = invoker
+    ctx.prefix = invoked_prefix
+    ctx.command = invoker
+    return ctx
+
+
+# -------------- Overrides --------------------
+async def get_context(message, *, cls=discord.ext.commands.Context):
+    """Constructs a context object from a given command."""
+
+    view = discord.ext.commands.view.StringView(message.content)
+    ctx = cls(prefix=None, view=view, bot=bot, message=message)
+
+    if bot._skip_check(message.author.id, bot.user.id):
+        return ctx
+
+    prefix = await bot.get_prefix(message)
+    invoked_prefix = prefix
+
+    if isinstance(prefix, str):
+        if not view.skip_string(prefix):
+            return ctx
+    else:
+        try:
+            # if the context class' __init__ consumes something from the view this
+            # will be wrong.  That seems unreasonable though.
+            if message.content.startswith(tuple(prefix)):
+                invoked_prefix = discord.utils.find(view.skip_string, prefix)
+            else:
+                return ctx
+
+        except TypeError:
+            if not isinstance(prefix, list):
+                raise TypeError("get_prefix must return either a string or a list of string, "
+                                "not {}".format(prefix.__class__.__name__))
+
+            # It's possible a bad command_prefix got us here.
+            for value in prefix:
+                if not isinstance(value, str):
+                    raise TypeError("Iterable command_prefix or list returned from get_prefix must "
+                                    "contain only strings, not {}".format(value.__class__.__name__))
+
+            # Getting here shouldn't happen
+            raise
+
+    invoker = view.get_word()
+    ctx.invoked_with = invoker
+    ctx.prefix = invoked_prefix
+    ctx.command = bot.all_commands.get(invoker)
+    return ctx
+
+
+async def process_commands(message):
+    """Process commands."""
+    if message.author.bot:
+        return
+
+    ctx = await get_context_no_command(message)
+    # print(type(ctx.prefix), ctx.prefix)
+    if ctx.prefix == '+':
+        await process_scoreboard(ctx)
+    else:
+        ctx.command = bot.all_commands.get(ctx.invoked_with)
+        await bot.invoke(ctx)
 
 
 @bot.event
 async def on_message(message):
     """Log info about recevied messages and send to process."""
     if message.content.startswith('$$'):
-        return # protection against hackerbot commands
+        return  # protection against hackerbot commands
+    # elif message.content.startswith('+'):
+    #     await process_scoreboard(await get_context(message))
+    #     return
 
-    if message.content.startswith(prefix):
+    if message.content.startswith(tuple(prefixes)):
         print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
     elif message.author == bot.user:
         print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
-    await bot.process_commands(message)
+    await process_commands(message)
     #except AttributeError as _:
     #    pass # ignore embed-only messages
     #except Exception as e:
     #    print(e)
-
+# ----------------------------------------------------------------------------
 
 @bot.command()
 async def join(ctx):
@@ -267,6 +403,8 @@ async def leave(ctx):
 @bot.command()
 async def perish(ctx):
     """Shut down the bot."""
+    for g in guilds.values():
+        g.exit()
     await bot.close()
 
 
@@ -289,6 +427,60 @@ async def _list(ctx):
     await ctx.message.add_reaction("✉")
 
 
+# @bot.command()
+# async def addpoint(ctx, *args):
+#     await score.__call__(ctx, args)
+
+
+@bot.command()
+@commands.check(is_major)
+async def resetscore(ctx, *args):
+    if not args:
+        raise discord.InvalidArgument
+    name = ' '.join(args[0:])
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    g = guilds[ctx.guild.id]
+    g.reset_score(user.id)
+
+
+@bot.command()
+async def addpoint(ctx, *args):
+    if not args:
+        raise discord.InvalidArgument
+    name = ' '.join(args[0:])
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    g = guilds[ctx.guild.id]
+    g.add_point(user.id)
+
+    await ctx.send(user.name + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+
+
+@bot.command()
+async def leaderboard(ctx):
+    try:
+        lb = guilds[ctx.guild.id].leaderboard
+        lbord = OrderedDict(sorted(lb.items(), key=lambda t: t[1], reverse=True))
+        out = str()
+        for i in lbord:
+            user = ctx.guild.get_member(i)
+            if user.nick:
+                name = user.nick
+            else:
+                name = user.name
+            out += '' + name + ' - ' + str(lbord[i]) + '\n'
+        await ctx.send(out)
+    except Exception as e:
+        print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
+                                         e, e.__traceback__),
+              file=sys.stderr, flush=True)
+
+
 @bot.command()
 async def drake(ctx, *args):
     if not args:
@@ -300,7 +492,7 @@ async def drake(ctx, *args):
     await ctx.message.delete(delay=1)
     await msg.add_reaction('drake:679179726740258826')
     await asyncio.sleep(5)
-    await msg.remove_reaction('drake:679179726740258826',bot.user)
+    await msg.remove_reaction('drake:679179726740258826', bot.user)
 
 
 @bot.command()
@@ -408,7 +600,7 @@ async def fsmash(ctx, *args):
 async def downsmash(ctx, *args):
     """Killem even more."""
     if not args:
-        raise discord.InvalidArgument #malformed statement?
+        raise discord.InvalidArgument()  # malformed statement?
 
     name = ' '.join(args[0:])
 
@@ -576,7 +768,7 @@ async def rename(ctx, *args):
             await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
         except Exception as e:
             raise JermaException(f'Error {type(e)} while renaming sound',
-                                  'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
+                                 'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
 
 
 @bot.command()
@@ -587,18 +779,21 @@ async def stop(ctx):
 
 
 @bot.command()
-async def volume(ctx, vol: int):
+async def volume(ctx, *args):
     """Allow the user to change the volume of all played sounds."""
-    fvol = vol / 100
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
+    vol = args[0]
+    if not vol:
+        await ctx.send(f'Volume is currently at {old_vol}, bro.')
+    fvol = vol / 100
     ginfo.volume = fvol
-    if ctx.voice_client and ctx.voice_client.source: # short-circuit statement
+    if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
         ctx.voice_client.source.volume = fvol
 
     react = ctx.message.add_reaction
-    speakers = ['🔈','🔉','🔊']
-    await react('🔇' if vol is 0 else speakers[min(int(fvol * len(speakers)), 2)])
+    speakers = ['🔈', '🔉', '🔊']
+    await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
     await react('⬆' if fvol > old_vol else '⬇')
 
 
@@ -666,8 +861,9 @@ async def on_voice_state_update(member, before, after):
             print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
             return
-    except discord.errors.ClientException as _:
-        perish(None)
+    except discord.errors.ClientException as e:
+        print(type(e), e)
+        await perish(None)
 
 
 @bot.event
@@ -724,7 +920,7 @@ class JermaException(Exception):
 
 if __name__ == '__main__':
     global source_path
-    source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__))  # /a/b/c/d/e
 
     logging.basicConfig(level=logging.INFO)
 
@@ -733,7 +929,7 @@ if __name__ == '__main__':
     file.close()
 
     try:
-        os.makedirs(os.path.join('resources','soundclips','temp'))
+        os.makedirs(os.path.join('resources', 'soundclips', 'temp'))
     except:
         pass
 
