@@ -231,6 +231,12 @@ async def help_loop(ctx, msg):
                 msg.remove_reaction(reaction.emoji, reaction.author)
 
 
+async def shutdown():
+    for g in guilds.values():
+        g.exit()
+    await bot.close()
+
+
 async def process_scoreboard(ctx):
     """Add points to person's score"""
     score = int(ctx.command)
@@ -403,9 +409,7 @@ async def leave(ctx):
 @bot.command()
 async def perish(ctx):
     """Shut down the bot."""
-    for g in guilds.values():
-        g.exit()
-    await bot.close()
+    await shutdown()
 
 
 @bot.command()
@@ -808,7 +812,7 @@ async def update(ctx):
         await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
     else:
         await ctx.send('Patch applied, sister.')
-        await perish(ctx)
+        await shutdown()
 
 
 @bot.event
@@ -863,7 +867,7 @@ async def on_voice_state_update(member, before, after):
             return
     except discord.errors.ClientException as e:
         print(type(e), e)
-        await perish(None)
+        # await perish(None)
 
 
 @bot.event
