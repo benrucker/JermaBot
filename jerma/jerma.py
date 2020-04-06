@@ -15,6 +15,7 @@ from pydub import AudioSegment
 from guild_info import GuildInfo
 
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
+import traceback
 
 
 colorama.init(autoreset=True) # set up colored console out
@@ -24,6 +25,7 @@ tts_path = 'resources/voice.exe'
 prefix = '$'
 bot = commands.Bot(prefix)
 
+guilds = list()
 
 def check_perms(user, action):
     if action is 'addsound':
@@ -180,7 +182,7 @@ async def connect_to_channel(channel, vc=None):
         raise AttributeError('channel cannot be None.')
 
     if not vc:
-        vc = await channel.connect(reconnect=False)
+        vc = await channel.connect()
 
     if vc.channel is not channel:
         await vc.move_to(channel)
@@ -267,6 +269,8 @@ async def leave(ctx):
 @bot.command()
 async def perish(ctx):
     """Shut down the bot."""
+    for g in guilds.values():
+        g.exit()
     await bot.close()
 
 
@@ -287,6 +291,42 @@ async def _list(ctx):
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
+
+
+# @bot.command()
+# async def addpoint(ctx, *args):
+#     await score.__call__(ctx, args)
+
+
+@bot.command()
+async def addpoint(ctx, *args):
+    if not args:
+        raise discord.InvalidArgument
+    name = ' '.join(args[0:])
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    g = guilds[ctx.guild.id]
+    g.add_point(user.id)
+
+    await ctx.send(user.nick + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+
+
+@bot.command()
+async def leaderboard(ctx):
+    try:
+        g = guilds[ctx.guild.id]
+        out = str()
+        for i in g.leaderboard:
+            name = ctx.guild.get_member(i).nick
+            out += '' + name + ' - ' + str(g.leaderboard[i])
+        await ctx.send(out)
+    except Exception as e:
+        print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
+                                        e, e.__traceback__),
+            file=sys.stderr, flush=True)
+        self.leaderboard = dict()
 
 
 @bot.command()
