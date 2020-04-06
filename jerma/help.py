@@ -189,7 +189,7 @@ class JermaHelpCommand(commands.HelpCommand):
             # <description> portion
             self.paginator.add_line(bot.description, empty=True)
 
-        no_category = '\u200b{0.no_category}:'.format(self)
+        #no_category = '\u200b{0.no_category}:'.format(self)
         def get_category(command, *, no_category=no_category):
             cog = command.cog
             return cog.qualified_name + ':' if cog is not None else no_category
