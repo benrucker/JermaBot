@@ -4,6 +4,8 @@ from discord.ext import commands
 import os
 import random
 from glob import glob
+from discord.ext.commands.help import Paginator
+import itertools
 
 source_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -76,7 +78,7 @@ class JermaHelpCommand(commands.HelpCommand):
 
     Most of this class is ripped straight from discord.py as of now."""
 
-    def __init__(**options):
+    def __init__(self, **options):
         self.width = options.pop('width', 80)
         self.indent = options.pop('indent', 2)
         self.show_hidden = options.pop('show_hidden', False)
@@ -187,7 +189,7 @@ class JermaHelpCommand(commands.HelpCommand):
             # <description> portion
             self.paginator.add_line(bot.description, empty=True)
 
-        no_category = '\u200b{0.no_category}:'.format(self)
+        #no_category = '\u200b{0.no_category}:'.format(self)
         def get_category(command, *, no_category=no_category):
             cog = command.cog
             return cog.qualified_name + ':' if cog is not None else no_category
