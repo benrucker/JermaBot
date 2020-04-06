@@ -22,8 +22,8 @@ colorama.init(autoreset=True)  # set up colored console out
 
 tts_path = 'resources/voice.exe'
 
-prefix = '$'
-bot = commands.Bot(prefix)
+prefixes = ['$', '+']
+bot = commands.Bot(tuple(prefixes))
 
 guilds = list()
 
@@ -230,23 +230,147 @@ async def help_loop(ctx, msg):
                 msg.remove_reaction(reaction.emoji, reaction.author)
 
 
+async def process_scoreboard(ctx):
+    """Add points to person's score"""
+    score = int(ctx.command)
+
+    name = ' '.join(ctx.message.content.split(' ')[1:])
+
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    g = guilds[ctx.guild.id]
+    g.add_point(user.id, amount=score)
+
+    await ctx.send(user.nick + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+
+
+async def get_context_no_command(message, cls=commands.Context):
+    """Constructs a context object from a given message."""
+
+    view = discord.ext.commands.view.StringView(message.content)
+    ctx = cls(prefix=None, view=view, bot=bot, message=message)
+
+    if bot._skip_check(message.author.id, bot.user.id):
+        return ctx
+
+    prefix = await bot.get_prefix(message)
+    invoked_prefix = prefix
+
+    if isinstance(prefix, str):
+        if not view.skip_string(prefix):
+            return ctx
+    else:
+        try:
+            # if the context class' __init__ consumes something from the view this
+            # will be wrong.  That seems unreasonable though.
+            if message.content.startswith(tuple(prefix)):
+                invoked_prefix = discord.utils.find(view.skip_string, prefix)
+            else:
+                return ctx
+
+        except TypeError:
+            if not isinstance(prefix, list):
+                raise TypeError("get_prefix must return either a string or a list of string, "
+                                "not {}".format(prefix.__class__.__name__))
+
+            # It's possible a bad command_prefix got us here.
+            for value in prefix:
+                if not isinstance(value, str):
+                    raise TypeError("Iterable command_prefix or list returned from get_prefix must "
+                                    "contain only strings, not {}".format(value.__class__.__name__))
+
+            # Getting here shouldn't happen
+            raise
+
+    invoker = view.get_word()
+    ctx.invoked_with = invoker
+    ctx.prefix = invoked_prefix
+    ctx.command = invoker
+    return ctx
+
+
+# -------------- Overrides --------------------
+async def get_context(message, *, cls=discord.ext.commands.Context):
+    """Constructs a context object from a given command."""
+
+    view = discord.ext.commands.view.StringView(message.content)
+    ctx = cls(prefix=None, view=view, bot=bot, message=message)
+
+    if bot._skip_check(message.author.id, bot.user.id):
+        return ctx
+
+    prefix = await bot.get_prefix(message)
+    invoked_prefix = prefix
+
+    if isinstance(prefix, str):
+        if not view.skip_string(prefix):
+            return ctx
+    else:
+        try:
+            # if the context class' __init__ consumes something from the view this
+            # will be wrong.  That seems unreasonable though.
+            if message.content.startswith(tuple(prefix)):
+                invoked_prefix = discord.utils.find(view.skip_string, prefix)
+            else:
+                return ctx
+
+        except TypeError:
+            if not isinstance(prefix, list):
+                raise TypeError("get_prefix must return either a string or a list of string, "
+                                "not {}".format(prefix.__class__.__name__))
+
+            # It's possible a bad command_prefix got us here.
+            for value in prefix:
+                if not isinstance(value, str):
+                    raise TypeError("Iterable command_prefix or list returned from get_prefix must "
+                                    "contain only strings, not {}".format(value.__class__.__name__))
+
+            # Getting here shouldn't happen
+            raise
+
+    invoker = view.get_word()
+    ctx.invoked_with = invoker
+    ctx.prefix = invoked_prefix
+    ctx.command = bot.all_commands.get(invoker)
+    return ctx
+
+
+async def process_commands(message):
+    """Process commands."""
+    if message.author.bot:
+        return
+
+    ctx = await get_context_no_command(message)
+    # print(type(ctx.prefix), ctx.prefix)
+    if ctx.prefix == '+':
+        await process_scoreboard(ctx)
+    else:
+        ctx.command = bot.all_commands.get(ctx.invoked_with)
+        await bot.invoke(ctx)
+
+
 @bot.event
 async def on_message(message):
     """Log info about recevied messages and send to process."""
     if message.content.startswith('$$'):
         return  # protection against hackerbot commands
+    # elif message.content.startswith('+'):
+    #     await process_scoreboard(await get_context(message))
+    #     return
 
-    if message.content.startswith(prefix):
+    if message.content.startswith(tuple(prefixes)):
         print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
     elif message.author == bot.user:
         print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
-    await bot.process_commands(message)
+    await process_commands(message)
     #except AttributeError as _:
     #    pass # ignore embed-only messages
     #except Exception as e:
     #    print(e)
-
+# ----------------------------------------------------------------------------
 
 @bot.command()
 async def join(ctx):
@@ -297,6 +421,19 @@ async def _list(ctx):
 # @bot.command()
 # async def addpoint(ctx, *args):
 #     await score.__call__(ctx, args)
+
+
+@bot.command()
+async def resetscore(ctx, *args):
+    if not args:
+        raise discord.InvalidArgument
+    name = ' '.join(args[0:])
+    async for u in ctx.guild.fetch_members():
+        if name.lower() in [u.name.lower(), u.display_name.lower()]:
+            user = u
+
+    g = guilds[ctx.guild.id]
+    g.reset_score(user.id)
 
 
 @bot.command()

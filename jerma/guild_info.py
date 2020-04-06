@@ -31,8 +31,14 @@ class GuildInfo():
             with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
                 pickle.dump(self.leaderboard, file)
 
-    def add_point(self, user):
+    def add_point(self, user, amount=1):
         try:
-            self.leaderboard[user] += 1
+            self.leaderboard[user] += amount
         except KeyError:
-            self.leaderboard[user] = 1
+            self.leaderboard[user] = amount
+
+    def reset_score(self, user):
+        try:
+            self.leaderboard.pop(user)
+        except KeyError:
+            pass
