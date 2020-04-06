@@ -236,10 +236,14 @@ async def process_scoreboard(ctx):
     score = int(ctx.command)
 
     name = ' '.join(ctx.message.content.split(' ')[1:])
-
+    user = None
+    
     async for u in ctx.guild.fetch_members():
         if name.lower() in [u.name.lower(), u.display_name.lower()]:
             user = u
+
+    if not name or not user:
+        return
 
     g = guilds[ctx.guild.id]
     g.add_point(user.id, amount=score)
