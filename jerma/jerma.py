@@ -18,7 +18,7 @@ from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 import traceback
 
 
-colorama.init(autoreset=True) # set up colored console out
+colorama.init(autoreset=True)  # set up colored console out
 
 tts_path = 'resources/voice.exe'
 
@@ -27,8 +27,9 @@ bot = commands.Bot(prefix)
 
 guilds = list()
 
+
 def check_perms(user, action):
-    if action is 'addsound':
+    if action == 'addsound':
         if is_major(user):
             return
         else:
@@ -102,7 +103,7 @@ def get_sound(sound, guild):
 
 
 def delete_sound(sound, guild):
-    path = guilds[guild.id].sound_folder
+    _ = guilds[guild.id].sound_folder
     os.remove(sound)
 
 
@@ -143,17 +144,16 @@ def get_snap_sound():
 
 def get_quarantine_sound():
     sound = os.path.join('resources', 'soundclips', '2319.wav')
-    with open(os.path.join('resources','soundclips','2319.txt'), 'r', encoding='utf-8') as file:
+    with open(os.path.join('resources', 'soundclips', '2319.txt'), 'r', encoding='utf-8') as file:
         a = file.readline().split(' ')
     return [sound, float(a[0]), float(a[1])]
 
 
 def get_smash_sound():
     sound = os.path.join('resources', 'soundclips', 'smash_kill.wav')
-    with open(os.path.join('resources','soundclips','smash_kill.txt'), 'r', encoding='utf-8') as file:
+    with open(os.path.join('resources', 'soundclips', 'smash_kill.txt'), 'r', encoding='utf-8') as file:
         a = file.readline().split(' ')
     return [sound, float(a[0]), float(a[1])]
-
 
 
 def text_to_wav(text, ctx, label, speed=0):
@@ -172,7 +172,8 @@ async def connect_to_user(ctx):
         vc = ctx.voice_client
         user_channel = ctx.author.voice.channel
         return await connect_to_channel(user_channel, vc)
-    except:
+    except Exception as e:
+        print(e)
         raise JermaException('User was not in a voice channel or something.',
                              msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
 
@@ -203,7 +204,7 @@ def birthday_wave(name, ctx):
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
     for insert_time in insert_times:
-    	song = song.overlay(name, position=insert_time)
+        song = song.overlay(name, position=insert_time)
 
     outpath = generate_id_path('birthday_name', ctx)
     song.export(outpath)
@@ -214,17 +215,17 @@ async def help_loop(ctx, msg):
     """WIP"""
     def check(reaction, user):
         return str(reaction.emoji) in ['⬅', '➡']
-    while True: # seconds
+    while True:  # seconds
         try:
             reaction, _ = await bot.wait_for('reaction_add', timeout=30,
                                              check=check)
         except asyncio.TimeoutError:
             return
         else:
-            if str(reaction.emoji) is '⬅':
+            if str(reaction.emoji) == '⬅':
                 msg.edit(embed=helpEmbed)
                 msg.remove_reaction(reaction.emoji, reaction.author)
-            if str(reaction.emoji) is '➡':
+            if str(reaction.emoji) == '➡':
                 msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
                 msg.remove_reaction(reaction.emoji, reaction.author)
 
@@ -233,7 +234,7 @@ async def help_loop(ctx, msg):
 async def on_message(message):
     """Log info about recevied messages and send to process."""
     if message.content.startswith('$$'):
-        return # protection against hackerbot commands
+        return  # protection against hackerbot commands
 
     if message.content.startswith(prefix):
         print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
@@ -324,9 +325,9 @@ async def leaderboard(ctx):
         await ctx.send(out)
     except Exception as e:
         print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
-                                        e, e.__traceback__),
-            file=sys.stderr, flush=True)
-        self.leaderboard = dict()
+                                         e, e.__traceback__),
+              file=sys.stderr, flush=True)
+        g.leaderboard = dict()
 
 
 @bot.command()
@@ -340,7 +341,7 @@ async def drake(ctx, *args):
     await ctx.message.delete(delay=1)
     await msg.add_reaction('drake:679179726740258826')
     await asyncio.sleep(5)
-    await msg.remove_reaction('drake:679179726740258826',bot.user)
+    await msg.remove_reaction('drake:679179726740258826', bot.user)
 
 
 @bot.command()
@@ -448,12 +449,11 @@ async def fsmash(ctx, *args):
 async def downsmash(ctx, *args):
     """Killem."""
     if not args:
-        raise discord.InvalidArgument #malformed statement?
+        raise discord.InvalidArgument()  # malformed statement?
 
     name = ' '.join(args[0:])
 
     vc = await connect_to_user(ctx)
-    dest_channel = get_soul_stone_channel(ctx)
 
     users = ctx.author.voice.channel.members
     user = None
@@ -608,7 +608,7 @@ async def rename(ctx, *args):
             await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
         except Exception as e:
             raise JermaException(f'Error {type(e)} while renaming sound',
-                                  'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
+                                 'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
 
 
 @bot.command()
@@ -625,12 +625,12 @@ async def volume(ctx, vol: int):
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
     ginfo.volume = fvol
-    if ctx.voice_client and ctx.voice_client.source: # short-circuit statement
+    if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
         ctx.voice_client.source.volume = fvol
 
     react = ctx.message.add_reaction
-    speakers = ['🔈','🔉','🔊']
-    await react('🔇' if vol is 0 else speakers[min(int(fvol * len(speakers)), 2)])
+    speakers = ['🔈', '🔉', '🔊']
+    await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
     await react('⬆' if fvol > old_vol else '⬇')
 
 
@@ -742,7 +742,7 @@ class JermaException(Exception):
 
 if __name__ == '__main__':
     global source_path
-    source_path = os.path.dirname(os.path.abspath(__file__)) # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__))  # /a/b/c/d/e
 
     logging.basicConfig(level=logging.INFO)
 
@@ -751,7 +751,7 @@ if __name__ == '__main__':
     file.close()
 
     try:
-        os.makedirs(os.path.join('resources','soundclips','temp'))
+        os.makedirs(os.path.join('resources', 'soundclips', 'temp'))
     except:
         pass
 
