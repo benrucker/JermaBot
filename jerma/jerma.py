@@ -16,6 +16,7 @@ from guild_info import GuildInfo
 
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 import traceback
+from collections import OrderedDict
 
 
 colorama.init(autoreset=True)  # set up colored console out
@@ -243,7 +244,11 @@ async def process_scoreboard(ctx):
     g = guilds[ctx.guild.id]
     g.add_point(user.id, amount=score)
 
-    await ctx.send(user.nick + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+    if user.nick:
+        name = user.nick
+    else:
+        name = user.name
+    await ctx.send(name + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
 
 
 async def get_context_no_command(message, cls=commands.Context):
@@ -424,6 +429,7 @@ async def _list(ctx):
 
 
 @bot.command()
+@commands.check(is_major)
 async def resetscore(ctx, *args):
     if not args:
         raise discord.InvalidArgument
@@ -448,23 +454,27 @@ async def addpoint(ctx, *args):
     g = guilds[ctx.guild.id]
     g.add_point(user.id)
 
-    await ctx.send(user.nick + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
+    await ctx.send(user.name + ' now has a whopping ' + str(g.leaderboard[user.id]) + ' points. Wow!')
 
 
 @bot.command()
 async def leaderboard(ctx):
     try:
-        g = guilds[ctx.guild.id]
+        lb = guilds[ctx.guild.id].leaderboard
+        lbord = OrderedDict(sorted(lb.items(), key=lambda t: t[1], reverse=True))
         out = str()
-        for i in g.leaderboard:
-            name = ctx.guild.get_member(i).nick
-            out += '' + name + ' - ' + str(g.leaderboard[i])
+        for i in lbord:
+            user = ctx.guild.get_member(i)
+            if user.nick:
+                name = user.nick
+            else:
+                name = user.name
+            out += '' + name + ' - ' + str(lbord[i]) + '\n'
         await ctx.send(out)
     except Exception as e:
         print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
                                          e, e.__traceback__),
               file=sys.stderr, flush=True)
-        g.leaderboard = dict()
 
 
 @bot.command()
