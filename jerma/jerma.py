@@ -770,10 +770,11 @@ async def stop(ctx):
 
 
 @bot.command()
-async def volume(ctx, vol):
+async def volume(ctx, *args):
     """Allow the user to change the volume of all played sounds."""
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
+    vol = args[0]
     if not vol:
         await ctx.send(f'Volume is currently at {old_vol}, bro.')
     fvol = vol / 100
