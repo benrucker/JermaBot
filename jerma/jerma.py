@@ -633,9 +633,9 @@ async def downsmash(ctx, *args):
 async def snooze(ctx):
     r = guilds[ctx.guild.id].snooze()
     if r:
-        ctx.say(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
+        await ctx.send(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
     else:
-        ctx.say(f'**I HAVE AWOKEN**')
+        await ctx.send(f'**I HAVE AWOKEN**')
 
 
 @bot.command()
