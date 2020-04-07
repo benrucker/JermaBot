@@ -28,17 +28,19 @@ class GuildInfo():
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
 
-    def snooze(self, duration=4):
-        if self.snooze_resume:
+    def toggle_snooze(self, duration=4): 
+        if self.is_snoozed():
             self.snooze_resume = None
-        self.snooze_resume = time.time() + 4*60*60
-        return self.snooze_resume
+        else:
+            self.snooze_resume = time.time() + 4*60*60
+            return self.snooze_resume
 
     def is_snoozed(self):
         if self.snooze_resume and self.snooze_resume < time.time():
             self.snooze_resume = None
             return False
         return True
+    
     def exit(self):
         if len(self.leaderboard) > 0:
             with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
