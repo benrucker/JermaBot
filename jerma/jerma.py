@@ -808,6 +808,8 @@ async def update(ctx):
     result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
     if result.returncode != 0:
         await ctx.send('Uhh, gamer? Something didn\'t go right.')
+        print(result.returncode)
+        print(result.stdout)
     elif 'Already up to date' in result.stdout:
         await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
     else:
