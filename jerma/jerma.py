@@ -633,8 +633,12 @@ async def downsmash(ctx, *args):
 async def snooze(ctx):
     r = guilds[ctx.guild.id].toggle_snooze()
     if r:
+        # set nick to JermaSnore
+        await ctx.me.edit(nick='JermaSnore')
         await ctx.send(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
     else:
+        # set nick to JermaBot
+        await ctx.me.edit(nick=None)
         await ctx.send(f'**I HAVE AWOKEN**')
 
 
