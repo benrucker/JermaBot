@@ -21,8 +21,8 @@ class GuildInfo():
             self.leaderboard = pickle.load(open(os.path.join(self.folder, 'leaderboard'), 'rb'))
         except Exception as e:
             print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
-                                         e, e.__traceback__),
-              file=sys.stderr, flush=True)
+                                             e, e.__traceback__),
+                  file=sys.stderr, flush=True)
             self.leaderboard = dict()
 
     def __repr__(self):
