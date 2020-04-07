@@ -635,7 +635,7 @@ async def snooze(ctx):
     if r:
         # set nick to JermaSnore
         await ctx.me.edit(nick='JermaSnore')
-        await ctx.send(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
+        await ctx.send(f'Snoozed until {time.asctime(time.localtime(r))}. See you then, champ.')
     else:
         # set nick to JermaBot
         await ctx.me.edit(nick=None)
