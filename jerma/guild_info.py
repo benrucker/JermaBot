@@ -36,7 +36,7 @@ class GuildInfo():
             return self.snooze_resume
 
     def is_snoozed(self):
-        if self.snooze_resume and self.snooze_resume < time.time():
+        if self.snooze_resume is not None and self.snooze_resume < time.time():
             self.snooze_resume = None
             return False
         return True
