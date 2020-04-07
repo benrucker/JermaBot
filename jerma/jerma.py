@@ -801,7 +801,7 @@ async def volume(ctx, *args):
     await react('⬆' if fvol > old_vol else '⬇')
 
 
-# @commands.check(is_major)
+@commands.check(is_major)
 @bot.command()
 async def update(ctx):
     """Update the bot."""
