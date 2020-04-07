@@ -633,9 +633,9 @@ async def downsmash(ctx, *args):
 async def snooze(ctx):
     r = guilds[ctx.guild.id].snooze()
     if r:
-        ctx.say(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
+        await ctx.send(f'Snoozed until: {time.asctime(time.localtime(r))}. See you then, champ.')
     else:
-        ctx.say(f'**I HAVE AWOKEN**')
+        await ctx.send(f'**I HAVE AWOKEN**')
 
 
 @bot.command()
@@ -808,6 +808,8 @@ async def update(ctx):
     result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
     if result.returncode != 0:
         await ctx.send('Uhh, gamer? Something didn\'t go right.')
+        print(result.returncode)
+        print(result.stdout)
     elif 'Already up to date' in result.stdout:
         await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
     else:
