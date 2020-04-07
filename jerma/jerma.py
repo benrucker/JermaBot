@@ -1,22 +1,22 @@
 import asyncio
-import sys
-import time
-import discord
-import random
-import os
-import logging
+from collections import OrderedDict
 import colorama
 from colorama import Fore as t
 from colorama import Back, Style
-from glob import glob
+import discord
 from discord.ext import commands
-import subprocess
+from glob import glob
+import logging
+import os
 from pydub import AudioSegment
-from guild_info import GuildInfo
-
-from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
+import random
+import sys
+import subprocess
+import time
 import traceback
-from collections import OrderedDict
+
+from guild_info import GuildInfo
+from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 
 colorama.init(autoreset=True)  # set up colored console out
