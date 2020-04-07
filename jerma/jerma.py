@@ -233,6 +233,8 @@ async def help_loop(ctx, msg):
 
 async def shutdown():
     for g in guilds.values():
+        if g.is_snoozed():
+            await bot.get_guild(g.id).me.edit(nick=None)
         g.exit()
     await bot.close()
 
