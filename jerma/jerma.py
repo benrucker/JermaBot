@@ -243,6 +243,10 @@ async def process_scoreboard(ctx):
     """Add points to person's score"""
     score = int(ctx.command)
 
+    if score not in [-3,-2,-1,1,2,3]:
+        await ctx.send("That's too many JermaBucks dude! Do you think I'm made of cash? Only do 1-3.")
+        return  # send failure message
+
     name = ' '.join(ctx.message.content.split(' ')[1:])
     user = None
 
