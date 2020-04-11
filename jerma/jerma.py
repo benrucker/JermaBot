@@ -852,30 +852,33 @@ async def on_voice_state_update(member, before, after):
     # before (VoiceState) – The voice state prior to the changes.
     # after (VoiceState) – The voice state after the changes.
     try:
+        # leave if channel is empty
         old_vc = get_existing_voice_client(member.guild)
-
-        g = guilds[member.guild.id]
-        if g.is_snapping or g.is_snoozed():
+        if old_vc and len(old_vc.channel.members) <= 1:
+            y = t.YELLOW + Style.BRIGHT
+            c = t.CYAN + Style.NORMAL
+            print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+            await old_vc.disconnect()
             return
 
-        if member.id is bot.user.id:
-            if old_vc and not after.channel:
+        # cleanup connection if kicked
+        if member.id is bot.user.id: 
+            if old_vc and not after.channel: 
                 await old_vc.disconnect()
             return
 
-        if after.channel and after.channel is not before.channel: # join sound
+        # don't play join sound if conditional
+        g = guilds[member.guild.id]
+        if g.is_snapping or g.is_snoozed():
+            return
+        
+        # play join sound
+        if after.channel and after.channel is not before.channel:
             join_sound = get_sound(member.name, member.guild)
             if join_sound:
                 vc = await connect_to_channel(member.voice.channel, old_vc)
                 await asyncio.sleep(0.1)
                 play_sound_file(join_sound, vc)
-            return
-
-        if old_vc and len(old_vc.channel.members) <= 1: # leave if server empty
-            y = t.YELLOW + Style.BRIGHT
-            c = t.CYAN + Style.NORMAL
-            print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-            await old_vc.disconnect()
             return
     except discord.errors.ClientException as e:
         print(type(e), e)
