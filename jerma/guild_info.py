@@ -4,6 +4,7 @@ import pickle
 import traceback
 import sys
 
+FOUR_HOURS = 4*60*60 
 
 class GuildInfo():
     """This class holds information about the state of the bot in a given guild."""
@@ -32,7 +33,7 @@ class GuildInfo():
         if self.is_snoozed():
             self.snooze_resume = None
         else:
-            self.snooze_resume = time.time() + 4*60*60
+            self.snooze_resume = time.time() + FOUR_HOURS
             return self.snooze_resume
 
     def is_snoozed(self):

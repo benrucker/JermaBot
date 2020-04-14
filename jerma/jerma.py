@@ -26,7 +26,7 @@ tts_path = 'resources/voice.exe'
 prefixes = ['$', '+']
 bot = commands.Bot(tuple(prefixes))
 
-guilds = list()
+guilds = dict()
 
 
 def check_perms(user, action):
@@ -833,9 +833,10 @@ async def on_ready():
     global guilds
     await bot.change_presence(activity=get_rand_activity())
 
-    guilds = dict()
-    for guild in bot.guilds:
-        guilds[guild.id] = GuildInfo(guild)
+    if len(guilds) == 0:
+        guilds = dict()
+        for guild in bot.guilds:
+            guilds[guild.id] = GuildInfo(guild)
 
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read()) # move to on_guild_add
