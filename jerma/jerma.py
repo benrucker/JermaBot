@@ -157,6 +157,11 @@ def get_smash_sound():
     return [sound, float(a[0]), float(a[1])]
 
 
+def get_yoni_leave_sound():
+    sound = os.path.join('resources', 'soundclips', 'workhereisdone.wav')
+    return sound
+
+
 def text_to_wav(text, ctx, label, speed=0):
     soundclip = generate_id_path(label, ctx)
     file = os.path.join(source_path, soundclip)
@@ -640,8 +645,9 @@ async def snooze(ctx):
     r = guilds[ctx.guild.id].toggle_snooze()
     if r:
         # set nick to JermaSnore
+        t = time.localtime(r)
         await ctx.me.edit(nick='JermaSnore')
-        await ctx.send(f'Snoozed until {time.asctime(time.localtime(r))}. See you then, champ.')
+        await ctx.send(f'Snoozed until {t.tm_hour % 12}:{t.tm_min:02} {t.tm_zone}. See you then, champ!')
     else:
         # set nick to JermaBot
         await ctx.me.edit(nick=None)
@@ -866,6 +872,13 @@ async def on_voice_state_update(member, before, after):
                 vc = await connect_to_channel(member.voice.channel, old_vc)
                 await asyncio.sleep(0.1)
                 play_sound_file(join_sound, vc)
+            return
+
+        # play leave sound
+        if not after.channel and before.channel is old_vc.channel:
+            leave_sound = get_yoni_leave_sound()
+            if leave_sound: # and member is yoni
+                play_sound_file(leave_sound, vc)
             return
 
         # leave if channel is empty
