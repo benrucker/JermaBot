@@ -878,7 +878,7 @@ async def on_voice_state_update(member, before, after):
         if not after.channel and before.channel is old_vc.channel:
             leave_sound = get_yoni_leave_sound()
             if leave_sound: # and member is yoni
-                play_sound_file(leave_sound, vc)
+                play_sound_file(leave_sound, old_vc)
             return
 
         # leave if channel is empty
