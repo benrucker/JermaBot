@@ -864,7 +864,7 @@ async def on_voice_state_update(member, before, after):
         g = guilds[member.guild.id]
         if g.is_snapping or g.is_snoozed():
             return
-        
+
         # play join sound
         if after.channel and after.channel is not before.channel:
             join_sound = get_sound(member.name, member.guild)
@@ -877,7 +877,7 @@ async def on_voice_state_update(member, before, after):
         # play leave sound
         if not after.channel and before.channel is old_vc.channel:
             leave_sound = get_yoni_leave_sound()
-            if leave_sound: # and member is yoni
+            if leave_sound and member.id == '196742230659170304':
                 play_sound_file(leave_sound, old_vc)
             return
 
@@ -890,8 +890,8 @@ async def on_voice_state_update(member, before, after):
             return
 
         # cleanup connection if kicked
-        if member.id is bot.user.id: 
-            if old_vc and not after.channel: 
+        if member.id is bot.user.id:
+            if old_vc and not after.channel:
                 await old_vc.disconnect()
             return
     except discord.errors.ClientException as e:
