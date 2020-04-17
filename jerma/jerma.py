@@ -879,7 +879,7 @@ async def on_voice_state_update(member, before, after):
             leave_sound = get_yoni_leave_sound()
             if leave_sound and member.id == 196742230659170304:
                 play_sound_file(leave_sound, old_vc)
-            return
+                return
 
         # leave if channel is empty
         if old_vc and len(old_vc.channel.members) <= 1:
