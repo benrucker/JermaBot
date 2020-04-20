@@ -189,7 +189,7 @@ async def connect_to_channel(channel, vc=None):
         raise AttributeError('channel cannot be None.')
 
     if not vc:
-        vc = await channel.connect()
+        vc = await channel.connect(reconnect=False)
 
     if vc.channel is not channel:
         await vc.move_to(channel)
