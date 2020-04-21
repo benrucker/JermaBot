@@ -10,9 +10,9 @@ You can add this bot to your server or install it locally.
 
 ### Adding JermaBot to your server
 
-Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is around 60% with plans to be at 99% by summer 2020.
+Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is at 99%, although the `speak` command has been broken to reach this goal (will fix soon I promise).
 
-Note: **some commands will be broken this way**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
+Note: **some commands will be broken on your server**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
 
 ### Installing JermaBot locally
 
