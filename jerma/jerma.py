@@ -24,7 +24,7 @@ colorama.init(autoreset=True)  # set up colored console out
 tts_path = 'resources/voice.exe'
 
 prefixes = ['$', '+']
-bot = commands.Bot(tuple(prefixes))
+bot = commands.Bot(command_prefix=commands.when_mentioned_or(tuple(prefixes)))
 
 guilds = dict()
 
@@ -864,6 +864,8 @@ async def on_voice_state_update(member, before, after):
         g = guilds[member.guild.id]
         if g.is_snapping or g.is_snoozed():
             return
+        else:
+            before.guild.me.edit(nick=None)
 
         # play join sound
         if after.channel and after.channel is not before.channel:
