@@ -24,7 +24,7 @@ colorama.init(autoreset=True)  # set up colored console out
 tts_path = 'resources/voice.exe'
 
 prefixes = ['$', '+']
-bot = commands.Bot(command_prefix=commands.when_mentioned_or(tuple(prefixes)))
+bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
 
 guilds = dict()
 
