@@ -163,6 +163,11 @@ def get_yoni_leave_sound():
 
 
 def text_to_wav(text, ctx, label, speed=150):
+    try:
+        tts.stop()
+        tts.endLoop()
+    except RuntimeError as e:
+        print(e)
     soundclip = generate_id_path(label, ctx)
     file = os.path.join(source_path, soundclip)
     tts.setProperty('rate', speed)
