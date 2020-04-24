@@ -8,6 +8,7 @@ from discord.ext import commands
 from glob import glob
 import logging
 import os
+import pyttsx3
 from pydub import AudioSegment
 import random
 import sys
@@ -27,6 +28,7 @@ prefixes = ['$', '+']
 bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
 
 guilds = dict()
+tts = pyttsx3.init()
 
 
 def check_perms(user, action):
@@ -162,10 +164,12 @@ def get_yoni_leave_sound():
     return sound
 
 
-def text_to_wav(text, ctx, label, speed=0):
+def text_to_wav(text, ctx, label, speed=150):
     soundclip = generate_id_path(label, ctx)
     file = os.path.join(source_path, soundclip)
-    subprocess.call([tts_path, '-r', str(speed), '-o', file, text])
+    tts.setProperty('rate', speed)
+    tts.save_to_file(text, file)
+    tts.runAndWait()
     return soundclip
 
 
@@ -690,7 +694,7 @@ async def adderall(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'adderall', _speed=7)
+    play_text(vc, to_speak, ctx, 'adderall', _speed=350)
 
 
 @bot.command()
@@ -710,7 +714,7 @@ async def speakdrunk(ctx, *args):
         raise discord.InvalidArgument
     to_speak = ''.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'speakdrunk', _speed=-10)
+    play_text(vc, to_speak, ctx, 'speakdrunk', _speed=50)
 
 
 @bot.command()
