@@ -22,8 +22,6 @@ from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 colorama.init(autoreset=True)  # set up colored console out
 
-tts_path = 'resources/voice.exe'
-
 prefixes = ['$', '+']
 bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
 
