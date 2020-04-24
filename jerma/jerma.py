@@ -865,7 +865,7 @@ async def on_voice_state_update(member, before, after):
         if g.is_snapping or g.is_snoozed():
             return
         else:
-            before.channel.guild.me.edit(nick=None)
+            await member.guild.me.edit(nick=None)
 
         # play join sound
         if after.channel and after.channel is not before.channel:
