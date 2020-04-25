@@ -890,8 +890,8 @@ async def on_ready():
     if len(guilds) == 0:
         guilds = dict()
         for guild in bot.guilds:
-            guilds[guild.id] = GuildInfo(guild)
             os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'), exist_ok=True)
+            guilds[guild.id] = GuildInfo(guild)
 
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read()) # move to on_guild_add

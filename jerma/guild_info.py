@@ -23,7 +23,7 @@ class GuildInfo():
         except Exception as e:
             print(e)
             self.leaderboard = dict()
-            with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
+            with open(os.path.join(self.folder, 'leaderboard'), 'xb') as file:
                 pickle.dump(self.leaderboard, file)
 
     def __repr__(self):
