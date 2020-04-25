@@ -936,8 +936,18 @@ async def on_command_error(ctx, e):
             #mention = ben.mention + ' something went bonkers.'
             #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
     else:
-        raise e
+        # return to default behavior circa 2020.4.25 https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
+        if hasattr(ctx.command, 'on_error'):
+            return
 
+        cog = ctx.cog
+        if cog:
+            if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
+                return
+
+        print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+        traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
+        # end plaigarism
 
 class LoopingSource(discord.AudioSource):
     """This class acts the same as a discord.py AudioSource except it will loop
