@@ -21,10 +21,10 @@ class GuildInfo():
         try:
             self.leaderboard = pickle.load(open(os.path.join(self.folder, 'leaderboard'), 'rb'))
         except Exception as e:
-            print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
-                                             e, e.__traceback__),
-                  file=sys.stderr, flush=True)
+            print(e)
             self.leaderboard = dict()
+            with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
+                pickle.dump(self.leaderboard, file)
 
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
