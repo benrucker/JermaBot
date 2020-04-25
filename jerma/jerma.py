@@ -20,6 +20,9 @@ from guild_info import GuildInfo
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 
+YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
+NO  = ['no','n','nope','start over','nada', 'nah']
+
 colorama.init(autoreset=True)  # set up colored console out
 guilds = dict()
 tts = pyttsx3.init()
@@ -44,9 +47,10 @@ def has_sound_file(message):
     return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
 
 
-async def add_sound_to_guild(sound, guild):
+async def add_sound_to_guild(sound, guild, filename=None):
     folder = get_guild_sound_path(guild)
-    filename = sound.filename.lower()
+    if not filename:
+        filename = sound.filename.lower()
 
     path = os.path.join(folder, filename)
 
@@ -93,7 +97,7 @@ def source_factory(filename):
     return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
 
 
-def get_sound(sound, guild):
+def get_sound(sound, guild: discord.Guild):
     ginfo = guilds[guild.id]
     sounds = make_sounds_dict(ginfo.sound_folder)
     try:
@@ -102,9 +106,10 @@ def get_sound(sound, guild):
         return None
 
 
-def delete_sound(sound, guild):
-    _ = guilds[guild.id].sound_folder
-    os.remove(sound)
+def delete_sound(sound, guild: discord.Guild):
+    path = guilds[guild.id].sound_folder
+    print('deleting ' + os.path.join(path,sound))
+    os.remove(os.path.join(path,sound))
 
 
 def rename_file(old_filepath, new_filepath):
@@ -749,17 +754,40 @@ async def play(ctx, *args):
 
 
 @bot.command()
-@commands.check(is_major)
-async def addsound(ctx):
+#@commands.check(is_major)
+async def addsound(ctx, *args):
     """Add a sound to the sounds list."""
-    await ctx.send('Alright gamer, send the new sound.')
+    arg = ' '.join(args).lower()
 
+    # get sound file from user
+    await ctx.send('Alright gamer, send the new sound.')
     def check(message):
         return message.author is ctx.author and has_sound_file(message)
-
     message = await bot.wait_for('message', timeout=20, check=check)
 
-    await add_sound_to_guild(message.attachments[0], ctx.guild)
+    # construct name from arg or attachment
+    if arg:
+        if arg.endswith(('.mp3','.wav')):
+            filename = arg
+        else:
+            filename = arg + '.' + message.attachments[0].filename.split('.')[-1]
+    else:
+        filename = message.attachments[0].filename
+
+    # remove old sound if there
+    name = filename.split('.')[0]
+    if get_sound(name, ctx.guild):
+        await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
+        def check2(message):
+            return message.author is ctx.author
+        replace_msg = await bot.wait_for('message', timeout=20, check=check2)
+        if replace_msg.content.lower().strip() in YES:
+            delete_sound(filename, ctx.guild)
+        else:
+            await ctx.send('Yeah, I like the old one better too.')
+            return
+
+    await add_sound_to_guild(message.attachments[0], ctx.guild, filename=filename)
     await ctx.send('Sound added, gamer.')
 
 
@@ -777,7 +805,7 @@ async def remove(ctx, *args):
         raise JermaException('Sound ' + sound + ' not found.',
                              'Hey gamer, that sound doesn\'t exist.')
 
-    delete_sound(sound, ctx.guild)
+    delete_sound(sound_name, ctx.guild)
     await ctx.send('The sound has been eliminated, gamer.')
 
 
