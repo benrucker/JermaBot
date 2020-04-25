@@ -433,8 +433,8 @@ async def perish(ctx):
 @bot.command()
 async def jermahelp(ctx):
     """Send the user important info about JermaBot."""
-    avatar = discord.File(os.path.join('jerma', 'resources', 'images', 'avatar.png'), filename='avatar.png')
-    thumbnail = discord.File(os.path.join('jerma', 'resources', 'images', 'avatar.png'), filename='thumbnail.png')
+    avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
+    thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=helpEmbed)
     await ctx.message.add_reaction("✉")
 
@@ -443,8 +443,8 @@ async def jermahelp(ctx):
 async def _list(ctx):
     """Send the user a list of sounds that can be played."""
     ginfo = guilds[ctx.guild.id]
-    avatar = discord.File(os.path.join('jerma', 'resources', 'images', 'avatar.png'), filename='avatar.png')
-    thumbnail = discord.File(os.path.join('jerma', 'resources', 'images', 'avatar.png'), filename='thumbnail.png')
+    avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
+    thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
 
