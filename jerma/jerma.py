@@ -833,7 +833,16 @@ async def volume(ctx, *args):
 @bot.command()
 async def update(ctx):
     """Update the bot."""
-    result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
+    try:
+        if (sys.platform.startswith('win')):
+            result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
+        else:
+            result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
+    except Exception as e:
+        print(e.with_traceback)
+        await ctx.send('Something ain\'t right here, pal.')
+        return
+
     if result.returncode != 0:
         await ctx.send('Uhh, gamer? Something didn\'t go right.')
         print(result.returncode)
