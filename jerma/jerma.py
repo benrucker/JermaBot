@@ -21,12 +21,11 @@ from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 
 
 colorama.init(autoreset=True)  # set up colored console out
+guilds = dict()
+tts = pyttsx3.init()
 
 prefixes = ['$', '+']
 bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
-
-guilds = dict()
-tts = pyttsx3.init()
 
 
 def check_perms(user, action):
