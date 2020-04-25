@@ -2,7 +2,7 @@
 
 <img src="jerma/resources/images/thumbnail.png" width="200" height="250" align="right" />
 
-This bot is inspired by Jerma985 and I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
+This bot is inspired by Jerma985. I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
 ## Setup
 
