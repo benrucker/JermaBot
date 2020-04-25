@@ -173,7 +173,7 @@ def text_to_wav(text, ctx, label, speed=150):
     except RuntimeError as e:
         print(e)
     soundclip = generate_id_path(label, ctx)
-    file = os.path.join(source_path, soundclip)
+    file = soundclip
     tts.setProperty('rate', speed)
     tts.save_to_file(text, file)
     tts.runAndWait()
@@ -959,7 +959,8 @@ async def on_command_error(ctx, e):
             #mention = ben.mention + ' something went bonkers.'
             #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
     else:
-        # return to default behavior circa 2020.4.25 https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
+        # return to default discord.py behavior circa 2020.4.25
+        # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
         if hasattr(ctx.command, 'on_error'):
             return
 
