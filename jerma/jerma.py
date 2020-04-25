@@ -872,7 +872,7 @@ async def on_voice_state_update(member, before, after):
     # after (VoiceState) – The voice state after the changes.
     try:
         old_vc = get_existing_voice_client(member.guild)
-        
+
         # don't play join sound if conditional
         g = guilds[member.guild.id]
         if g.is_snapping or g.is_snoozed():
