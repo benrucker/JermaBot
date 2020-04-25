@@ -872,12 +872,19 @@ async def on_voice_state_update(member, before, after):
     # after (VoiceState) – The voice state after the changes.
     try:
         old_vc = get_existing_voice_client(member.guild)
+        
         # don't play join sound if conditional
         g = guilds[member.guild.id]
         if g.is_snapping or g.is_snoozed():
             return
         else:
             await member.guild.me.edit(nick=None)
+
+        # cleanup connection if kicked
+        if member.id is bot.user.id:
+            if old_vc and not after.channel:
+                await old_vc.disconnect()
+            return
 
         # play join sound
         if after.channel and after.channel is not before.channel:
@@ -889,7 +896,7 @@ async def on_voice_state_update(member, before, after):
             return
 
         # play leave sound
-        if not after.channel and before.channel is old_vc.channel:
+        if not after or not after.channel and before.channel is old_vc.channel:
             leave_sound = get_yoni_leave_sound()
             if leave_sound and member.id == 196742230659170304:
                 play_sound_file(leave_sound, old_vc)
@@ -901,12 +908,6 @@ async def on_voice_state_update(member, before, after):
             c = t.CYAN + Style.NORMAL
             print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
-            return
-
-        # cleanup connection if kicked
-        if member.id is bot.user.id:
-            if old_vc and not after.channel:
-                await old_vc.disconnect()
             return
     except discord.errors.ClientException as e:
         print(type(e), e)
