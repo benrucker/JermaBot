@@ -891,6 +891,7 @@ async def on_ready():
         guilds = dict()
         for guild in bot.guilds:
             guilds[guild.id] = GuildInfo(guild)
+            os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'))
 
     # with open('avatar.png', 'rb') as file:
     #     await bot.user.edit(avatar=file.read()) # move to on_guild_add
@@ -972,6 +973,7 @@ async def on_command_error(ctx, e):
         print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
+
 
 class LoopingSource(discord.AudioSource):
     """This class acts the same as a discord.py AudioSource except it will loop
