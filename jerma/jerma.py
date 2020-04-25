@@ -671,6 +671,7 @@ async def jermalofi(ctx):
 
 
 @bot.command()
+@commands.check(lambda x: False)
 async def birthday(ctx, *args):
     """Wish someone a happy birthday!"""
     if not args:
@@ -682,6 +683,7 @@ async def birthday(ctx, *args):
 
 
 @bot.command()
+@commands.check(lambda x: False)
 async def speakfile(ctx, *args):
     """Send the input text as a sound file from text-to-speech."""
     if not args:
@@ -691,6 +693,7 @@ async def speakfile(ctx, *args):
 
 
 @bot.command()
+@commands.check(lambda x: False)
 async def adderall(ctx, *args):
     """Text-to-speech but f a s t."""
     if not args:
@@ -701,6 +704,7 @@ async def adderall(ctx, *args):
 
 
 @bot.command()
+@commands.check(lambda x: False)
 async def speak(ctx, *args):
     """Play your input text through text-to-speech."""
     if not args:
@@ -711,6 +715,7 @@ async def speak(ctx, *args):
 
 
 @bot.command()
+@commands.check(lambda x: False)
 async def speakdrunk(ctx, *args):
     """Text-to-speech but more drunk."""
     if not args:
