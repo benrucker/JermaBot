@@ -16,18 +16,31 @@ Note: **some commands will be broken on your server**. Fixes for these commands 
 
 ### Installing JermaBot locally
 
-Clone this repo then store your bot token in a file called `secret.txt` in the base directory. Custom files should be stored in `discord-jerma\sounds\`. Currently only works on Windows due to reliance on `voice.exe`. Commands that don't use `voice.exe` should work on other platforms (**not tested**).
+Clone this repo,
+```git clone https://github.com/benrucker/discord-jerma.git```
+
+then store your bot token in a file called `secret.txt` in the `discord-jerma/`. The, run the bot by doing
+```
+cd jerma
+python jerma.py
+```
+or
+```
+cd jerma
+python3 jerma.py
+```
+
 
 #### Requirements:
 Install the needed python packages by running this command in the repo:
 ```pip install -r requirements.txt```
 
-You will also need ffmpeg to be on your system path.
+You will also need ffmpeg to be on your system path. If you're on Linux, you might need to install libespeck1
 
 ## Commands
 All commands are prefixed with `$` by default.
 
-* `speak <words>` - Jerma joins the channel and says what you input in the command using `voice.exe`.
+* `speak <words>` - Jerma joins the channel and says what you input.
   * E.g. `$speak What's up guys, Jermabot here.`
 * `speakdrunk <stuff>` - Same as `speak` but more like a streamer during a Labo build.
 * `adderall <things>` - Same as `speak` but more like a streamer during a bitcoin joke.
