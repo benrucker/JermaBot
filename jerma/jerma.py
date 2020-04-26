@@ -453,11 +453,6 @@ async def _list(ctx):
     await ctx.message.add_reaction("✉")
 
 
-# @bot.command()
-# async def addpoint(ctx, *args):
-#     await score.__call__(ctx, args)
-
-
 @bot.command()
 @commands.check(is_major)
 async def resetscore(ctx, *args):
