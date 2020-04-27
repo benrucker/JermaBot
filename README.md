@@ -1,4 +1,4 @@
-# Jerma985 Bot
+# JermaBot
 
 <img src="jerma/resources/images/thumbnail.png" width="200" height="250" align="right" />
 
@@ -10,32 +10,35 @@ You can add this bot to your server or install it locally.
 
 ### Adding JermaBot to your server
 
-Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is at 99%, although the `speak` command has been broken to reach this goal (will fix soon I promise).
+Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is at 99%.
 
-Note: **some commands will be broken on your server**. Fixes for these commands will be applied in future updates. If you want these commands, you can install JermaBost locally and edit them yourself.
+Note: **some commands are broken**. Fixes for these commands will be applied in future updates. If you really need these commands right now, you can install JermaBost locally and apply a patch yourself.
 
 ### Installing JermaBot locally
+
+#### Setup:
+Install the needed python packages by running this command in the repo:
+```pip install -r requirements.txt```
+
+You will also need ffmpeg to be on your system path. If you want to use TTS features, you will need SAPI5 if you're on Windows, or `libespeak1` if you're on Linux.
 
 Clone this repo,
 ```git clone https://github.com/benrucker/discord-jerma.git```
 
-then store your bot token in a file called `secret.txt` in the `discord-jerma/`. The, run the bot by doing
+Then, store your bot token in a file called `secret.txt` in the folder `discord-jerma/`.
+
+#### Running JermaBot:
+
+Run the bot on Windows with:
 ```
 cd jerma
 python jerma.py
 ```
-or
+or on Linux with:
 ```
 cd jerma
 python3 jerma.py
 ```
-
-
-#### Requirements:
-Install the needed python packages by running this command in the repo:
-```pip install -r requirements.txt```
-
-You will also need ffmpeg to be on your system path. If you're on Linux, you might need to install libespeck1
 
 ## Commands
 All commands are prefixed with `$` by default.
