@@ -837,9 +837,10 @@ async def volume(ctx, *args):
     """Allow the user to change the volume of all played sounds."""
     ginfo = guilds[ctx.guild.id]
     old_vol = ginfo.volume
-    vol = args[0]
-    if not vol:
-        await ctx.send(f'Volume is currently at {old_vol}, bro.')
+    if not args:
+        await ctx.send(f'Volume is currently at {int(old_vol*100)}, bro.')
+        return
+    vol = int(args[0])
     fvol = vol / 100
     ginfo.volume = fvol
     if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
