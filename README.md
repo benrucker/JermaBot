@@ -20,7 +20,7 @@ Note: **some commands are broken**. Fixes for these commands will be applied in 
 Install the needed python packages by running this command in the repo:
 ```pip install -r requirements.txt```
 
-You will also need ffmpeg to be on your system path. If you want to use TTS features, you will need SAPI5 if you're on Windows, or `libespeak1` if you're on Linux.
+You will also need ffmpeg to be on your system path. If you want to use TTS features, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
 
 Clone this repo,
 ```git clone https://github.com/benrucker/discord-jerma.git```
