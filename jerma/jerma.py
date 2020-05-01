@@ -772,7 +772,7 @@ async def addsound(ctx, *args):
         filename = message.attachments[0].filename
 
     # remove old sound if there
-    name = filename.split('.')[0]
+    name = filename.split('.')[0].lower()
     if get_sound(name, ctx.guild):
         await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
         def check2(message):
