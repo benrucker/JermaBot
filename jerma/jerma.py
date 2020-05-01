@@ -806,7 +806,7 @@ async def remove(ctx, *args):
     await ctx.send('The sound has been eliminated, gamer.')
 
 
-@commands.check(is_major)
+# @commands.check(is_major)
 @bot.command()
 async def rename(ctx, *args):
     """Rename a sound clip."""
