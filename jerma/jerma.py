@@ -106,10 +106,12 @@ def get_sound(sound, guild: discord.Guild):
         return None
 
 
-def delete_sound(sound, guild: discord.Guild):
+def delete_sound(filepath, guild: discord.Guild):
     path = guilds[guild.id].sound_folder
-    print('deleting ' + os.path.join(path,sound))
-    os.remove(os.path.join(path,sound))
+    if 'sounds' not in filepath:
+        filepath = os.path.join(path,filepath)
+    print('deleting ' + filepath)
+    os.remove(filepath)
 
 
 def rename_file(old_filepath, new_filepath):
