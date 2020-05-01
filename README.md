@@ -10,7 +10,7 @@ You can add this bot to your server or install it locally.
 
 ### Adding JermaBot to your server
 
-Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=0&scope=bot) and select your server! Currently, uptime is at 99%.
+Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot) and select your server! Currently, uptime is at 99%.
 
 Note: **some commands are broken**. Fixes for these commands will be applied in future updates. If you really need these commands right now, you can install JermaBost locally and apply a patch yourself.
 
