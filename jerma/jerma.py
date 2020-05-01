@@ -770,6 +770,7 @@ async def addsound(ctx, *args):
             filename = arg + '.' + message.attachments[0].filename.split('.')[-1]
     else:
         filename = message.attachments[0].filename
+    filename = filename.lower()
 
     # remove old sound if there
     name = filename.split('.')[0].lower()
