@@ -900,6 +900,13 @@ async def on_ready():
 
 
 @bot.event
+async def on_guild_join(guild):
+    os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'), exist_ok=True)
+    guilds[guild.id] = GuildInfo(guild)
+    print(f'Added to {guild.name}:{guild.id}!')
+
+
+@bot.event
 async def on_voice_state_update(member, before, after):
     """Play a join noise when a user joins a channel."""
     # member (Member) – The member whose voice states changed.
