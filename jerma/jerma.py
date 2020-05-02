@@ -793,7 +793,7 @@ async def addsound(ctx, *args):
 async def remove(ctx, *args):
     """Remove a sound clip."""
     if not args:
-        raise JermaException('No sound specified in play command.',
+        raise JermaException('No sound specified in remove command.',
                              'Gamer, you gotta tell me which sound to remove.')
 
     sound_name = ' '.join(args)
@@ -812,7 +812,7 @@ async def remove(ctx, *args):
 async def rename(ctx, *args):
     """Rename a sound clip."""
     if not args:
-        raise JermaException('No sound specified in play command.',
+        raise JermaException('No sound specified in rename command.',
                              'Gamer, do it like this: `$rename old name, new name`')
 
     old, new = ' '.join(args).split(', ')
