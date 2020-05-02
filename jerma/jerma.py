@@ -42,6 +42,20 @@ def check_perms(user, action):
         raise NotImplementedError()
 
 
+async def manage_sounds_check(ctx):
+    p = ctx.channel.permissions_for(ctx.author)
+    return p.kick_members or\
+           p.ban_members or\
+           p.administrator or\
+           p.manage_guild or\
+           p.move_members or\
+           p.manage_nicknames or\
+           p.manage_roles or\
+           p.deafen_members or\
+           p.mute_members or\
+           p.mute_members
+
+
 def has_sound_file(message):
     attachment = message.attachments[0]
     return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
@@ -411,6 +425,7 @@ async def on_message(message):
     #    print(e)
 # ----------------------------------------------------------------------------
 
+
 @bot.command()
 async def join(ctx):
     """Join the user's voice channel."""
@@ -751,7 +766,7 @@ async def play(ctx, *args):
 
 
 @bot.command()
-#@commands.check(is_major)
+@commands.check(manage_sounds_check)
 async def addsound(ctx, *args):
     """Add a sound to the sounds list."""
     arg = ' '.join(args).lower()
@@ -790,6 +805,7 @@ async def addsound(ctx, *args):
 
 
 @bot.command()
+@commands.check(manage_sounds_check)
 async def remove(ctx, *args):
     """Remove a sound clip."""
     if not args:
@@ -807,8 +823,8 @@ async def remove(ctx, *args):
     await ctx.send('The sound has been eliminated, gamer.')
 
 
-# @commands.check(is_major)
 @bot.command()
+@commands.check(manage_sounds_check)
 async def rename(ctx, *args):
     """Rename a sound clip."""
     if not args:
@@ -857,7 +873,7 @@ async def volume(ctx, *args):
     await react('⬆' if fvol > old_vol else '⬇')
 
 
-@commands.check(is_major)
+@commands.is_owner()
 @bot.command()
 async def update(ctx):
     """Update the bot."""
@@ -966,8 +982,8 @@ async def on_voice_state_update(member, before, after):
 @bot.event
 async def on_command_error(ctx, e):
     """Catch errors and handle them."""
-    e2 = e.original
-    if type(e2) is JermaException:
+    if hasattr(e, 'original') and type(e.original) is JermaException:
+        e2 = e.original
         print(f'{t.RED}Caught JermaException: ' + str(e2))
         await ctx.send(e2.message)
     # if type(e) is commands.errors.CommandInvokeError:
