@@ -928,7 +928,7 @@ async def on_guild_join(guild):
 @bot.event
 async def on_guild_update(before, after):
     print(f'Guild {before.name} updated.')
-    if not before.region == after.region and before.voice_client:
+    if before.voice_client and not before.region == after.region:
         print(f'Disconnecting from {before.name} due to region switch.')
         await before.voice_client.disconnect()
 
