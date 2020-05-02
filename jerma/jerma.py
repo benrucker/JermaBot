@@ -908,6 +908,14 @@ async def on_guild_join(guild):
 
 
 @bot.event
+async def on_guild_update(before, after):
+    print(f'Guild {before.name} updated.')
+    if not before.region == after.region and before.voice_client:
+        print(f'Disconnecting from {before.name} due to region switch.')
+        await before.voice_client.disconnect()
+
+
+@bot.event
 async def on_voice_state_update(member, before, after):
     """Play a join noise when a user joins a channel."""
     # member (Member) – The member whose voice states changed.
