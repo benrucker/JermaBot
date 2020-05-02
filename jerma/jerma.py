@@ -956,11 +956,11 @@ async def on_voice_state_update(member, before, after):
 @bot.event
 async def on_command_error(ctx, e):
     """Catch errors and handle them."""
-    if type(e) is commands.errors.CommandInvokeError:
-        e = e.original
-        if type(e) is JermaException:
-            print(f'{t.RED}Caught JermaException: ' + str(e))
-            await ctx.send(e.message)
+    e2 = e.original
+    if type(e2) is JermaException:
+        print(f'{t.RED}Caught JermaException: ' + str(e2))
+        await ctx.send(e2.message)
+    # if type(e) is commands.errors.CommandInvokeError:
         #else:
             #ben = get_ben()
             #mention = ben.mention + ' something went bonkers.'
