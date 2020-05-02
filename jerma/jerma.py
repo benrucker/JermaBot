@@ -816,7 +816,7 @@ async def rename(ctx, *args):
                              'Gamer, do it like this: `$rename old name, new name`')
 
     old, new = ' '.join(args).split(', ')
-
+    print(f'renaming {old} to {new} in {ctx.guild.name}')
     old_filename = get_sound(old, ctx.guild)
     if old_filename:
         new_filename = old_filename[:33] + new.lower() + old_filename[-4:]
@@ -826,6 +826,8 @@ async def rename(ctx, *args):
         except Exception as e:
             raise JermaException(f'Error {type(e)} while renaming sound',
                                  'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
+    else:
+        await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
 
 
 @bot.command()
