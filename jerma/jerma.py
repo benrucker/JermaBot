@@ -45,15 +45,15 @@ def check_perms(user, action):
 
 async def manage_sounds_check(ctx):
     p = ctx.channel.permissions_for(ctx.author)
-    return p.kick_members or\
-           p.ban_members or\
-           p.administrator or\
-           p.manage_guild or\
-           p.move_members or\
-           p.manage_nicknames or\
-           p.manage_roles or\
-           p.deafen_members or\
-           p.mute_members or\
+    return p.kick_members or \
+           p.ban_members or \
+           p.administrator or \
+           p.manage_guild or \
+           p.move_members or \
+           p.manage_nicknames or \
+           p.manage_roles or \
+           p.deafen_members or \
+           p.mute_members or \
            p.mute_members
 
 
