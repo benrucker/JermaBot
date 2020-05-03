@@ -58,7 +58,7 @@ class TTSMycroft(TTSEngineInterface):
                f'-o {filepath}')
         print(cmd)
         result = subprocess.run(cmd,
-                                text=True, capture_output=True, check=True)
+                                shell=True, text=True, capture_output=True, check=True)
         if not result.returncode == 0:
             print('Something went wrong saving mycroft mimic to file.')
         else:
