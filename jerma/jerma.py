@@ -778,7 +778,7 @@ async def play(ctx, *args):
 @bot.command()
 @commands.check(manage_sounds_check)
 async def addsound(ctx, *args):
-    """Add a sound to the sounds list. Any sort of 'Manage Person' permission is required to use it."""
+    """Add a sound to the sounds list. Requires certain server perms."""
     arg = ' '.join(args).lower()
 
     # get sound file from user
