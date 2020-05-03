@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 from collections import OrderedDict
 import colorama
@@ -8,7 +9,6 @@ from discord.ext import commands
 from glob import glob
 import logging
 import os
-import pyttsx3
 from pydub import AudioSegment
 import random
 import sys
@@ -18,6 +18,7 @@ import traceback
 
 from guild_info import GuildInfo
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
+import ttsengine
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
@@ -25,7 +26,7 @@ NO  = ['no','n','nope','start over','nada', 'nah']
 
 colorama.init(autoreset=True)  # set up colored console out
 guilds = dict()
-tts = pyttsx3.init()
+tts = None
 
 prefixes = ['$', '+']
 bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
@@ -91,8 +92,8 @@ def play_sound_file(sound, vc, output=True):
         print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
 
 
-def play_text(vc, to_speak, ctx, label, _speed=0):
-    sound_file = text_to_wav(to_speak, ctx, label, speed=_speed)
+def play_text(vc, to_speak, speed='normal'):
+    sound_file = text_to_wav(to_speak, speed=speed)
     play_sound_file(sound_file, vc)
 
 
@@ -182,18 +183,12 @@ def get_yoni_leave_sound():
     return sound
 
 
-def text_to_wav(text, ctx, label, speed=150):
-    try:
-        tts.stop()
-        tts.endLoop()
-    except RuntimeError as e:
-        print(e)
-    soundclip = generate_id_path(label, ctx)
-    file = soundclip
-    tts.setProperty('rate', speed)
-    tts.save_to_file(text, file)
-    tts.runAndWait()
-    return soundclip
+def text_to_wav(text, speed='normal'):
+    if speed == 'slow':
+        return tts.text_to_wav_slow(text)
+    if speed == 'fast':
+        return tts.text_to_wav_fast(text)
+    return tts.text_to_wav_normal(text)
 
 
 def generate_id_path(label, ctx):
@@ -230,10 +225,30 @@ def get_existing_voice_client(guild):
             return vc
 
 
+def remove_leading_silence(sound, silence_threshold=-50.0, chunk_size=10):
+    '''
+    sound is a pydub.AudioSegment
+    silence_threshold in dB
+    chunk_size in ms
+
+    iterate over chunks until you find the first one with sound, then
+    return trimmed AudioSegment.
+    Taken from https://stackoverflow.com/questions/29547218/remove-silence-at-the-beginning-and-at-the-end-of-wave-files-with-pydub
+    '''
+    trim_ms = 0 # ms
+
+    assert chunk_size > 0 # to avoid infinite loop
+    while sound[trim_ms:trim_ms+chunk_size].dBFS < silence_threshold and trim_ms < len(sound):
+        trim_ms += chunk_size
+
+    return sound[trim_ms:]
+
+
 def birthday_wave(name, ctx):
     """Construct birthday sound."""
     song = AudioSegment.from_wav(os.path.join('resources', 'soundclips', 'blank_birthday.wav'))
     name = AudioSegment.from_wav(name)
+    name = remove_leading_silence(name)
     insert_times = [7.95 * 1000, 12.1 * 1000]
 
     for insert_time in insert_times:
@@ -687,7 +702,6 @@ async def jermalofi(ctx):
 
 
 @bot.command()
-@commands.check(lambda x: False)
 async def birthday(ctx, *args):
     """Wish someone a happy birthday!"""
     if not args:
@@ -695,50 +709,46 @@ async def birthday(ctx, *args):
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
     vc.play(discord.FFmpegPCMAudio(birthday_wave(
-                                     text_to_wav(to_speak, ctx, 'birthday_name'), ctx)))
+                                     text_to_wav(to_speak), ctx)))
 
 
 @bot.command()
-@commands.check(lambda x: False)
 async def speakfile(ctx, *args):
     """Send the input text as a sound file from text-to-speech."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
-    await ctx.send(file=discord.File(text_to_wav(to_speak, ctx, 'speakfile', speed=0)))
+    await ctx.send(file=discord.File(text_to_wav(to_speak)))
 
 
 @bot.command()
-@commands.check(lambda x: False)
 async def adderall(ctx, *args):
     """Text-to-speech but f a s t."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'adderall', _speed=350)
+    play_text(vc, to_speak, speed='fast')
 
 
 @bot.command()
-@commands.check(lambda x: False)
 async def speak(ctx, *args):
     """Play your input text through text-to-speech."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ' '.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'speak')
+    play_text(vc, to_speak)
 
 
 @bot.command()
-@commands.check(lambda x: False)
 async def speakdrunk(ctx, *args):
     """Text-to-speech but more drunk."""
     if not args:
         raise discord.InvalidArgument
     to_speak = ''.join(args)
     vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, ctx, 'speakdrunk', _speed=50)
+    play_text(vc, to_speak, speed='slow')
 
 
 @bot.command()
@@ -1049,9 +1059,33 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=logging.INFO)
 
-    file = open('secret.txt')
+    parser = argparse.ArgumentParser(description='Run JermaBot')
+    parser.add_argument('-s', '--secret_filename', help='location of bot token text file')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-mycroft', '--mycroft_path', help='tell jerma to use mycroft at the given path')
+    group.add_argument('-voice', '--voice_path', help='tell jerma to use windows voice.exe tts engine')
+    group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
+                        action='store_true')
+    parser.add_argument('-mv','--mycroft_voice', help='name of OR path to the voice to use with mycroft')
+    args = parser.parse_args()
+
+    if args.secret_filename:
+        file = open(args.secret)
+    else:
+        file = open('secret.txt')
     secret = file.read()
     file.close()
+
+    if args.mycroft_path:
+        if args.mycroft_voice:
+            _v = args.mycroft_voice
+        else:
+            _v = 'ap'
+        tts = ttsengine.construct(engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
+    elif args.voice_path:
+        tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
+    else:
+        tts = ttsengine.construct(engine=ttsengine.ESPEAK) 
 
     try:
         os.makedirs(os.path.join('resources', 'soundclips', 'temp'))

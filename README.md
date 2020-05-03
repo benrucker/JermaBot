@@ -29,18 +29,22 @@ Then, store your bot token in a file called `secret.txt` in the folder `discord-
 
 #### Running JermaBot:
 
-Run the bot on Windows with:
+Run the bot through the command line like this:
 ```
 cd jerma
-python jerma.py
+python jerma.py [-s SECRET_FILENAME]
+                (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak)
+                [-mv MYCROFT_VOICE]
 ```
-or on Linux with:
-```
-cd jerma
-python3 jerma.py
-```
+* `-s` allows you to specify a specific text file that your bot token is stored in. If not included, Jerma will look for your token in a file called `secret.txt` in the base dirctory. This flag is optional.
+* `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
+    * e.g. `-mycroft tts/mimic.exe`
+* `-mv PATH_TO_VOICE` allows you to specify which voice you want to use with mycroft mimic. This flag is optional.
 
-## Commands
+
+On Linux, use `python3` instead of `python`.
+
+## Some Commands
 All commands are prefixed with `$` by default.
 
 * `speak <words>` - Jerma joins the channel and says what you input.
