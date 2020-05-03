@@ -778,7 +778,7 @@ async def play(ctx, *args):
 @bot.command()
 @commands.check(manage_sounds_check)
 async def addsound(ctx, *args):
-    """Add a sound to the sounds list."""
+    """Add a sound to the sounds list. Any sort of 'Manage Person' permission is required to use it."""
     arg = ' '.join(args).lower()
 
     # get sound file from user
@@ -1002,6 +1002,9 @@ async def on_command_error(ctx, e):
             #mention = ben.mention + ' something went bonkers.'
             #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
     else:
+        if type(e) is commands.errors.CheckFailure:
+            await ctx.send('You don\'t have the correct server permissions to do that, dude.')
+
         # return to default discord.py behavior circa 2020.4.25
         # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
         if hasattr(ctx.command, 'on_error'):
