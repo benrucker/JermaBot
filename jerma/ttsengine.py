@@ -52,7 +52,7 @@ class TTSMycroft(TTSEngineInterface):
 
     def text_to_wav(self, text, speed):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
-        cmd = (f'{self.path} -t {text} ' +
+        cmd = (f'{self.path} -t "{text}" ' +
                f'-voice {self.voice} ' +
                f'--setf duration_stretch={speed} ' +
                f'-o {filepath}')
