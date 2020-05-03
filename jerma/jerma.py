@@ -955,7 +955,7 @@ async def on_voice_state_update(member, before, after):
     g = guilds[member.guild.id]
     if g.is_snapping or g.is_snoozed():
         return
-    else:
+    elif member.guild.me.nick:
         await member.guild.me.edit(nick=None)
 
     # cleanup connection if kicked
