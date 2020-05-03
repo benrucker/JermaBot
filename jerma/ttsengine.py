@@ -52,12 +52,13 @@ class TTSMycroft(TTSEngineInterface):
 
     def text_to_wav(self, text, speed):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
-        result = subprocess.run(['mimic.exe','-t',text,
-                                '-voice',self.voice,
-                                '--setf',f'duration_stretch={speed}',
-                                '-o',filepath],
-                                shell=True, text=True, capture_output=True)
-        # mimic.exe -t test -voice voices\\cmu_us_rms.flitevox -setf duration_stretch=0.5 -o test.wav
+        cmd = (f'{self.path} -t {text} ' +
+               f'-voice {self.voice} ' +
+               f'--setf duration_stretch={speed} ' +
+               f'-o {filepath}')
+        print(cmd)
+        result = subprocess.run(cmd,
+                                text=True, capture_output=True, check=True)
         if not result.returncode == 0:
             print('Something went wrong saving mycroft mimic to file.')
         else:
