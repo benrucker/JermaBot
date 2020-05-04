@@ -799,13 +799,14 @@ async def addsound(ctx, *args):
 
     # remove old sound if there
     name = filename.split('.')[0].lower()
-    if get_sound(name, ctx.guild):
+    existing = get_sound(name, ctx.guild)
+    if existing:
         await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
         def check2(message):
             return message.author is ctx.author
         replace_msg = await bot.wait_for('message', timeout=20, check=check2)
         if replace_msg.content.lower().strip() in YES:
-            delete_sound(filename, ctx.guild)
+            delete_sound(os.path.split(existing)[1], ctx.guild)
         else:
             await ctx.send('Yeah, I like the old one better too.')
             return
