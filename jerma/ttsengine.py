@@ -36,7 +36,7 @@ class TTSMycroft(TTSEngineInterface):
         self.voice = voice
         self.slow = 2.5
         self.normal = 1
-        self.fast = .4
+        self.fast = .5
 
     def get_environment_path(self):
         return self.path
