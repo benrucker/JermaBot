@@ -89,7 +89,7 @@ def play_sound_file(sound, vc, output=True):
 
     if output:
         c = t.CYAN
-        print(f'Playing {sound} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
+        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
 
 
 def play_text(vc, to_speak, speed='normal'):
@@ -429,9 +429,9 @@ async def on_message(message):
     #     return
 
     if message.content.startswith(tuple(prefixes)):
-        print(f'{message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
+        print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
     elif message.author == bot.user:
-        print(f'{message.author.name} - {message.guild} #{message.channel}: {message.content}')
+        print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
     await process_commands(message)
     #except AttributeError as _:
@@ -985,7 +985,7 @@ async def on_voice_state_update(member, before, after):
     if old_vc and len(old_vc.channel.members) <= 1:
         y = t.YELLOW + Style.BRIGHT
         c = t.CYAN + Style.NORMAL
-        print(f'{y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+        print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
         await old_vc.disconnect()
         return
 
