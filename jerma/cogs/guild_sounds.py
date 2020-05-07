@@ -22,32 +22,6 @@ async def manage_sounds_check(ctx):
            p.mute_members
 
 
-def source_factory(filename):
-    op = '-guess_layout_max 0'
-    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
-
-
-class LoopingSource(discord.AudioSource):
-    """This class acts the same as a discord.py AudioSource except it will loop
-    forever."""
-    def __init__(self, param, source_factory, guild_id):
-        self.factory = source_factory
-        self.param = param
-        self.source = source_factory(self.param)
-        self.guild_id = guild_id
-        self.source.volume = bot.get_guildinfo(guild_id).volume
-
-    def read(self):
-        self.source.volume = bot.get_guildinfo(self.guild_id).volume
-        ret = self.source.read()
-        if not ret:
-            self.source.cleanup()
-            self.source = self.factory(self.param)
-            self.source.volume = bot.get_guildinfo(self.guild_id).volume
-            ret = self.source.read()
-        return ret
-
-
 class GuildSounds(commands.Cog):
     def __init__(self, bot, path_to_guilds):
         self.bot = bot
@@ -205,14 +179,6 @@ class GuildSounds(commands.Cog):
                               )
         await ctx.message.add_reaction("✉")
 
-    def play_sound_file(self, sound, vc):
-        source = source_factory(sound)
-        source.volume = bot.get_guildinfo(vc.channel.guild.id).volume
-        self.stop_audio(vc)
-        vc.play(source)
-        c = t.CYAN
-        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
-
     @commands.command()
     async def play(self, ctx, *args):
         """Play a sound."""
@@ -228,38 +194,4 @@ class GuildSounds(commands.Cog):
 
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(ctx)
-        self.play_sound_file(current_sound, vc)
-
-    def stop_audio(self, vc):
-        if vc.is_playing():
-            vc.stop()
-            silence = os.path.join('resources', 'soundclips', 'silence.wav')
-            self.play_sound_file(silence, vc)
-            #time.sleep(.07)
-            while vc.is_playing():
-                continue
-
-    @commands.command()
-    async def stop(self, ctx):
-        """Stops any currently playing audio."""
-        vc = ctx.voice_client
-        self.stop_audio(vc)
-
-    @commands.command()
-    async def volume(self, ctx, *args):
-        """Allow the user to change the volume of all played sounds."""
-        ginfo = bot.get_guildinfo(ctx.guild.id)
-        old_vol = ginfo.volume
-        if not args:
-            await ctx.send(f'Volume is currently at {int(old_vol*100)}, bro.')
-            return
-        vol = int(args[0])
-        fvol = vol / 100
-        ginfo.volume = fvol
-        if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
-            ctx.voice_client.source.volume = fvol
-
-        react = ctx.message.add_reaction
-        speakers = ['🔈', '🔉', '🔊']
-        await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
-        await react('⬆' if fvol > old_vol else '⬇')
+        self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
