@@ -32,17 +32,6 @@ prefixes = ['$', '+']
 bot = commands.Bot(command_prefix=commands.when_mentioned_or('$', '+'))
 
 
-def check_perms(user, action):
-    if action == 'addsound':
-        if is_major(user):
-            return
-        else:
-            raise JermaException('invalid permissions to do ' + addsound,
-                                 'You don\'t got permission to do that, pardner.')
-    else:
-        raise NotImplementedError()
-
-
 async def manage_sounds_check(ctx):
     p = ctx.channel.permissions_for(ctx.author)
     return p.kick_members or \
@@ -81,56 +70,19 @@ def get_ben():
     return bot.get_user(bot.owner_id)
 
 
-def play_sound_file(sound, vc, output=True):
-    source = source_factory(sound)
-    source.volume = guilds[vc.channel.guild.id].volume
-    stop_audio(vc)
-    vc.play(source)
-
-    if output:
-        c = t.CYAN
-        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
-
-
 def play_text(vc, to_speak, speed='normal'):
     sound_file = text_to_wav(to_speak, speed=speed)
-    play_sound_file(sound_file, vc)
+    bot.get_cog('SoundPlayer').play_sound_file(sound_file, vc)
 
 
 def stop_audio(vc):
     if vc.is_playing():
         vc.stop()
         silence = os.path.join('resources', 'soundclips', 'silence.wav')
-        play_sound_file(silence, vc, output=False)
+        bot.get_cog('SoundPlayer').play_sound_file(silence, vc, output=False)
         #time.sleep(.07)
         while vc.is_playing():
             continue
-
-
-def source_factory(filename):
-    op = '-guess_layout_max 0'
-    return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
-
-
-def get_sound(sound, guild: discord.Guild):
-    ginfo = guilds[guild.id]
-    sounds = make_sounds_dict(ginfo.sound_folder)
-    try:
-        return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
-    except KeyError:
-        return None
-
-
-def delete_sound(filepath, guild: discord.Guild):
-    path = guilds[guild.id].sound_folder
-    if 'sounds' not in filepath:
-        filepath = os.path.join(path,filepath)
-    print('deleting ' + filepath)
-    os.remove(filepath)
-
-
-def rename_file(old_filepath, new_filepath):
-    os.rename(old_filepath, new_filepath)
 
 
 def get_soul_stone_channel(ctx):
@@ -455,7 +407,7 @@ async def leave(ctx):
         sounds = make_sounds_dict(loc)
         soundname = random.choice(list(sounds.values()))
         sound = os.path.join(loc, soundname)
-        play_sound_file(sound, ctx.voice_client)
+        bot.get_cog('SoundPlayer').play_sound_file(sound, ctx.voice_client)
         time.sleep(1)
         await ctx.guild.voice_client.disconnect()
 
@@ -472,16 +424,6 @@ async def jermahelp(ctx):
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
     thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
     await ctx.author.send(files=[avatar, thumbnail], embed=helpEmbed)
-    await ctx.message.add_reaction("✉")
-
-
-@bot.command(name='list')
-async def _list(ctx):
-    """Send the user a list of sounds that can be played."""
-    ginfo = guilds[ctx.guild.id]
-    avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
-    thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
-    await ctx.author.send(files=[avatar, thumbnail], embed=get_list_embed(ginfo))
     await ctx.message.add_reaction("✉")
 
 
@@ -612,7 +554,7 @@ async def quarantine(ctx, *args):
     sound, delay, length = get_quarantine_sound()
     
     guilds[ctx.guild.id].is_snapping = True
-    play_sound_file(sound, vc, output=True)
+    bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
     time.sleep(delay)
     await user.move_to(dest_channel)
     time.sleep(length - delay)
@@ -642,7 +584,7 @@ async def fsmash(ctx, *args):
     sound, delay, length = get_smash_sound()
     
     guilds[ctx.guild.id].is_snapping = True
-    play_sound_file(sound, vc, output=True)
+    bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
     time.sleep(delay)
     await user.move_to(dest_channel)
     time.sleep(length - delay)
@@ -671,7 +613,7 @@ async def downsmash(ctx, *args):
     sound, delay, length = get_smash_sound()
     
     guilds[ctx.guild.id].is_snapping = True
-    play_sound_file(sound, vc, output=True)
+    bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
     time.sleep(delay)
     await user.move_to(None)
     time.sleep(length - delay)
@@ -698,7 +640,9 @@ async def jermalofi(ctx):
     print('jermalofi')
     vc = await connect_to_user(ctx)
     id = ctx.guild.id
-    vc.play(LoopingSource(os.path.join('resources', 'soundclips', 'birthdayloop.wav'), source_factory, id))
+    vc.play(bot.get_cog('SoundPlayer').LoopingSource(os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
+                                                    bot.get_cog('SoundPlayer').source_factory,
+                                                    id))
 
 
 @bot.command()
@@ -749,139 +693,6 @@ async def speakdrunk(ctx, *args):
     to_speak = ''.join(args)
     vc = await connect_to_user(ctx)
     play_text(vc, to_speak, speed='slow')
-
-
-@bot.command()
-async def loopaudio(ctx, *args):
-    """Play a sound and loop it forever."""
-    vc = await connect_to_user(ctx)
-    vc.play(LoopingSource(args, source_factory, ctx.guild.id))
-
-
-@bot.command()
-async def play(ctx, *args):
-    """Play a sound."""
-    if not args:
-        raise JermaException('No sound specified in play command.',
-                             'Gamer, you gotta tell me which sound to play.')
-
-    sound = ' '.join(args)
-    current_sound = get_sound(sound, ctx.guild)
-    if not current_sound:
-        raise JermaException('Sound ' + sound + ' not found.',
-                             'Hey gamer, that sound doesn\'t exist.')
-
-    vc = await connect_to_user(ctx)
-    play_sound_file(current_sound, vc)
-
-
-@bot.command()
-@commands.check(manage_sounds_check)
-async def addsound(ctx, *args):
-    """Add a sound to the sounds list. Requires certain server perms."""
-    arg = ' '.join(args).lower()
-
-    # get sound file from user
-    await ctx.send('Alright gamer, send the new sound.')
-    def check(message):
-        return message.author is ctx.author and has_sound_file(message)
-    message = await bot.wait_for('message', timeout=20, check=check)
-
-    # construct name from arg or attachment
-    if arg:
-        if arg.endswith(('.mp3','.wav')):
-            filename = arg
-        else:
-            filename = arg + '.' + message.attachments[0].filename.split('.')[-1]
-    else:
-        filename = message.attachments[0].filename
-    filename = filename.lower()
-
-    # remove old sound if there
-    name = filename.split('.')[0].lower()
-    existing = get_sound(name, ctx.guild)
-    if existing:
-        await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
-        def check2(message):
-            return message.author is ctx.author
-        replace_msg = await bot.wait_for('message', timeout=20, check=check2)
-        if replace_msg.content.lower().strip() in YES:
-            delete_sound(os.path.split(existing)[1], ctx.guild)
-        else:
-            await ctx.send('Yeah, I like the old one better too.')
-            return
-
-    await add_sound_to_guild(message.attachments[0], ctx.guild, filename=filename)
-    await ctx.send('Sound added, gamer.')
-
-
-@bot.command()
-@commands.check(manage_sounds_check)
-async def remove(ctx, *args):
-    """Remove a sound clip."""
-    if not args:
-        raise JermaException('No sound specified in remove command.',
-                             'Gamer, you gotta tell me which sound to remove.')
-
-    sound_name = ' '.join(args)
-    sound = get_sound(sound_name, ctx.guild)
-
-    if not sound:
-        raise JermaException('Sound ' + sound + ' not found.',
-                             'Hey gamer, that sound doesn\'t exist.')
-
-    delete_sound(sound, ctx.guild)
-    await ctx.send('The sound has been eliminated, gamer.')
-
-
-@bot.command()
-@commands.check(manage_sounds_check)
-async def rename(ctx, *args):
-    """Rename a sound clip."""
-    if not args:
-        raise JermaException('No sound specified in rename command.',
-                             'Gamer, do it like this: `$rename old name, new name`')
-
-    old, new = ' '.join(args).split(', ')
-    print(f'renaming {old} to {new} in {ctx.guild.name}')
-    old_filename = get_sound(old, ctx.guild)
-    if old_filename:
-        new_filename = old_filename[:33] + new.lower() + old_filename[-4:]
-        try:
-            rename_file(old_filename, new_filename)
-            await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
-        except Exception as e:
-            raise JermaException(f'Error {type(e)} while renaming sound',
-                                 'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
-    else:
-        await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
-
-
-@bot.command()
-async def stop(ctx):
-    """Stops any currently playing audio."""
-    vc = ctx.voice_client
-    stop_audio(vc)
-
-
-@bot.command()
-async def volume(ctx, *args):
-    """Allow the user to change the volume of all played sounds."""
-    ginfo = guilds[ctx.guild.id]
-    old_vol = ginfo.volume
-    if not args:
-        await ctx.send(f'Volume is currently at {int(old_vol*100)}, bro.')
-        return
-    vol = int(args[0])
-    fvol = vol / 100
-    ginfo.volume = fvol
-    if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
-        ctx.voice_client.source.volume = fvol
-
-    react = ctx.message.add_reaction
-    speakers = ['🔈', '🔉', '🔊']
-    await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
-    await react('⬆' if fvol > old_vol else '⬇')
 
 
 @commands.is_owner()
@@ -967,18 +778,18 @@ async def on_voice_state_update(member, before, after):
 
     # play join sound
     if after.channel and after.channel is not before.channel:
-        join_sound = get_sound(member.name, member.guild)
+        join_sound = bot.get_cog('GuildSounds').get_sound(member.name, member.guild)
         if join_sound:
             vc = await connect_to_channel(member.voice.channel, old_vc)
             await asyncio.sleep(0.1)
-            play_sound_file(join_sound, vc)
+            bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
         return
 
     # play leave sound
     if old_vc and not after or not hasattr(after, 'channel') and before.channel is old_vc.channel:
         leave_sound = get_yoni_leave_sound()
         if leave_sound and member.id == 196742230659170304:
-            play_sound_file(leave_sound, old_vc)
+            bot.get_cog('SoundPlayer').play_sound_file(leave_sound, old_vc)
             return
 
     # leave if channel is empty
@@ -1019,27 +830,6 @@ async def on_command_error(ctx, e):
         print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
-
-
-class LoopingSource(discord.AudioSource):
-    """This class acts the same as a discord.py AudioSource except it will loop
-    forever."""
-    def __init__(self, param, source_factory, guild_id):
-        self.factory = source_factory
-        self.param = param
-        self.source = source_factory(self.param)
-        self.source.volume = guilds[guild_id].volume
-        self.guild_id = guild_id
-
-    def read(self):
-        self.source.volume = guilds[self.guild_id].volume
-        ret = self.source.read()
-        if not ret:
-            self.source.cleanup()
-            self.source = self.factory(self.param)
-            self.source.volume = guilds[self.guild_id].volume
-            ret = self.source.read()
-        return ret
 
 
 class JermaException(Exception):
