@@ -56,9 +56,12 @@ activities = [(ActivityType.listening, 'my heart.'),
               (ActivityType.listening, 'rats lofi'),
               (ActivityType.listening, 'Shigurain.'),
               (ActivityType.listening, 'Kim!'),
-              (ActivityType.streaming, 'DARK SOULS 3'),
+              (ActivityType.listening, 'the DOOM OST.'),
+              (ActivityType.listening, 'a clown podcast.'),
+              (ActivityType.streaming, 'DARK SOULS III'),
               (ActivityType.streaming, 'Just Cause 4 for 3DS'),
               (ActivityType.watching, 'chat make fun of me.'),
+              (ActivityType.watching, 'E3® 2022.'),
               (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
               (ActivityType.watching, 'the byeahs.'), # comma on last item is good
               ]
