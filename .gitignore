@@ -4,6 +4,7 @@ secret*
 guilds/
 *.bat
 *.py.*
+jerma/voices/
 
 # VS
 .vc/
