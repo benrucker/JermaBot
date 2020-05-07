@@ -48,8 +48,8 @@ class LoopingSource(discord.AudioSource):
         return ret
 
 
-class Sound(commands.Cog):
-    def __init__(self, bot):
+class GuildSounds(commands.Cog):
+    def __init__(self, bot, path_to_guilds):
         self.bot = bot
         self.path_to_guilds = path_to_guilds
         #self.sounds_dict  # keep this static until add,rm,or rename
