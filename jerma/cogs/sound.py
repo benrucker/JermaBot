@@ -4,6 +4,8 @@ import discord
 from discord.ext import commands
 import time
 import os
+from glob import glob
+from discord.embeds import Embed
 
 
 async def manage_sounds_check(ctx):
@@ -32,16 +34,16 @@ class LoopingSource(discord.AudioSource):
         self.factory = source_factory
         self.param = param
         self.source = source_factory(self.param)
-        self.source.volume = guilds[guild_id].volume
         self.guild_id = guild_id
+        self.source.volume = bot.get_guildinfo(guild_id).volume
 
     def read(self):
-        self.source.volume = guilds[self.guild_id].volume
+        self.source.volume = bot.get_guildinfo(self.guild_id).volume
         ret = self.source.read()
         if not ret:
             self.source.cleanup()
             self.source = self.factory(self.param)
-            self.source.volume = guilds[self.guild_id].volume
+            self.source.volume = bot.get_guildinfo(self.guild_id).volume
             ret = self.source.read()
         return ret
 
@@ -49,10 +51,11 @@ class LoopingSource(discord.AudioSource):
 class Sound(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        #self.sounds_dict
+        self.path_to_guilds = path_to_guilds
+        #self.sounds_dict  # keep this static until add,rm,or rename
 
     def get_sound(self, sound, guild: discord.Guild):
-        ginfo = guilds[guild.id]
+        ginfo = bot.get_guildinfo(guild.id)
         sounds = self.make_sounds_dict(ginfo.sound_folder)
         try:
             return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
@@ -66,7 +69,7 @@ class Sound(commands.Cog):
         return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
 
     def get_guild_sound_path(self, guild):
-        ginfo = guilds[guild.id]
+        ginfo = bot.get_guildinfo(guild.id)
         return ginfo.sound_folder
 
     async def add_sound_to_guild(self, sound, guild, filename=None):
@@ -118,7 +121,7 @@ class Sound(commands.Cog):
         await ctx.send('Sound added, gamer.')
 
     def delete_sound(self, filepath, guild: discord.Guild):
-        path = guilds[guild.id].sound_folder
+        path = bot.get_guildinfo(guild.id).sound_folder
         if 'sounds' not in filepath:
             filepath = os.path.join(path,filepath)
         print('deleting ' + filepath)
@@ -133,7 +136,7 @@ class Sound(commands.Cog):
                                 'Gamer, you gotta tell me which sound to remove.')
 
         sound_name = ' '.join(args)
-        sound = selfget_sound(sound_name, ctx.guild)
+        sound = self.get_sound(sound_name, ctx.guild)
 
         if not sound:
             raise JermaException('Sound ' + sound + ' not found.',
@@ -168,15 +171,47 @@ class Sound(commands.Cog):
         else:
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
 
-    def play_sound_file(self, sound, vc, output=True):
+    def make_sounds_dict(self, id):
+        sounds = {}
+        sound_folder = os.path.join(self.path_to_guilds, id, 'sounds')
+        #print('Finding sounds in:', sound_folder)
+        for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
+            filename = os.path.basename(filepath)
+            extension = filename.split('.')[1]
+            if extension not in ['mp3', 'wav']:
+                continue
+            sounds[filename.split('.')[0]] = filename
+        return sounds
+
+    def get_list_embed(self, guild_info):
+        sounds = self.make_sounds_dict(guild_info.sound_folder)
+
+        soundEmbed = Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
+        soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
+        soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
+        soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
+        soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
+
+        return soundEmbed
+
+    @commands.command(name='list')
+    async def _list(self, ctx):
+        """Send the user a list of sounds that can be played."""
+        ginfo = bot.get_guildinfo(ctx.guild.id)
+        # avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
+        # thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
+        await ctx.author.send(embed=self.get_list_embed(ginfo),
+                              #files=[avatar, thumbnail], 
+                              )
+        await ctx.message.add_reaction("✉")
+
+    def play_sound_file(self, sound, vc):
         source = source_factory(sound)
-        source.volume = guilds[vc.channel.guild.id].volume
+        source.volume = bot.get_guildinfo(vc.channel.guild.id).volume
         self.stop_audio(vc)
         vc.play(source)
-
-        if output:
-            c = t.CYAN
-            print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
+        c = t.CYAN
+        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
 
     @commands.command()
     async def play(self, ctx, *args):
@@ -186,7 +221,7 @@ class Sound(commands.Cog):
                                 'Gamer, you gotta tell me which sound to play.')
 
         sound = ' '.join(args)
-        current_sound = get_sound(sound, ctx.guild)
+        current_sound = self.get_sound(sound, ctx.guild)
         if not current_sound:
             raise JermaException('Sound ' + sound + ' not found.',
                                 'Hey gamer, that sound doesn\'t exist.')
@@ -199,7 +234,7 @@ class Sound(commands.Cog):
         if vc.is_playing():
             vc.stop()
             silence = os.path.join('resources', 'soundclips', 'silence.wav')
-            self.play_sound_file(silence, vc, output=False)
+            self.play_sound_file(silence, vc)
             #time.sleep(.07)
             while vc.is_playing():
                 continue
@@ -213,7 +248,7 @@ class Sound(commands.Cog):
     @commands.command()
     async def volume(self, ctx, *args):
         """Allow the user to change the volume of all played sounds."""
-        ginfo = guilds[ctx.guild.id]
+        ginfo = bot.get_guildinfo(ctx.guild.id)
         old_vol = ginfo.volume
         if not args:
             await ctx.send(f'Volume is currently at {int(old_vol*100)}, bro.')
