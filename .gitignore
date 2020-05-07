@@ -5,6 +5,7 @@ guilds/
 *.bat
 *.py.*
 jerma/voices/
+mimic.exe
 
 # VS
 .vc/
