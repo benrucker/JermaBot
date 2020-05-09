@@ -9,6 +9,7 @@ from discord.embeds import Embed
 import asyncio
 
 
+# will move these up to a broader scope later
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
 NO  = ['no','n','nope','start over','nada', 'nah']
 
