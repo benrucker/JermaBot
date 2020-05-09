@@ -21,6 +21,7 @@ from cogs.sound_player import SoundPlayer
 from cogs.control import Control
 from cogs.tts import TTS
 from cogs.admin import Admin
+from cogs.fun import Fun
 from jerma_exception import JermaException
 from guild_info import GuildInfo
 from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
@@ -379,9 +380,10 @@ if __name__ == '__main__':
 
     register_uncategorized_methods()
 
-    bot.add_cog(GuildSounds(bot, os.path.join(source_path, 'guilds')))
+    bot.load_extension('cogs.guild_sounds')
     bot.add_cog(SoundPlayer(bot, os.path.join(source_path, 'guilds')))
     bot.add_cog(Control(bot))
     bot.add_cog(TTS(bot, tts))
     bot.add_cog(Admin(bot))
+    bot.add_cog(Fun(bot))
     bot.run(secret)
