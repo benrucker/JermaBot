@@ -14,13 +14,13 @@ class Admin(commands.Cog):
             g.exit()
         await self.bot.close()
 
-    @commands.command()
+    @commands.command(hidden=True)
     async def perish(self, ctx):
         """Shut down the bot."""
         await self.shutdown()
 
     @commands.is_owner()
-    @commands.command()
+    @commands.command(hidden=True)
     async def update(self, ctx):
         """Update the bot."""
         try:
@@ -44,6 +44,6 @@ class Admin(commands.Cog):
             await self.shutdown()
 
     @commands.is_owner()
-    @commands.command()
+    @commands.command(hidden=True)
     async def reload(self, ctx, cog: str):
         self.bot.reload_extension(cog)
