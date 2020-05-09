@@ -34,7 +34,7 @@ class GuildSounds(commands.Cog):
 
     def get_sound(self, sound, guild: discord.Guild):
         ginfo = self.bot.get_guildinfo(guild.id)
-        sounds = self.make_sounds_dict(ginfo.sound_folder)
+        sounds = self.make_sounds_dict(guild.id)
         try:
             return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
         except KeyError:
@@ -54,9 +54,7 @@ class GuildSounds(commands.Cog):
         folder = self.get_guild_sound_path(guild)
         if not filename:
             filename = sound.filename.lower()
-
         path = os.path.join(folder, filename)
-
         await sound.save(path)
 
     @commands.command()
@@ -151,7 +149,7 @@ class GuildSounds(commands.Cog):
 
     def make_sounds_dict(self, id):
         sounds = {}
-        sound_folder = os.path.join(self.path_to_guilds, id, 'sounds')
+        sound_folder = os.path.join(self.path_to_guilds, str(id), 'sounds')
         #print('Finding sounds in:', sound_folder)
         for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
             filename = os.path.basename(filepath)
