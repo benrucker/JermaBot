@@ -28,10 +28,14 @@ async def manage_sounds_check(ctx):
            p.mute_members
 
 
+def setup(bot):
+    bot.add_cog(GuildSounds(bot))
+
+
 class GuildSounds(commands.Cog):
-    def __init__(self, bot, path_to_guilds):
+    def __init__(self, bot):
         self.bot = bot
-        self.path_to_guilds = path_to_guilds
+        #self.path_to_guilds = path_to_guilds
         #self.sounds_dict  # keep this static until add,rm,or rename
 
     def get_sound(self, sound, guild: discord.Guild):
@@ -49,7 +53,10 @@ class GuildSounds(commands.Cog):
         return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
 
     def get_guild_sound_path(self, guild):
-        ginfo = self.bot.get_guildinfo(guild.id)
+        if type(guild) is discord.Guild:
+            ginfo = self.bot.get_guildinfo(guild.id)
+        else:
+            ginfo = self.bot.get_guildinfo(guild)
         return ginfo.sound_folder
 
     async def add_sound_to_guild(self, sound, guild, filename=None):
