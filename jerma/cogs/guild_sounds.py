@@ -6,6 +6,7 @@ import time
 import os
 from glob import glob
 from discord.embeds import Embed
+import asyncio
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
@@ -160,11 +161,11 @@ class GuildSounds(commands.Cog):
         return sounds
 
     def get_list_embed(self, guild_info):
-        sounds = self.make_sounds_dict(guild_info.sound_folder)
+        sounds = self.make_sounds_dict(guild_info.id)
 
         soundEmbed = Embed(title=" list | all of the sounds in Jerma's directory", description="call these with the prefix to play them in your server, gamer!", color=0x66c3cb)
-        soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU", icon_url="attachment://avatar.png")
-        soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
+        soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU")#, icon_url="attachment://avatar.png")
+        # soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
         soundEmbed.add_field(name='Sounds:', value='\n'.join(sounds), inline=True)
         soundEmbed.set_footer(text="Message your server owner to get custom sounds added!")
 
@@ -210,3 +211,53 @@ class GuildSounds(commands.Cog):
             # set nick to JermaBot
             await ctx.me.edit(nick=None)
             await ctx.send(f'**I HAVE AWOKEN**')
+
+    def get_yoni_leave_sound(self):
+        sound = os.path.join('resources', 'soundclips', 'workhereisdone.wav')
+        return sound
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member, before, after):
+        """Play a join noise when a user joins a channel."""
+        # member (Member) – The member whose voice states changed.
+        # before (VoiceState) – The voice state prior to the changes.
+        # after (VoiceState) – The voice state after the changes.
+        old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
+
+        # don't play join sound if conditional
+        g = self.bot.get_guildinfo(member.guild.id)
+        if g.is_snapping or g.is_snoozed():
+            return
+        elif member.guild.me.nick:
+            await member.guild.me.edit(nick=None)
+
+        # cleanup connection if kicked
+        if member.id is self.bot.user.id:
+            if old_vc and not after.channel:
+                await old_vc.disconnect()
+            return
+
+        # play join sound
+        if after.channel and after.channel is not before.channel:
+            join_sound = self.bot.get_cog('GuildSounds').get_sound(member.name, member.guild)
+            if join_sound:
+                vc = await self.bot.get_cog('Control').connect_to_channel(member.voice.channel, old_vc)
+                await asyncio.sleep(0.1)
+                self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
+            return
+
+        # play leave sound
+        if old_vc and not after or not hasattr(after, 'channel') and before.channel is old_vc.channel:
+            leave_sound = self.get_yoni_leave_sound()
+            if leave_sound and member.id == 196742230659170304:
+                self.bot.get_cog('SoundPlayer').play_sound_file(leave_sound, old_vc)
+                return
+
+        # leave if channel is empty
+        if old_vc and len(old_vc.channel.members) <= 1:
+            y = t.YELLOW + Style.BRIGHT
+            c = t.CYAN + Style.NORMAL
+            print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+            await old_vc.disconnect()
+            return
+
