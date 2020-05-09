@@ -372,6 +372,7 @@ if __name__ == '__main__':
         tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
     else:
         tts = ttsengine.construct(engine=ttsengine.ESPEAK) 
+    bot.tts_engine = tts
 
     try:
         os.makedirs(os.path.join('resources', 'soundclips', 'temp'))
@@ -381,9 +382,10 @@ if __name__ == '__main__':
     register_uncategorized_methods()
 
     bot.load_extension('cogs.guild_sounds')
-    bot.add_cog(SoundPlayer(bot, os.path.join(source_path, 'guilds')))
-    bot.add_cog(Control(bot))
-    bot.add_cog(TTS(bot, tts))
-    bot.add_cog(Admin(bot))
-    bot.add_cog(Fun(bot))
+    bot.load_extension('cogs.sound_player')
+    bot.load_extension('cogs.control')
+    bot.load_extension('cogs.tts')
+    bot.load_extension('cogs.admin')
+    bot.load_extension('cogs.fun')
+
     bot.run(secret)

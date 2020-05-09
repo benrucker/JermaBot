@@ -5,8 +5,12 @@ import os
 import time
 
 
+def setup(bot):
+    bot.add_cog(SoundPlayer(bot))
+
+
 class SoundPlayer(commands.Cog):
-    def __init__(self, bot, path_to_guilds):
+    def __init__(self, bot):
         self.bot = bot
 
     def play_sound_file(self, sound, vc):

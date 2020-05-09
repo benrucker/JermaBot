@@ -4,6 +4,9 @@ import glob
 import random
 import asyncio
 
+def setup(bot):
+    bot.add_cog(Control(bot))
+
 
 class Control(commands.Cog):
     def __init__(self, bot):

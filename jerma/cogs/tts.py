@@ -3,6 +3,11 @@ import discord
 from pydub.audio_segment import AudioSegment
 import os
 
+
+def setup(bot):
+    bot.add_cog(TTS(bot, bot.tts_engine))
+
+
 class TTS(commands.Cog):
     def __init__(self, bot, tts_engine):
         self.bot = bot

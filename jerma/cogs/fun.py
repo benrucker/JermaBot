@@ -6,6 +6,10 @@ import time
 import random
 
 
+def setup(bot):
+    bot.add_cog(Fun(bot))
+
+
 class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -16,7 +20,7 @@ class Fun(commands.Cog):
                 return channel
         raise Exception('channel not found')
 
-    def get_snap_sound(self, ):
+    def get_snap_sound(self):
         sounds = []
         snaps_folder = os.path.join('resources', 'soundclips', 'snaps')
         snaps_db = os.path.join(snaps_folder, 'sounds.txt')
