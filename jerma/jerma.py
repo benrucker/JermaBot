@@ -605,21 +605,6 @@ async def downsmash(ctx, *args):
     time.sleep(length - delay)
     guilds[ctx.guild.id].is_snapping = False
 
-
-@bot.command()
-async def snooze(ctx):
-    r = guilds[ctx.guild.id].toggle_snooze()
-    if r:
-        # set nick to JermaSnore
-        t = time.localtime(r)
-        await ctx.me.edit(nick='JermaSnore')
-        await ctx.send(f'Snoozed until {t.tm_hour % 12}:{t.tm_min:02} {t.tm_zone}. See you then, champ!')
-    else:
-        # set nick to JermaBot
-        await ctx.me.edit(nick=None)
-        await ctx.send(f'**I HAVE AWOKEN**')
-
-
 @bot.command()
 async def jermalofi(ctx):
     """Chill with a sick jam."""
