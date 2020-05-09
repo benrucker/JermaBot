@@ -215,15 +215,6 @@ async def help_loop(ctx, msg):
                 msg.edit(embed=get_list_embed(guilds[ctx.guild.id]))
                 msg.remove_reaction(reaction.emoji, reaction.author)
 
-
-async def shutdown():
-    for g in guilds.values():
-        if g.is_snoozed():
-            await bot.get_guild(g.id).me.edit(nick=None)
-        g.exit()
-    await bot.close()
-
-
 async def process_scoreboard(ctx):
     """Add points to person's score"""
     score = int(ctx.command)
