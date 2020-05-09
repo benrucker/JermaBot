@@ -42,3 +42,8 @@ class Admin(commands.Cog):
         else:
             await ctx.send('Patch applied, sister.')
             await self.shutdown()
+
+    @commands.is_owner()
+    @commands.command()
+    async def reload(self, ctx, cog: str):
+        self.bot.reload_extension(cog)
