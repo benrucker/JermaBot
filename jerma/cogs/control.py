@@ -28,6 +28,11 @@ class Control(commands.Cog):
             raise self.bot.JermaException('User was not in a voice channel or something.',
                                 msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
 
+    def get_existing_voice_client(self, guild):
+        for vc in self.bot.voice_clients:
+            if vc.guild == guild:
+                return vc
+
     @commands.command()
     async def join(self, ctx):
         """Join the user's voice channel."""
