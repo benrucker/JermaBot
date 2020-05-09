@@ -197,3 +197,16 @@ class GuildSounds(commands.Cog):
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(ctx)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
+
+    @commands.command()
+    async def snooze(self, ctx):
+        r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
+        if r:
+            # set nick to JermaSnore
+            t = time.localtime(r)
+            await ctx.me.edit(nick='JermaSnore')
+            await ctx.send(f'Snoozed until {t.tm_hour % 12}:{t.tm_min:02} {t.tm_zone}. See you then, champ!')
+        else:
+            # set nick to JermaBot
+            await ctx.me.edit(nick=None)
+            await ctx.send(f'**I HAVE AWOKEN**')
