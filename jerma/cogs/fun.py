@@ -94,7 +94,7 @@ class Fun(commands.Cog):
         sound, delay, length = self.get_quarantine_sound()
         
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
-        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
+        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
         await user.move_to(dest_channel)
         time.sleep(length - delay)
@@ -129,7 +129,7 @@ class Fun(commands.Cog):
         sound, delay, length = self.get_smash_sound()
         
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
-        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
+        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
         await user.move_to(dest_channel)
         time.sleep(length - delay)
@@ -158,7 +158,7 @@ class Fun(commands.Cog):
         sound, delay, length = self.get_smash_sound()
         
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
-        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc, output=True)
+        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
         await user.move_to(None)
         time.sleep(length - delay)
