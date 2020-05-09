@@ -380,31 +380,6 @@ async def on_message(message):
 
 
 @bot.command()
-async def join(ctx):
-    """Join the user's voice channel."""
-    _ = await connect_to_user(ctx)
-
-
-@bot.command()
-async def leave(ctx):
-    """Leave the voice channel, if any."""
-    if ctx.voice_client and ctx.voice_client.is_connected():
-        loc = os.path.join('resources', 'soundclips', 'leave')
-        sounds = make_sounds_dict(loc)
-        soundname = random.choice(list(sounds.values()))
-        sound = os.path.join(loc, soundname)
-        bot.get_cog('SoundPlayer').play_sound_file(sound, ctx.voice_client)
-        time.sleep(1)
-        await ctx.guild.voice_client.disconnect()
-
-
-@bot.command()
-async def perish(ctx):
-    """Shut down the bot."""
-    await shutdown()
-
-
-@bot.command()
 async def jermahelp(ctx):
     """Send the user important info about JermaBot."""
     avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
