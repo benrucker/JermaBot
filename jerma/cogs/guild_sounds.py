@@ -151,7 +151,7 @@ class GuildSounds(commands.Cog):
 
     def make_sounds_dict(self, id):
         sounds = {}
-        sound_folder = os.path.join(self.path_to_guilds, str(id), 'sounds')
+        sound_folder = os.path.join(self.bot.path, self.get_guild_sound_path(id))
         #print('Finding sounds in:', sound_folder)
         for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
             filename = os.path.basename(filepath)
