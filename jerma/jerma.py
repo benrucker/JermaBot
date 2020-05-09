@@ -630,57 +630,6 @@ async def jermalofi(ctx):
                                                     bot.get_cog('SoundPlayer').source_factory,
                                                     id))
 
-
-@bot.command()
-async def birthday(ctx, *args):
-    """Wish someone a happy birthday!"""
-    if not args:
-        raise discord.InvalidArgument
-    to_speak = ' '.join(args)
-    vc = await connect_to_user(ctx)
-    vc.play(discord.FFmpegPCMAudio(birthday_wave(
-                                     text_to_wav(to_speak), ctx)))
-
-
-@bot.command()
-async def speakfile(ctx, *args):
-    """Send the input text as a sound file from text-to-speech."""
-    if not args:
-        raise discord.InvalidArgument
-    to_speak = ' '.join(args)
-    await ctx.send(file=discord.File(text_to_wav(to_speak)))
-
-
-@bot.command()
-async def adderall(ctx, *args):
-    """Text-to-speech but f a s t."""
-    if not args:
-        raise discord.InvalidArgument
-    to_speak = ' '.join(args)
-    vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, speed='fast')
-
-
-@bot.command()
-async def speak(ctx, *args):
-    """Play your input text through text-to-speech."""
-    if not args:
-        raise discord.InvalidArgument
-    to_speak = ' '.join(args)
-    vc = await connect_to_user(ctx)
-    play_text(vc, to_speak)
-
-
-@bot.command()
-async def speakdrunk(ctx, *args):
-    """Text-to-speech but more drunk."""
-    if not args:
-        raise discord.InvalidArgument
-    to_speak = ''.join(args)
-    vc = await connect_to_user(ctx)
-    play_text(vc, to_speak, speed='slow')
-
-
 @commands.is_owner()
 @bot.command()
 async def update(ctx):
