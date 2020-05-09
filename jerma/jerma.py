@@ -55,22 +55,6 @@ def get_guild_sound_path(guild):
 def get_ben():
     return bot.get_user(bot.owner_id)
 
-
-def play_text(vc, to_speak, speed='normal'):
-    sound_file = text_to_wav(to_speak, speed=speed)
-    bot.get_cog('SoundPlayer').play_sound_file(sound_file, vc)
-
-
-def stop_audio(vc):
-    if vc.is_playing():
-        vc.stop()
-        silence = os.path.join('resources', 'soundclips', 'silence.wav')
-        bot.get_cog('SoundPlayer').play_sound_file(silence, vc, output=False)
-        #time.sleep(.07)
-        while vc.is_playing():
-            continue
-
-
 def get_soul_stone_channel(ctx):
     for channel in ctx.guild.voice_channels:
         if channel.id == 343939767068655616:
