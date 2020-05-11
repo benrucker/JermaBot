@@ -49,5 +49,17 @@ class Admin(commands.Cog):
 
     @commands.is_owner()
     @commands.command(hidden=True)
-    async def reload(self, ctx, cog: str):
-        self.bot.reload_extension(cog)
+    async def reload(self, ctx, ext: str):
+        self.bot.reload_extension(ext)
+        await ctx.send('Reloadception complete.')
+
+    @commands.is_owner()
+    @commands.command()
+    async def reloadall(self, ctx):
+        raise NotImplementedError()
+
+    @commands.is_owner()
+    @commands.command(hidden=True)
+    async def load(self, ctx, ext: str):
+        self.bot.load_extension(ext)
+        await ctx.send('Loading 99% complete.')
