@@ -4,6 +4,7 @@ import glob
 import random
 import asyncio
 
+
 def setup(bot):
     bot.add_cog(Control(bot))
 
