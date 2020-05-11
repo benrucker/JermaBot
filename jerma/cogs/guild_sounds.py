@@ -7,6 +7,7 @@ import os
 from glob import glob
 from discord.embeds import Embed
 import asyncio
+from guild_info import GuildInfo
 
 
 # will move these up to a broader scope later
@@ -226,7 +227,11 @@ class GuildSounds(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        """Play a join noise when a user joins a channel."""
+        """Play a join noise when a user joins a channel,
+        cleanup if kicked from voice,
+        play a leave sound for a certain user,
+        or disconnect if connected to an empty voice channel.
+        """
         # member (Member) – The member whose voice states changed.
         # before (VoiceState) – The voice state prior to the changes.
         # after (VoiceState) – The voice state after the changes.
@@ -269,3 +274,9 @@ class GuildSounds(commands.Cog):
             await old_vc.disconnect()
             return
 
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild):
+        '''Initialize guild sounds directory for new guild.'''
+        os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'), exist_ok=True)
+        self.bot.make_guildinfo(guild)
+        print(f'Added to {guild.name}:{guild.id}!')

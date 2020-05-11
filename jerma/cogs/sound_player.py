@@ -54,6 +54,14 @@ class SoundPlayer(commands.Cog):
         speakers = ['🔈', '🔉', '🔊']
         await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
         await react('⬆' if fvol > old_vol else '⬇')
+
+    @commands.Cog.listener()
+    async def on_guild_update(self, before, after):
+        '''Disconnect from voice channel if guild changes voice region.'''
+        print(f'Guild {before.name} updated.')
+        if before.voice_client and not before.region == after.region:
+            print(f'Disconnecting from {before.name} due to region switch.')
+            await before.voice_client.disconnect()
     
     def source_factory(self, filename):
         op = '-guess_layout_max 0'
