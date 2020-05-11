@@ -24,7 +24,6 @@ from cogs.admin import Admin
 from cogs.fun import Fun
 from jerma_exception import JermaException
 from guild_info import GuildInfo
-from help import helpEmbed, get_list_embed, make_sounds_dict, get_rand_activity
 import ttsengine
 
 
