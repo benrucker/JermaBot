@@ -51,9 +51,9 @@ class Control(commands.Cog):
         """Leave the voice channel, if any."""
         if ctx.voice_client and ctx.voice_client.is_connected():
             loc = os.path.join('resources', 'soundclips', 'leave')
-            sounds = glob.glob(os.path.join(self.bot.path, loc))
+            sounds = glob.glob(os.path.join(self.bot.path, loc, '*'))
             soundname = random.choice(sounds)
             sound = os.path.join(loc, soundname)
             self.bot.get_cog('SoundPlayer').play_sound_file(sound, ctx.voice_client)
-            asyncio.sleep(1)
+            await asyncio.sleep(1)
             await ctx.guild.voice_client.disconnect()
