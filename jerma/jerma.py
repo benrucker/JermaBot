@@ -3,6 +3,8 @@ import colorama
 from colorama import Fore as t
 from colorama import Style
 import discord
+from discord.activity import Activity
+from discord.enums import ActivityType
 from discord.ext import commands
 import logging
 import os
@@ -14,8 +16,6 @@ import traceback
 from jerma_exception import JermaException
 from guild_info import GuildInfo
 import ttsengine
-from discord.enums import ActivityType
-from discord.activity import Activity
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
