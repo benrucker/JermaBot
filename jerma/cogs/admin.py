@@ -63,3 +63,9 @@ class Admin(commands.Cog):
     async def load(self, ctx, ext: str):
         self.bot.load_extension(ext)
         await ctx.send('Loading 99% complete.')
+
+    @commands.is_owner()
+    @commands.command()
+    async def unload(self, ctx, ext: str):
+        self.bot.unload_extension(ext)
+        await ctx.send('Unloaded, pew pew.')
