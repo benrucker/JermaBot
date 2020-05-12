@@ -10,9 +10,11 @@ def setup(bot):
 
 
 class Control(commands.Cog):
+    """Cog for controlling the movement of a bot through voice channels."""
+
     def __init__(self, bot):
         self.bot = bot
-    
+
     async def connect_to_channel(self, channel, vc=None):
         if not channel:
             raise AttributeError('channel cannot be None.')
@@ -29,8 +31,10 @@ class Control(commands.Cog):
             return await self.connect_to_channel(user_channel, vc)
         except Exception as e:
             print(e)
-            raise self.bot.JermaException('User was not in a voice channel or something.',
-                                msg='Hey gamer, you\'re not in a voice channel. Totally uncool.')
+            raise self.bot.JermaException(
+                    'User was not in a voice channel or something.',
+                    msg='Hey gamer, you\'re not in a voice channel. Totally uncool.'
+                    )
 
     def get_existing_voice_client(self, guild):
         for vc in self.bot.voice_clients:

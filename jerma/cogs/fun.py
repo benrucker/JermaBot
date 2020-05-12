@@ -11,6 +11,8 @@ def setup(bot):
 
 
 class Fun(commands.Cog):
+    """Cog for various silly bot functions."""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -96,7 +98,7 @@ class Fun(commands.Cog):
             return
 
         sound, delay, length = self.get_quarantine_sound()
-        
+
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
@@ -131,14 +133,13 @@ class Fun(commands.Cog):
             return
 
         sound, delay, length = self.get_smash_sound()
-        
+
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
         await user.move_to(dest_channel)
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
-
 
     @commands.command()
     async def downsmash(self, ctx, *args):
@@ -160,7 +161,7 @@ class Fun(commands.Cog):
             return
 
         sound, delay, length = self.get_smash_sound()
-        
+
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         time.sleep(delay)
@@ -170,12 +171,13 @@ class Fun(commands.Cog):
 
     @commands.command()
     async def drake(self, ctx, *args):
+        """Add a drake clapping reaction to the last message sent."""
         if not args:
             return
         try:
             msg = await ctx.channel.fetch_message(args[0])
-        except:
-            pass
+        except Exception as e:
+            print(e.with_traceback())
         await ctx.message.delete(delay=1)
         await msg.add_reaction('drake:679179726740258826')
         await asyncio.sleep(5)
@@ -187,6 +189,9 @@ class Fun(commands.Cog):
         print('jermalofi')
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         id = ctx.guild.id
-        vc.play(self.bot.get_cog('SoundPlayer').LoopingSource(os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
-                                                        self.bot.get_cog('SoundPlayer').source_factory,
-                                                        id))
+        vc.play(self.bot.get_cog('SoundPlayer')
+                .LoopingSource(
+                    os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
+                    self.bot.get_cog('SoundPlayer').source_factory,
+                    id)
+                )

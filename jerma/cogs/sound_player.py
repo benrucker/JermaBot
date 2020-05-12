@@ -10,6 +10,8 @@ def setup(bot):
 
 
 class SoundPlayer(commands.Cog):
+    """Cog for playing sounds through voice channels."""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -32,13 +34,13 @@ class SoundPlayer(commands.Cog):
 
     @commands.command()
     async def stop(self, ctx):
-        """Stops any currently playing audio."""
+        """Stop any currently playing audio."""
         vc = ctx.voice_client
         self.stop_audio(vc)
 
     @commands.command()
     async def volume(self, ctx, *args):
-        """Allow the user to change the volume of all played sounds."""
+        """Change the volume of played sounds."""
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
         old_vol = ginfo.volume
         if not args:
@@ -57,19 +59,19 @@ class SoundPlayer(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_update(self, before, after):
-        '''Disconnect from voice channel if guild changes voice region.'''
+        """Disconnect from voice channel if guild changes voice region."""
         print(f'Guild {before.name} updated.')
         if before.voice_client and not before.region == after.region:
             print(f'Disconnecting from {before.name} due to region switch.')
             await before.voice_client.disconnect()
-    
+
     def source_factory(self, filename):
         op = '-guess_layout_max 0'
         return discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(filename, before_options=op))
 
     class LoopingSource(discord.AudioSource):
-        """This class acts the same as a discord.py AudioSource except it will loop
-        forever."""
+        """This class acts the same as a discord.py AudioSource except it will loop forever."""
+
         def __init__(self, param, source_factory, guild_id, bot):
             self.factory = source_factory
             self.param = param

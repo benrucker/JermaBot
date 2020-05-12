@@ -1,5 +1,5 @@
 from colorama import Fore as t
-from colorama import Back, Style
+from colorama import Style
 import discord
 from discord.ext import commands
 import time
@@ -7,7 +7,6 @@ import os
 from glob import glob
 from discord.embeds import Embed
 import asyncio
-from guild_info import GuildInfo
 
 
 # will move these up to a broader scope later
@@ -34,6 +33,8 @@ def setup(bot):
 
 
 class GuildSounds(commands.Cog):
+    """Cog for maintaining guild-specific sound functionality."""
+
     def __init__(self, bot):
         self.bot = bot
         #self.path_to_guilds = path_to_guilds
@@ -75,13 +76,14 @@ class GuildSounds(commands.Cog):
 
         # get sound file from user
         await ctx.send('Alright gamer, send the new sound.')
+
         def check(message):
             return message.author is ctx.author and self.has_sound_file(message)
         message = await self.bot.wait_for('message', timeout=20, check=check)
 
         # construct name from arg or attachment
         if arg:
-            if arg.endswith(('.mp3','.wav')):
+            if arg.endswith(('.mp3', '.wav')):
                 filename = arg
             else:
                 filename = arg + '.' + message.attachments[0].filename.split('.')[-1]
@@ -94,6 +96,7 @@ class GuildSounds(commands.Cog):
         existing = self.get_sound(name, ctx.guild)
         if existing:
             await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
+
             def check2(message):
                 return message.author is ctx.author
             replace_msg = await self.bot.wait_for('message', timeout=20, check=check2)
@@ -109,7 +112,7 @@ class GuildSounds(commands.Cog):
     def delete_sound(self, filepath, guild: discord.Guild):
         path = self.bot.get_guildinfo(guild.id).sound_folder
         if 'sounds' not in filepath:
-            filepath = os.path.join(path,filepath)
+            filepath = os.path.join(path, filepath)
         print('deleting ' + filepath)
         os.remove(filepath)
 
@@ -130,7 +133,6 @@ class GuildSounds(commands.Cog):
 
         self.delete_sound(sound, ctx.guild)
         await ctx.send('The sound has been eliminated, gamer.')
-
 
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
@@ -187,7 +189,7 @@ class GuildSounds(commands.Cog):
         # avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
         # thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
         await ctx.author.send(embed=self.get_list_embed(ginfo),
-                              #files=[avatar, thumbnail], 
+                              #files=[avatar, thumbnail],
                               )
         await ctx.message.add_reaction("✉")
 
@@ -210,6 +212,7 @@ class GuildSounds(commands.Cog):
 
     @commands.command()
     async def snooze(self, ctx):
+        """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
         if r:
             # set nick to JermaSnore
@@ -227,7 +230,10 @@ class GuildSounds(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        """Play a join noise when a user joins a channel,
+        """
+        Manage functionality when someone changes voice state.
+
+        Play a join noise when a user joins a channel,
         cleanup if kicked from voice,
         play a leave sound for a certain user,
         or disconnect if connected to an empty voice channel.
@@ -276,7 +282,7 @@ class GuildSounds(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
-        '''Initialize guild sounds directory for new guild.'''
-        os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'), exist_ok=True)
+        """Initialize guild sounds directory for new guild."""
+        os.makedirs(os.path.join('guilds', f'{guild.id}', 'sounds'), exist_ok=True)
         self.bot.make_guildinfo(guild)
         print(f'Added to {guild.name}:{guild.id}!')

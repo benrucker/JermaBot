@@ -10,12 +10,15 @@ def setup(bot):
 
 
 class Scoreboard(commands.Cog):
+    """Cog for maintaining an interactable scoreboard for users."""
+
     def __init__(self, bot):
         self.bot = bot
 
     @commands.is_owner()
     @commands.command()
     async def resetscore(self, ctx, *args):
+        """Reset the score of a user."""
         if not args:
             raise discord.InvalidArgument
         name = ' '.join(args[0:])
@@ -28,6 +31,7 @@ class Scoreboard(commands.Cog):
 
     @commands.command()
     async def addpoint(self, ctx, *args):
+        """Give someone a point. Analogous to "+1 name"."""
         if not args:
             raise discord.InvalidArgument
         name = ' '.join(args[0:])
@@ -42,6 +46,7 @@ class Scoreboard(commands.Cog):
 
     @commands.command()
     async def leaderboard(self, ctx):
+        """View the leaderboard."""
         try:
             lb = self.bot.get_guildinfo(ctx.guild.id).leaderboard
             lbord = OrderedDict(sorted(lb.items(), key=lambda t: t[1], reverse=True))
@@ -56,14 +61,14 @@ class Scoreboard(commands.Cog):
             await ctx.send(out)
         except Exception as e:
             print(traceback.format_exception(None,  # <- type(e) by docs, but ignored
-                                            e, e.__traceback__),
-                file=sys.stderr, flush=True)
+                                             e, e.__traceback__),
+                  file=sys.stderr, flush=True)
 
     async def process_scoreboard(self, ctx):
-        """Add points to person's score"""
+        """Add points to person's score."""
         score = int(ctx.command)
 
-        if score not in [-3,-2,-1,1,2,3]:
+        if score not in [-3, -2, -1, 1, 2, 3]:
             await ctx.send("That's too many JermaBucks dude! Do you think I'm made of cash? Only do 1-3.")
             return  # send failure message
 

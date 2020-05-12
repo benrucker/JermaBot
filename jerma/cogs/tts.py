@@ -9,6 +9,8 @@ def setup(bot):
 
 
 class TTS(commands.Cog):
+    """Cog for text-to-speech functionality."""
+
     def __init__(self, bot, tts_engine):
         self.bot = bot
         self.tts = tts_engine
@@ -25,18 +27,18 @@ class TTS(commands.Cog):
         self.bot.get_cog('SoundPlayer').play_sound_file(sound_file, vc)
 
     def remove_leading_silence(self, sound, silence_threshold=-50.0, chunk_size=10):
-        '''
+        """
+        Return an AudioSegment that starts at the end of leading silence.
+
         sound is a pydub.AudioSegment
         silence_threshold in dB
         chunk_size in ms
 
-        iterate over chunks until you find the first one with sound, then
-        return trimmed AudioSegment.
         Taken from https://stackoverflow.com/questions/29547218/remove-silence-at-the-beginning-and-at-the-end-of-wave-files-with-pydub
-        '''
-        trim_ms = 0 # ms
+        """
+        trim_ms = 0  # ms
 
-        assert chunk_size > 0 # to avoid infinite loop
+        assert chunk_size > 0  # to avoid infinite loop
         while sound[trim_ms:trim_ms+chunk_size].dBFS < silence_threshold and trim_ms < len(sound):
             trim_ms += chunk_size
 

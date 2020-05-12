@@ -1,27 +1,16 @@
 import argparse
-import asyncio
-from collections import OrderedDict
 import colorama
 from colorama import Fore as t
-from colorama import Back, Style
+from colorama import Style
 import discord
 from discord.ext import commands
-from glob import glob
 import logging
 import os
-from pydub import AudioSegment
 import random
 import sys
-import subprocess
 import time
 import traceback
 
-from cogs.guild_sounds import GuildSounds
-from cogs.sound_player import SoundPlayer
-from cogs.control import Control
-from cogs.tts import TTS
-from cogs.admin import Admin
-from cogs.fun import Fun
 from jerma_exception import JermaException
 from guild_info import GuildInfo
 import ttsengine
@@ -44,7 +33,7 @@ ACTIVITIES = [(ActivityType.listening, 'my heart.'),
               (ActivityType.watching, 'chat make fun of me.'),
               (ActivityType.watching, 'E3® 2022.'),
               (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
-              (ActivityType.watching, 'the byeahs.'), # comma on last item is good
+              (ActivityType.watching, 'the byeahs.'),  # comma on last item is good
              ]
 
 
@@ -56,29 +45,42 @@ prefixes = ['$', '+']
 
 
 class JermaBot(commands.Bot):
+    """Base JermaBot class."""
+
     def __init__(self, path, command_prefix=None):
+        """
+        Construct JermaBot.
+
+        Sets the path and guild_info attrs to be accessed by cogs. Calls
+        its superclass's constructor as well.
+        """
         self.path = path
         self.guild_infos = dict()
         super().__init__(command_prefix=command_prefix)
 
     def get_guildinfo(self, id=None):
+        """Return a GuildInfo object for the given guild id."""
         if not id:
             return self.guild_infos
         else:
             return self.guild_infos[id]
 
     def make_guildinfo(self, guild: discord.Guild):
+        """Set a guildinfo object to a certain id."""
         self.guild_infos[guild.id] = GuildInfo(guild)
 
     def initialize_guild_infos(self):
+        """Construct dictionary of guildinfo objects."""
         for guild in self.guilds:
-            os.makedirs(os.path.join('guilds',f'{guild.id}','sounds'), exist_ok=True)
+            os.makedirs(os.path.join('guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
     def JermaException(self, err, msg):
+        """Return a JermaException. Useful for added cogs to access."""
         return JermaException(err, msg)
 
     def get_rand_activity(self):
+        """Return an Activity object with a random value."""
         info = random.choice(ACTIVITIES)
         return Activity(name=info[1], type=info[0])
 
@@ -123,10 +125,8 @@ class JermaBot(commands.Bot):
             traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
             # end plaigarism
 
-        
     async def get_context_no_command(self, message, cls=commands.Context):
-        """Constructs a context object from a given message."""
-
+        """Construct a context object from a given message."""
         view = discord.ext.commands.view.StringView(message.content)
         ctx = cls(prefix=None, view=view, bot=self, message=message)
 
@@ -170,8 +170,7 @@ class JermaBot(commands.Bot):
 
     # -------------- Overrides --------------------
     async def get_context(self, message, *, cls=discord.ext.commands.Context):
-        """Constructs a context object from a given command."""
-
+        """Construct a context object from a given command."""
         view = discord.ext.commands.view.StringView(message.content)
         ctx = cls(prefix=None, view=view, bot=self, message=message)
 
@@ -246,7 +245,6 @@ class JermaBot(commands.Bot):
         #    print(e)
 
 
-
 if __name__ == '__main__':
     global source_path, bot
     source_path = os.path.dirname(os.path.abspath(__file__))  # /a/b/c/d/e
@@ -259,8 +257,8 @@ if __name__ == '__main__':
     group.add_argument('-mycroft', '--mycroft_path', help='tell jerma to use mycroft at the given path')
     group.add_argument('-voice', '--voice_path', help='tell jerma to use windows voice.exe tts engine')
     group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
-                        action='store_true')
-    parser.add_argument('-mv','--mycroft_voice', help='name of OR path to the voice to use with mycroft')
+                       action='store_true')
+    parser.add_argument('-mv', '--mycroft_voice', help='name of OR path to the voice to use with mycroft')
     args = parser.parse_args()
 
     if args.secret_filename:
