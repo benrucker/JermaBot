@@ -182,15 +182,17 @@ class Fun(commands.Cog):
     async def drake(self, ctx, *args):
         """Add a drake clapping reaction to the last message sent."""
         if not args:
-            return
-        try:
-            msg = await ctx.channel.fetch_message(args[0])
-        except Exception as e:
-            print(e.with_traceback())
+            msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
+        else:
+            try:
+                msg = await ctx.channel.fetch_message(args[0])
+            except Exception as e:
+                print(e.with_traceback())
+                return
         await ctx.message.delete(delay=1)
-        await msg.add_reaction('drake:679179726740258826')
+        await msg.add_reaction(self.bot.get_emoji(679179726740258826))
         await asyncio.sleep(5)
-        await msg.remove_reaction('drake:679179726740258826', self.bot.user)
+        await msg.remove_reaction(self.bot.get_emoji(679179726740258826), self.bot.user)
 
     @commands.command()
     async def jermalofi(self, ctx):
