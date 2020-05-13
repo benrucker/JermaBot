@@ -12,7 +12,7 @@ You can add this bot to your server or install it locally.
 
 Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot) and select your server! Currently, uptime is at 99%.
 
-Note: **some commands are broken**. Fixes for these commands will be applied in future updates. If you really need these commands right now, you can install JermaBost locally and apply a patch yourself.
+Note: **some commands you see in the code are guild-specfic**. Send `$help` to see what commands you can call.
 
 ### Installing JermaBot locally
 
@@ -59,6 +59,7 @@ All commands are prefixed with `$` by default.
 * `help` - Lists all commands available to users.
 * `stop` - Stops audio from playing, if any.
 * `jermahelp` - Sends a DM to the command caller detailing commands.
+* `help` - Autogenerate a list of all commands available to you.
 * `list` - Lists the sounds available in the `play` command.
 * `volume` - Change the volume for sounds to be played at.
 
