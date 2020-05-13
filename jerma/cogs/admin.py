@@ -16,6 +16,10 @@ class Admin(commands.Cog):
             if g.is_snoozed():
                 await self.bot.get_guild(g.id).me.edit(nick=None)
             g.exit()
+        extensions = self.bot.extensions.copy()
+        for ext in extensions:
+            print(f'Unloading {ext}')
+            self.bot.unload_extension(ext)
         await self.bot.close()
 
     @commands.command(hidden=True)
