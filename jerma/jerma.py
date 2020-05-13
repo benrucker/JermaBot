@@ -98,7 +98,7 @@ class JermaBot(commands.Bot):
 
     async def on_command_error(self, ctx, e):
         """Catch errors and handle them."""
-        if hasattr(e, 'original') and type(e.original) is self.JermaException:
+        if hasattr(e, 'original') and type(e.original) is JermaException:
             e2 = e.original
             print(f'{t.RED}Caught JermaException: ' + str(e2))
             await ctx.send(e2.message)
