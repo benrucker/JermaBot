@@ -10,6 +10,12 @@ def setup(bot):
     bot.add_cog(Fun(bot))
 
 
+def is_whid():
+    def predicate(ctx):
+        return ctx.guild.id == 173840048343482368
+    return commands.check(predicate)
+
+
 class Fun(commands.Cog):
     """Cog for various silly bot functions."""
 
@@ -37,6 +43,7 @@ class Fun(commands.Cog):
         return choice
 
     @commands.command()
+    @is_whid()
     async def jermasnap(self, ctx):
         """Snap the user's voice channel."""
         print('jermasnap')
@@ -78,6 +85,7 @@ class Fun(commands.Cog):
         return [sound, float(a[0]), float(a[1])]
 
     @commands.command()
+    @is_whid()
     async def quarantine(self, ctx, *args):
         """Save'm."""
         if not args:
@@ -113,6 +121,7 @@ class Fun(commands.Cog):
         return [sound, float(a[0]), float(a[1])]
 
     @commands.command()
+    @is_whid()
     async def fsmash(self, ctx, *args):
         """Killem."""
         if not args:

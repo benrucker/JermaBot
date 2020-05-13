@@ -109,7 +109,7 @@ class JermaBot(commands.Bot):
                 #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
         else:
             if type(e) is commands.errors.CheckFailure:
-                await ctx.send('You don\'t have the correct server permissions to do that, dude.')
+                await ctx.send('Something went wrong, dude. You probably don\'t have the correct server permissions to do that.')
 
             # return to default discord.py behavior circa 2020.4.25
             # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
