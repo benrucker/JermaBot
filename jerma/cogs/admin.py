@@ -56,7 +56,10 @@ class Admin(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def reloadall(self, ctx):
-        raise NotImplementedError()
+        await ctx.send('Reloading:\n' + '\n'.join([(str(x)) for x in self.bot.extensions]))
+        for ext in self.bot.extensions:
+            self.bot.reload_extension(ext)
+        await ctx.send('Done')
 
     @commands.is_owner()
     @commands.command(hidden=True)
