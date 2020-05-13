@@ -178,6 +178,23 @@ class Fun(commands.Cog):
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
+    async def _add_emoji_and_delete_msg(self, emoji, msg_to_react, msg_to_delete):
+        await msg_to_delete.delete(delay=1)
+        await msg_to_react.add_reaction(str(emoji))
+        await asyncio.sleep(5)
+        await msg_to_react.remove_reaction(str(emoji), self.bot.user)
+
+    @commands.command()
+    async def e(self, ctx, emoji_name: str):
+        """Add the specified emoji to the most recent message sent."""
+        msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
+        # find emoji in server
+        emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
+        # if not found, search all
+        if not emoji:
+            emoji = discord.utils.get(self.bot.emojis, name=emoji_name)
+        await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
+
     @commands.command()
     async def drake(self, ctx, *args):
         """Add a drake clapping reaction to the last message sent."""
@@ -189,10 +206,8 @@ class Fun(commands.Cog):
             except Exception as e:
                 print(e.with_traceback())
                 return
-        await ctx.message.delete(delay=1)
-        await msg.add_reaction(self.bot.get_emoji(679179726740258826))
-        await asyncio.sleep(5)
-        await msg.remove_reaction(self.bot.get_emoji(679179726740258826), self.bot.user)
+        emoji = self.bot.get_emoji(679179726740258826)
+        await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
 
     @commands.command()
     async def jermalofi(self, ctx):
