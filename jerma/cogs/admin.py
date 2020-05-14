@@ -27,29 +27,42 @@ class Admin(commands.Cog):
         """Shut down the bot."""
         await self.shutdown()
 
-    @commands.is_owner()
-    @commands.command(hidden=True)
-    async def update(self, ctx):
-        """Update the bot."""
+    def _git_pull(self):
+        """Run git pull and return the result."""
+        if (sys.platform.startswith('win')):
+            result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
+        else:
+            result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
+        return result
+
+    async def _handle_pull(self, ctx) -> bool:
+        """Run git pull and return true if there was content to pull."""
         try:
-            if (sys.platform.startswith('win')):
-                result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
-            else:
-                result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
+            result = self._git_pull()
         except Exception as e:
             print(e.with_traceback)
             await ctx.send('Something ain\'t right here, pal.')
             return
-
         if result.returncode != 0:
             await ctx.send('Uhh, gamer? Something didn\'t go right.')
             print(result.returncode)
             print(result.stdout)
         elif 'Already up to date' in result.stdout:
-            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+            return False
         else:
+            return True
+
+    @commands.is_owner()
+    @commands.command()
+    async def update(self, ctx):
+        """Update the bot."""
+        updated = await self._handle_pull(ctx)
+        if updated:
+            await self._reload_all_cogs(ctx)
             await ctx.send('Patch applied, sister.')
-            await self.shutdown()
+        else:
+            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+        return updated
 
     @commands.is_owner()
     @commands.command(hidden=True)
@@ -57,13 +70,15 @@ class Admin(commands.Cog):
         self.bot.reload_extension(ext)
         await ctx.send('Reloadception complete.')
 
+    async def _reload_all_cogs(self, ctx):
+        await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
+        for ext in self.bot.extensions:
+            self.bot.reload_extension(ext)
+
     @commands.is_owner()
     @commands.command()
     async def reloadall(self, ctx):
-        await ctx.send('Reloading:\n' + '\n'.join([(str(x)) for x in self.bot.extensions]))
-        for ext in self.bot.extensions:
-            self.bot.reload_extension(ext)
-        await ctx.send('Done')
+        await self._reload_all_cogs(ctx)
 
     @commands.is_owner()
     @commands.command(hidden=True)
