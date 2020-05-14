@@ -1,6 +1,7 @@
 import os
 import time
 import subprocess
+from pydub.audio_segment import AudioSegment
 
 MYCROFT = 1
 VOICE   = 2
@@ -37,6 +38,7 @@ class TTSMycroft(TTSEngineInterface):
         self.slow = 2.5
         self.normal = 1
         self.fast = .5
+        self.vol_raise_amount = 6
 
     def get_environment_path(self):
         return self.path
@@ -50,6 +52,10 @@ class TTSMycroft(TTSEngineInterface):
     def text_to_wav_fast(self, text):
         return self.text_to_wav(text, self.fast)
 
+    def raise_volume(self, file):
+        sound = AudioSegment.from_file(file, format="wav") + self.vol_raise_amount
+        sound.export(file)
+
     def text_to_wav(self, text, speed):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
         cmd = (f'{self.path} -t "{text}" ' +
@@ -62,6 +68,7 @@ class TTSMycroft(TTSEngineInterface):
         if not result.returncode == 0:
             print('Something went wrong saving mycroft mimic to file.')
         else:
+            self.raise_volume(filepath)
             return filepath
 
 
