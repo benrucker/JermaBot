@@ -12,7 +12,7 @@ You can add this bot to your server or install it locally.
 
 Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot) and select your server! Currently, uptime is at 99%.
 
-Note: **some commands you see in the code are guild-specfic**. Send `$help` to see what commands you can call.
+Note: **some commands you might see in the code are guild-specfic**. Send `$help` to see what commands you can call.
 
 ### Installing JermaBot locally
 
