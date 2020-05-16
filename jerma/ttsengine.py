@@ -38,7 +38,7 @@ class TTSMycroft(TTSEngineInterface):
         self.slow = 2.5
         self.normal = 1
         self.fast = .5
-        self.vol_raise_amount = 12
+        self.vol_raise_amount = 9
 
     def get_environment_path(self):
         return self.path
