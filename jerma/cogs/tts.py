@@ -49,8 +49,8 @@ class TTS(commands.Cog):
 
     def birthday_wave(self, name, ctx):
         """Construct birthday sound."""
-        song = AudioSegment.from_wav(os.path.join('resources', 'soundclips', 'blank_birthday.wav'))
-        name = AudioSegment.from_wav(name)
+        song = AudioSegment.from_file(os.path.join('resources', 'soundclips', 'blank_birthday.wav'))
+        name = AudioSegment.from_file(name)
         name = self.remove_leading_silence(name)
         insert_times = [7.95 * 1000, 12.1 * 1000]
 
@@ -67,10 +67,11 @@ class TTS(commands.Cog):
         if not args:
             raise discord.InvalidArgument
         to_speak = ' '.join(args)
+        name = self.text_to_wav(to_speak)
+        birthday_with_name = self.birthday_wave(name, ctx)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
-        vc.play(discord.FFmpegPCMAudio(
-                    self.birthday_wave(
-                        self.text_to_wav(to_speak), ctx)))
+        player = self.bot.get_cog('SoundPlayer')
+        player.play_sound_file(birthday_with_name, vc)
 
     @commands.command()
     async def speakfile(self, ctx, *args):
