@@ -19,7 +19,7 @@ class Control(commands.Cog):
         if not channel:
             raise AttributeError('channel cannot be None.')
         if not vc:
-            vc = await channel.connect(reconnect=False)
+            vc = await channel.connect(reconnect=True)
         if vc.channel is not channel:
             await vc.move_to(channel)
         return vc
