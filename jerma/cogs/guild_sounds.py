@@ -261,7 +261,7 @@ class GuildSounds(commands.Cog):
             print(f'{y}Not playing guild sound due to snap or snooze')
             return
         elif member.guild.me.nick:
-            print(f'{y}Reset nickname in {guild}')
+            print(f'{y}Reset nickname in {member.guild}')
             await member.guild.me.edit(nick=None)
 
         # cleanup connection if kicked
