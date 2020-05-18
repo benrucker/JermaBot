@@ -54,11 +54,12 @@ class Admin(commands.Cog):
 
     @commands.is_owner()
     @commands.command()
-    async def update(self, ctx):
+    async def update(self, ctx, *args):
         """Update the bot."""
         updated = await self._handle_pull(ctx)
-        if updated:
+        if '-r' in args:
             await self._reload_all_cogs(ctx)
+        if updated:
             await ctx.send('Patch applied, sister.')
         else:
             await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
