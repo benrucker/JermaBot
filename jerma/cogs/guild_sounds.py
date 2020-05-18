@@ -251,23 +251,30 @@ class GuildSounds(commands.Cog):
         # after (VoiceState) – The voice state after the changes.
         print('Voice state update: ', member, member.id, before, after)
 
+        y = t.YELLOW + Style.BRIGHT
+        c = t.CYAN + Style.NORMAL
         old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
 
         # don't play join sound if conditional
         g = self.bot.get_guildinfo(member.guild.id)
         if g.is_snapping or g.is_snoozed():
+            print(f'{y}Not playing guild sound due to snap or snooze')
             return
         elif member.guild.me.nick:
+            print(f'{y}Reset nickname in {guild}')
             await member.guild.me.edit(nick=None)
 
         # cleanup connection if kicked
         if member.id == self.bot.user.id:
+            print(f'{y}Voice update was self')
             if old_vc and not after.channel:
+                print('Attempting to disconnect from old voice client')
                 await old_vc.disconnect()
             return
 
         # play join sound
         if after.channel and after.channel is not before.channel:
+            print(f'{y}Playing join sound...')
             join_sound = self.bot.get_cog('GuildSounds').get_sound(member.name, member.guild)
             if join_sound:
                 vc = await self.bot.get_cog('Control').connect_to_channel(member.voice.channel, old_vc)
@@ -284,8 +291,6 @@ class GuildSounds(commands.Cog):
 
         # leave if channel is empty
         if old_vc and len(old_vc.channel.members) <= 1:
-            y = t.YELLOW + Style.BRIGHT
-            c = t.CYAN + Style.NORMAL
             print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
             await old_vc.disconnect()
             return
