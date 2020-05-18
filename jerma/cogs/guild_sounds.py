@@ -249,6 +249,8 @@ class GuildSounds(commands.Cog):
         # member (Member) – The member whose voice states changed.
         # before (VoiceState) – The voice state prior to the changes.
         # after (VoiceState) – The voice state after the changes.
+        print('Voice state update: ', member, before, after)
+
         old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
 
         # don't play join sound if conditional
