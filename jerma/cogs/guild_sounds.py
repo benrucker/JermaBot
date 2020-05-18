@@ -253,6 +253,10 @@ class GuildSounds(commands.Cog):
 
         old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
 
+        # don't do anything if the bot itself moved
+        if member.id in [602166415788736537, 579445833938763816]:
+            return
+
         # don't play join sound if conditional
         g = self.bot.get_guildinfo(member.guild.id)
         if g.is_snapping or g.is_snoozed():
