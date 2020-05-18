@@ -13,7 +13,7 @@ class Admin(commands.Cog):
 
     @commands.is_owner()
     @commands.command()
-    async def moveto(self, id: int):
+    async def moveto(self, ctx, id: int):
         await self.bot.get_cog('Control').connect_to_channel(self.bot.get_channel(id))
 
     async def shutdown(self):
