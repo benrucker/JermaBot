@@ -1,6 +1,7 @@
 from discord.ext import commands
 import subprocess
 import sys
+from typing import Tuple
 
 
 def setup(bot):
@@ -40,28 +41,29 @@ class Admin(commands.Cog):
             result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
         return result
 
-    async def _handle_pull(self, ctx) -> bool:
+    async def _handle_pull(self, ctx) -> Tuple[bool, str]:
         """Run git pull and return true if there was content to pull."""
         try:
             result = self._git_pull()
         except Exception as e:
             print(e.with_traceback)
             await ctx.send('Something ain\'t right here, pal.')
-            return
+            return None
         if result.returncode != 0:
             await ctx.send('Uhh, gamer? Something didn\'t go right.')
             print(result.returncode)
             print(result.stdout)
         elif 'Already up to date' in result.stdout:
-            return False
+            return False, result.stdout
         else:
-            return True
+            return True, result.stdout
 
     @commands.is_owner()
     @commands.command()
     async def update(self, ctx, *args):
         """Update the bot."""
-        updated = await self._handle_pull(ctx)
+        updated, stdout = await self._handle_pull(ctx)
+        print(stdout)
         if '-r' in args:
             await self._reload_all_cogs(ctx)
         if updated:
