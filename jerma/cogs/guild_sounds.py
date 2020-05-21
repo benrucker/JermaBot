@@ -236,6 +236,14 @@ class GuildSounds(commands.Cog):
         sound = os.path.join('resources', 'soundclips', 'workhereisdone.wav')
         return sound
 
+    def voice_state_diff_str(self, v1, v2) -> str:
+        """Return a descriptive string of differences between two voice states."""
+        out = ''
+        for x, y in zip(repr(v1).split(' '), repr(v2).split(' ')):
+            if x != y:
+                out += '\tfrom ' + x + ' to ' + y + '\n'
+        return out[:-1]
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """
@@ -249,7 +257,7 @@ class GuildSounds(commands.Cog):
         # member (Member) – The member whose voice states changed.
         # before (VoiceState) – The voice state prior to the changes.
         # after (VoiceState) – The voice state after the changes.
-        print('Voice state update: ', member, member.id, before, after)
+        print('Voice state update: ' + member.name + '\n' + self.voice_state_diff_str(before, after))
 
         y = t.YELLOW + Style.BRIGHT
         c = t.CYAN + Style.NORMAL
