@@ -68,7 +68,7 @@ class GuildSounds(commands.Cog):
         path = os.path.join(folder, filename)
         await sound.save(path)
 
-    @commands.command()
+    @commands.command(aliases='add')
     @commands.check(manage_sounds_check)
     async def addsound(self, ctx, *args):
         """Add a sound to the sounds list. Requires certain server perms."""
@@ -116,7 +116,7 @@ class GuildSounds(commands.Cog):
         print('deleting ' + filepath)
         os.remove(filepath)
 
-    @commands.command()
+    @commands.command(aliases=['removesound'])
     @commands.check(manage_sounds_check)
     async def remove(self, ctx, *args):
         """Remove a sound clip."""
@@ -137,7 +137,7 @@ class GuildSounds(commands.Cog):
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
 
-    @commands.command()
+    @commands.command(aliases=['rename'])
     @commands.check(manage_sounds_check)
     async def rename(self, ctx, *args):
         """Rename a sound clip."""
@@ -190,7 +190,7 @@ class GuildSounds(commands.Cog):
 
         return sound_embed
 
-    @commands.command(name='list')
+    @commands.command(name='list', aliases=['sounds'])
     async def _list(self, ctx):
         """Send the user a list of sounds that can be played."""
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
@@ -218,7 +218,7 @@ class GuildSounds(commands.Cog):
         vc = await control.connect_to_user(ctx)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
 
-    @commands.command()
+    @commands.command(aliases=['sleep'])
     async def snooze(self, ctx):
         """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
