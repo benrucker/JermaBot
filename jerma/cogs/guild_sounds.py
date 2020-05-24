@@ -68,7 +68,7 @@ class GuildSounds(commands.Cog):
         path = os.path.join(folder, filename)
         await sound.save(path)
 
-    @commands.command(aliases='add')
+    @commands.command(aliases=['add'])
     @commands.check(manage_sounds_check)
     async def addsound(self, ctx, *args):
         """Add a sound to the sounds list. Requires certain server perms."""
@@ -137,7 +137,7 @@ class GuildSounds(commands.Cog):
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
 
-    @commands.command(aliases=['rename'])
+    @commands.command(aliases=['renamesound'])
     @commands.check(manage_sounds_check)
     async def rename(self, ctx, *args):
         """Rename a sound clip."""
