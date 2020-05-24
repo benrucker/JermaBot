@@ -174,7 +174,7 @@ class GuildSounds(commands.Cog):
     def get_list_embed(self, guild_info):
         # this was rewritten unextensibly but whatever
         _lim = 1024
-        sounds = '\n'.join(self.make_sounds_dict(guild_info.id))
+        sounds = '\n'.join(sorted(self.make_sounds_dict(guild_info.id)))
         overflow = None
         if len(sounds) > _lim:
             _split = sounds.rindex('\n', 0, len(sounds) // 2)
@@ -183,9 +183,9 @@ class GuildSounds(commands.Cog):
         sound_embed = Embed(title=" list | all of the sounds you can play through Jerma", description="`$play <sound>` to play them in your server, gamer!", color=0x66c3cb)
         # soundEmbed.set_author(name="Jermabot Help", url="https://www.youtube.com/watch?v=fnbvTOcNFhU")#, icon_url="attachment://avatar.png")
         # soundEmbed.set_thumbnail(url="attachment://thumbnail.png")
-        sound_embed.add_field(name='Sounds:', value=sounds, inline=True)
+        sound_embed.add_field(name='Sounds?', value=sounds, inline=True)
         if overflow:
-            sound_embed.add_field(name='Sounds 2:', value=overflow, inline=True)
+            sound_embed.add_field(name='Sounds!', value=overflow, inline=True)
         sound_embed.set_footer(text="Message your server owner to get custom sounds added!")
 
         return sound_embed
