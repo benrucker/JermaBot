@@ -56,7 +56,7 @@ class JermaBot(commands.Bot):
         """
         self.path = path
         self.guild_infos = dict()
-        super().__init__(command_prefix=command_prefix, case_insensitive=True)
+        super().__init__(command_prefix=command_prefix)
 
     def get_guildinfo(self, id=None):
         """Return a GuildInfo object for the given guild id."""
