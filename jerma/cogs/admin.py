@@ -15,7 +15,9 @@ class Admin(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def moveto(self, ctx, id: int):
-        await self.bot.get_cog('Control').connect_to_channel(self.bot.get_channel(id))
+        dest = ctx.guild.get_channel(id)
+        print(id, dest)
+        await self.bot.get_cog('Control').connect_to_channel(ctx, dest)
 
     async def shutdown(self):
         for g in self.bot.get_guildinfo().values():
