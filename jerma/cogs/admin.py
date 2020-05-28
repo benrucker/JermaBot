@@ -49,21 +49,20 @@ class Admin(commands.Cog):
             print(e.with_traceback)
             await ctx.send('Something ain\'t right here, pal.')
             return None
+        print(result.returncode)
+        print(result.stdout)
         if result.returncode != 0:
             await ctx.send('Uhh, gamer? Something didn\'t go right.')
-            print(result.returncode)
-            print(result.stdout)
         elif 'Already up to date' in result.stdout:
-            return False, result.stdout
+            return False
         else:
-            return True, result.stdout
+            return True
 
     @commands.is_owner()
     @commands.command()
     async def update(self, ctx, *args):
         """Update the bot."""
-        updated, stdout = await self._handle_pull(ctx)
-        print(stdout)
+        updated = await self._handle_pull(ctx)
         if '-r' in args:
             await self._reload_all_cogs(ctx)
         if updated:
