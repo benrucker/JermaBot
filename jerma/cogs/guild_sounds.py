@@ -279,29 +279,30 @@ class GuildSounds(commands.Cog):
                 print('Attempting to disconnect from old voice client')
                 await old_vc.disconnect()
             return
-
         # play join sound
         if after.channel and after.channel is not before.channel:
-            print(f'{y}Playing join sound...')
-            join_sound = self.bot.get_cog('GuildSounds').get_sound(member.name, member.guild)
+            print(f'{y}Playing join sound if exists...')
+            join_sound = self.get_sound(member.name, member.guild)
             if join_sound:
-                vc = await self.bot.get_cog('Control').connect_to_channel(member.voice.channel, old_vc)
-                await asyncio.sleep(0.1)
+                print(f'{y}Found join sound')
+                vc = await self.bot.get_cog('Control').connect_to_channel(old_vc, member.voice.channel)
+                print(f'{y}{vc}')
+                if vc is None:
+                    return
                 self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
+            print(f'{y}Done!')
             return
-
+        # leave if channel is empty
+        elif old_vc and len(old_vc.channel.members) <= 1:
+            print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
+            await old_vc.disconnect()
+            return
         # play leave sound
-        if old_vc and not after or not hasattr(after, 'channel') and before.channel is old_vc.channel:
+        elif old_vc and not after or not hasattr(after, 'channel') and before.channel is old_vc.channel:
             leave_sound = self.get_yoni_leave_sound()
             if leave_sound and member.id == 196742230659170304:
                 self.bot.get_cog('SoundPlayer').play_sound_file(leave_sound, old_vc)
                 return
-
-        # leave if channel is empty
-        if old_vc and len(old_vc.channel.members) <= 1:
-            print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-            await old_vc.disconnect()
-            return
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
