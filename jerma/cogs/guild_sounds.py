@@ -266,7 +266,7 @@ class GuildSounds(commands.Cog):
         # don't play join sound if conditional
         g = self.bot.get_guildinfo(member.guild.id)
         if g.is_snapping or g.is_snoozed():
-            print(f'{y}Not playing guild sound due to snap or snooze')
+            print(f'{y}Ignoring voice state update due to snap or snooze')
             return
         elif member.guild.me.nick:
             print(f'{y}Reset nickname in {member.guild}')
