@@ -43,18 +43,19 @@ class Admin(commands.Cog):
             result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
         return result
 
-    async def _handle_pull(self, ctx) -> Tuple[bool, str]:
-        """Run git pull and return true if there was content to pull."""
+    async def _handle_pull(self, ctx) -> bool:
+        """Run git pull and return true if an update succeeded."""
         try:
             result = self._git_pull()
         except Exception as e:
             print(e.with_traceback)
             await ctx.send('Something ain\'t right here, pal.')
-            return None
+            return False
         print(result.returncode)
         print(result.stdout)
         if result.returncode != 0:
             await ctx.send('Uhh, gamer? Something didn\'t go right.')
+            return False
         elif 'Already up to date' in result.stdout:
             return False
         else:
