@@ -290,7 +290,6 @@ class GuildSounds(commands.Cog):
                 if vc is None:
                     return
                 self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
-            print(f'{y}Done!')
             return
         # leave if channel is empty
         elif old_vc and len(old_vc.channel.members) <= 1:
