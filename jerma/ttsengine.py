@@ -98,7 +98,7 @@ class TTSOpenJtalk(TTSEngineInterface):
                f'-ow {filepath}')
         print(cmd)
         result = subprocess.run(cmd,
-                                shell=True, text=True, capture_output=True, check=True)
+                                shell=True, text=True, capture_output=True)
         if not result.returncode == 0:
             print('Something went wrong saving open_jtalk mimic to file.')
             print(result.stdout)
