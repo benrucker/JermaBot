@@ -102,6 +102,7 @@ class TTSOpenJtalk(TTSEngineInterface):
         if not result.returncode == 0:
             print('Something went wrong saving open_jtalk mimic to file.')
             print(result.stdout)
+            print(result.stderr)
         else:
             # self.raise_volume(filepath)
             return filepath
