@@ -82,7 +82,7 @@ class TTSOpenJtalk(TTSEngineInterface):
         # self.slow = 2.5
         # self.normal = 1
         # self.fast = .5
-        # self.vol_raise_amount = 9
+        self.vol_raise_amount = 10
 
     def get_environment_path(self):
         """Return the command line call to the tts executable."""
@@ -106,12 +106,16 @@ class TTSOpenJtalk(TTSEngineInterface):
             print(result.stdout)
             print(result.stderr)
         else:
-            # self.raise_volume(filepath)
+            self.raise_volume(filepath)
             return filepath
 
     def text_to_wav_normal(self, text):
         # return self.text_to_wav(text, self.normal)
         return self.text_to_wav(text)
+
+    def raise_volume(self, file):
+        sound = AudioSegment.from_file(file, format="wav") + self.vol_raise_amount
+        sound.export(file)
 
 
 class TTSVoice(TTSEngineInterface):
