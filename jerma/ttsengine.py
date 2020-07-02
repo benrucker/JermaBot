@@ -94,7 +94,7 @@ class TTSOpenJtalk(TTSEngineInterface):
         text = text.replace('"', '')
         cmd = (f'echo "{text}" | ' +
                f'{self.path} ' +
-               f'-x {self.dic}'
+               f'-x {self.dic} '
                f'-m {self.voice} ' +
                #f'--setf duration_stretch={speed} ' +
                f'-ow {filepath}')
