@@ -19,10 +19,10 @@ class TTS(commands.Cog):
     def text_to_wav(self, text, speed='normal', engine=None):
         if not engine: engine = self.tts
         if speed == 'slow':
-            return self.tts.text_to_wav_slow(text)
+            return engine.text_to_wav_slow(text)
         if speed == 'fast':
-            return self.tts.text_to_wav_fast(text)
-        return self.tts.text_to_wav_normal(text)
+            return engine.text_to_wav_fast(text)
+        return engine.text_to_wav_normal(text)
 
     def play_text(self, vc, to_speak, speed='normal', engine=None):
         if not engine: engine = self.tts
