@@ -288,8 +288,11 @@ if __name__ == '__main__':
     bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'))
     bot.tts_engine = tts
     if args.japanese_voice:
+        print('setting JTTS to openjtalk')
+        print('openjtalk voice at:', args.japanese_voice)
         bot.jtts_engine = ttsengine.construct(engine=ttsengine.OPEN_JTALK, voice=args.japanese_voice)
     else:
+        print('setting jtts to None')
         bot.jtts_engine = None
 
     bot.load_extension('cogs.guild_sounds')
