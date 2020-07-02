@@ -259,6 +259,7 @@ if __name__ == '__main__':
     group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
                        action='store_true')
     parser.add_argument('-mv', '--mycroft_voice', help='name of OR path to the voice to use with mycroft')
+    parser.add_argument('-jv', '--japanese_voice', help='path to voice to use with Japanese TTS')
     args = parser.parse_args()
 
     if args.secret_filename:
@@ -286,6 +287,10 @@ if __name__ == '__main__':
 
     bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'))
     bot.tts_engine = tts
+    if args.japanese_voice:
+        bot.jtts_engine = ttsengine.construct(engine=ttsengine.OPEN_JTALK, voice=args.japanese_voice)
+    else:
+        bot.jtts_engine = None
 
     bot.load_extension('cogs.guild_sounds')
     bot.load_extension('cogs.sound_player')

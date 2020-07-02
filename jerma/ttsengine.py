@@ -3,9 +3,10 @@ import time
 import subprocess
 from pydub.audio_segment import AudioSegment
 
-MYCROFT = 1
-VOICE   = 2
-ESPEAK  = 3
+MYCROFT    = 1
+VOICE      = 2
+ESPEAK     = 3
+OPEN_JTALK = 4
 
 
 class TTSEngineInterface:
@@ -72,6 +73,43 @@ class TTSMycroft(TTSEngineInterface):
             return filepath
 
 
+class TTSOpenJtalk(TTSEngineInterface):
+
+    def __init__(self, path, voice):
+        self.path = path
+        self.voice = voice
+        # self.slow = 2.5
+        # self.normal = 1
+        # self.fast = .5
+        # self.vol_raise_amount = 9
+
+    def get_environment_path(self):
+        """Return the command line call to the tts executable."""
+        return self.path
+
+    def text_to_wav(self, text):
+        """Read out the text and save it to a wav file."""
+        filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
+        text = text.replace('"', '')
+        cmd = (f'echo "{text}" | ' +
+               f'{self.path} -t "{text}" ' +
+               f'-m {self.voice} ' +
+               #f'--setf duration_stretch={speed} ' +
+               f'-ow {filepath}')
+        print(cmd)
+        result = subprocess.run(cmd,
+                                shell=True, text=True, capture_output=True, check=True)
+        if not result.returncode == 0:
+            print('Something went wrong saving open_jtalk mimic to file.')
+        else:
+            # self.raise_volume(filepath)
+            return filepath
+
+    def text_to_wav_normal(self, text):
+        # return self.text_to_wav(text, self.normal)
+        return self.text_to_wav(text)
+
+
 class TTSVoice(TTSEngineInterface):
     """Voice.exe engine."""
 
@@ -108,6 +146,8 @@ def construct(engine: int, path=None, voice=None):
         out = TTSVoice(path=path)
     elif engine == ESPEAK:
         out = TTSEspeak()
+    elif engine == OPEN_JTALK:
+        out = TTSOpenJtalk(path='open_jtalk', voice=voice)
     else:
         raise RuntimeError('Invalid tts engine specified.')
 

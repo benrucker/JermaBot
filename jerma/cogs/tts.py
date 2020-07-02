@@ -5,25 +5,28 @@ import os
 
 
 def setup(bot):
-    bot.add_cog(TTS(bot, bot.tts_engine))
+    bot.add_cog(TTS(bot, bot.tts_engine, bot.jtts_engine))
 
 
 class TTS(commands.Cog):
     """Cog for text-to-speech functionality."""
 
-    def __init__(self, bot, tts_engine):
+    def __init__(self, bot, tts_engine, jtts_engine):
         self.bot = bot
         self.tts = tts_engine
+        self.jtts = jtts_engine
 
-    def text_to_wav(self, text, speed='normal'):
+    def text_to_wav(self, text, speed='normal', engine=None):
+        if not engine: engine = self.tts
         if speed == 'slow':
             return self.tts.text_to_wav_slow(text)
         if speed == 'fast':
             return self.tts.text_to_wav_fast(text)
         return self.tts.text_to_wav_normal(text)
 
-    def play_text(self, vc, to_speak, speed='normal'):
-        sound_file = self.text_to_wav(to_speak, speed=speed)
+    def play_text(self, vc, to_speak, speed='normal', engine=None):
+        if not engine: engine = self.tts
+        sound_file = self.text_to_wav(to_speak, speed=speed, engine=engine)
         self.bot.get_cog('SoundPlayer').play_sound_file(sound_file, vc)
 
     def remove_leading_silence(self, sound, silence_threshold=-50.0, chunk_size=10):
@@ -107,3 +110,11 @@ class TTS(commands.Cog):
         to_speak = ''.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, speed='slow')
+
+    @commands.command(aliases=['sa'])
+    async def speakanime(self, ctx, *args):
+        if not args:
+            raise discord.InvalidArgument
+        to_speak = ''.join(args)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        self.play_text(vc, to_speak, engine=self.jtts)
