@@ -1,7 +1,9 @@
 from discord.ext import commands
 import discord
-from pydub.audio_segment import AudioSegment
 import os
+from pydub.audio_segment import AudioSegment
+from ttsengine import TTSEngineInterface
+from typing import Optional
 
 
 def setup(bot):
@@ -13,8 +15,8 @@ class TTS(commands.Cog):
 
     def __init__(self, bot, tts_engine, jtts_engine):
         self.bot = bot
-        self.tts = tts_engine
-        self.jtts = jtts_engine
+        self.tts: TTSEngineInterface = tts_engine
+        self.jtts: TTSEngineInterface = jtts_engine
 
     def text_to_wav(self, text, speed='normal', engine=None):
         if not engine: engine = self.tts
@@ -118,3 +120,16 @@ class TTS(commands.Cog):
         to_speak = ' '.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, engine=self.jtts)
+
+    @commands.command(hidden=True)
+    async def changemei(self, ctx, voice: Optional[str]):
+        """Change the version of Mei to speak with."""
+        voices = ['angry','bashful','happy','normal','sad']
+        if not voice or voice not in voices:
+            await ctx.send('Voice options: ' + ', '.join(voices) + '.')
+            return
+        path, _ = os.path.split(self.jtts)
+        filename = 'mei_' + voice + '.htsvoice'
+        newpath = path + filename
+        print('setting open_jtalk voice to:', filename)
+        self.jtts.voice = newpath
