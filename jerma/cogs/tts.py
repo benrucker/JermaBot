@@ -128,7 +128,7 @@ class TTS(commands.Cog):
         if not voice or voice not in voices:
             await ctx.send('Voice options: ' + ', '.join(voices) + '.')
             return
-        path, _ = os.path.split(self.jtts)
+        path, _ = os.path.split(self.jtts.voice)
         filename = 'mei_' + voice + '.htsvoice'
         newpath = path + filename
         print('setting open_jtalk voice to:', filename)
