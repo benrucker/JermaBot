@@ -115,6 +115,6 @@ class TTS(commands.Cog):
     async def speakanime(self, ctx, *args):
         if not args:
             raise discord.InvalidArgument
-        to_speak = ''.join(args)
+        to_speak = ' '.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, engine=self.jtts)
