@@ -84,7 +84,7 @@ class Fun(commands.Cog):
             a = file.readline().split(' ')
         return [sound, float(a[0]), float(a[1])]
 
-    @commands.command()
+    @commands.command(aliases=['q'])
     @is_whid()
     async def quarantine(self, ctx, *args):
         """Save'm."""
@@ -204,7 +204,7 @@ class Fun(commands.Cog):
             try:
                 msg = await ctx.channel.fetch_message(args[0])
             except Exception as e:
-                print(e.with_traceback())
+                print(e)
                 return
         emoji = self.bot.get_emoji(679179726740258826)
         await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
