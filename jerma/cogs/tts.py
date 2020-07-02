@@ -130,6 +130,6 @@ class TTS(commands.Cog):
             return
         path, _ = os.path.split(self.jtts.voice)
         filename = 'mei_' + voice + '.htsvoice'
-        newpath = os.path.join(path, filename)
+        newpath = os.path.join(path, 'mei', filename)
         print('setting open_jtalk voice to:', filename)
         self.jtts.voice = newpath
