@@ -260,6 +260,7 @@ if __name__ == '__main__':
                        action='store_true')
     parser.add_argument('-mv', '--mycroft_voice', help='name of OR path to the voice to use with mycroft')
     parser.add_argument('-jv', '--japanese_voice', help='path to voice to use with Japanese TTS')
+    parser.add_argument('-jd', '--japanese_dict', help='path to dictionary to use with Japanese TTS')
     args = parser.parse_args()
 
     if args.secret_filename:
@@ -287,10 +288,12 @@ if __name__ == '__main__':
 
     bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'))
     bot.tts_engine = tts
-    if args.japanese_voice:
+    if args.japanese_voice and args.japanese_dict:
         print('setting JTTS to openjtalk')
         print('openjtalk voice at:', args.japanese_voice)
-        bot.jtts_engine = ttsengine.construct(engine=ttsengine.OPEN_JTALK, voice=args.japanese_voice)
+        bot.jtts_engine = ttsengine.construct(engine=ttsengine.OPEN_JTALK,
+                                              voice=args.japanese_voice,
+                                              dic=args.japanese_dict)
     else:
         print('setting jtts to None')
         bot.jtts_engine = None

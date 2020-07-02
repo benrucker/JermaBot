@@ -75,9 +75,10 @@ class TTSMycroft(TTSEngineInterface):
 
 class TTSOpenJtalk(TTSEngineInterface):
 
-    def __init__(self, path, voice):
+    def __init__(self, path, voice, dic):
         self.path = path
         self.voice = voice
+        self.dic = dic
         # self.slow = 2.5
         # self.normal = 1
         # self.fast = .5
@@ -92,7 +93,8 @@ class TTSOpenJtalk(TTSEngineInterface):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
         text = text.replace('"', '')
         cmd = (f'echo "{text}" | ' +
-               f'{self.path} -t "{text}" ' +
+               f'{self.path} ' +
+               f'-x {self.dic}'
                f'-m {self.voice} ' +
                #f'--setf duration_stretch={speed} ' +
                f'-ow {filepath}')
@@ -136,7 +138,7 @@ class TTSEspeak(TTSEngineInterface):
         return self.path
 
 
-def construct(engine: int, path=None, voice=None):
+def construct(engine: int, path=None, voice=None, **kwargs):
     """Construct and return a TTSEngine object."""
     if engine == MYCROFT:
         if not path:
@@ -149,7 +151,7 @@ def construct(engine: int, path=None, voice=None):
     elif engine == ESPEAK:
         out = TTSEspeak()
     elif engine == OPEN_JTALK:
-        out = TTSOpenJtalk(path='open_jtalk', voice=voice)
+        out = TTSOpenJtalk(path='open_jtalk', voice=voice, **kwargs)
     else:
         raise RuntimeError('Invalid tts engine specified.')
 
