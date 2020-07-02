@@ -121,9 +121,9 @@ class TTS(commands.Cog):
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, engine=self.jtts)
 
-    @commands.command(hidden=True)
-    async def changemei(self, ctx, voice: Optional[str]):
-        """Change the version of Mei to speak with."""
+    @commands.command()
+    async def inflection(self, ctx, voice: Optional[str]):
+        """Change the inflection of Japanese speech."""
         voices = ['angry','bashful','happy','normal','sad']
         if not voice or voice not in voices:
             await ctx.send('Voice options: ' + ', '.join(voices) + '.')
@@ -133,3 +133,4 @@ class TTS(commands.Cog):
         newpath = os.path.join(path, 'mei', filename)
         print('setting open_jtalk voice to:', filename)
         self.jtts.voice = newpath
+        await ctx.send(f'Mr. Stark, I\'m feeling {voice}.')
