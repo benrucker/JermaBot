@@ -2,7 +2,7 @@ from discord.ext import commands
 import discord
 import os
 from pydub.audio_segment import AudioSegment
-from ttsengine import TTSEngineInterface
+from utils import ttsengine
 from typing import Optional
 
 
@@ -15,8 +15,8 @@ class TTS(commands.Cog):
 
     def __init__(self, bot, tts_engine, jtts_engine):
         self.bot = bot
-        self.tts: TTSEngineInterface = tts_engine
-        self.jtts: TTSEngineInterface = jtts_engine
+        self.tts: ttsengine.TTSEngineInterface = tts_engine
+        self.jtts: ttsengine.TTSEngineInterface = jtts_engine
 
     def text_to_wav(self, text, speed='normal', engine=None):
         if not engine: engine = self.tts

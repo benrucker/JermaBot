@@ -1,11 +1,4 @@
 import argparse
-import colorama
-from colorama import Fore as t
-from colorama import Style
-import discord
-from discord.activity import Activity
-from discord.enums import ActivityType
-from discord.ext import commands
 import logging
 import os
 import random
@@ -13,9 +6,17 @@ import sys
 import time
 import traceback
 
-from jerma_exception import JermaException
+import colorama
+from colorama import Fore as t
+from colorama import Style
+import discord
+from discord.activity import Activity
+from discord.enums import ActivityType
+from discord.ext import commands
+
+from cogs.utils import ttsengine
 from guild_info import GuildInfo
-import ttsengine
+from jerma_exception import JermaException
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
