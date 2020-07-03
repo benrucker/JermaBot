@@ -2,7 +2,7 @@ from discord.ext import commands
 import discord
 import os
 from pydub.audio_segment import AudioSegment
-from utils import ttsengine
+from .utils import ttsengine, textconv
 from typing import Optional
 
 
@@ -44,7 +44,7 @@ class TTS(commands.Cog):
         trim_ms = 0  # ms
 
         assert chunk_size > 0  # to avoid infinite loop
-        while sound[trim_ms:trim_ms+chunk_size].dBFS < silence_threshold and trim_ms < len(sound):
+        while sound[trim_ms:trim_ms + chunk_size].dBFS < silence_threshold and trim_ms < len(sound):
             trim_ms += chunk_size
 
         return sound[trim_ms:]
@@ -70,7 +70,7 @@ class TTS(commands.Cog):
     async def birthday(self, ctx, *args):
         """Wish someone a happy birthday!"""
         if not args:
-            raise discord.InvalidArgument
+            raise discord.InvalidArgument()
         to_speak = ' '.join(args)
         name = self.text_to_wav(to_speak)
         birthday_with_name = self.birthday_wave(name, ctx)
@@ -82,7 +82,7 @@ class TTS(commands.Cog):
     async def speakfile(self, ctx, *args):
         """Send the input text as a sound file from text-to-speech."""
         if not args:
-            raise discord.InvalidArgument
+            raise discord.InvalidArgument()
         to_speak = ' '.join(args)
         await ctx.send(file=discord.File(self.text_to_wav(to_speak)))
 
@@ -90,7 +90,7 @@ class TTS(commands.Cog):
     async def adderall(self, ctx, *args):
         """Text-to-speech but f a s t."""
         if not args:
-            raise discord.InvalidArgument
+            raise discord.InvalidArgument()
         to_speak = ' '.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, speed='fast')
@@ -99,7 +99,7 @@ class TTS(commands.Cog):
     async def speak(self, ctx, *args):
         """Play your input text through text-to-speech."""
         if not args:
-            raise discord.InvalidArgument
+            raise discord.InvalidArgument()
         to_speak = ' '.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak)
@@ -108,7 +108,7 @@ class TTS(commands.Cog):
     async def speakdrunk(self, ctx, *args):
         """Text-to-speech but more drunk."""
         if not args:
-            raise discord.InvalidArgument
+            raise discord.InvalidArgument()
         to_speak = ''.join(args)
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, speed='slow')
@@ -116,15 +116,18 @@ class TTS(commands.Cog):
     @commands.command(aliases=['sa'])
     async def speakanime(self, ctx, *args):
         if not args:
-            raise discord.InvalidArgument
-        to_speak = ' '.join(args)
+            raise discord.InvalidArgument()
+        to_speak = ' '.join(args)  # ingest args
+        to_speak = textconv.split(to_speak)  # split into workable list
+        to_speak = ' '.join(textconv.mixed_to_katakana(args))  # convert and rejoin
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, engine=self.jtts)
 
+    # TODO hide if jtts is none
     @commands.command()
     async def inflection(self, ctx, voice: Optional[str]):
         """Change the inflection of Japanese speech."""
-        voices = ['angry','bashful','happy','normal','sad']
+        voices = ['angry', 'bashful', 'happy', 'normal', 'sad']
         if not voice or voice not in voices:
             await ctx.send('Voice options: ' + ', '.join(voices) + '.')
             return
