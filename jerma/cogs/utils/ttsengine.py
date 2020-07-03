@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Optional
 import subprocess
 from pydub.audio_segment import AudioSegment
 
@@ -144,6 +145,7 @@ class TTSEspeak(TTSEngineInterface):
 
 def construct(engine: int, path=None, voice=None, **kwargs):
     """Construct and return a TTSEngine object."""
+    out: Optional[TTSEngineInterface] = None
     if engine == MYCROFT:
         if not path:
             raise RuntimeError('No path specified for mycroft tts engine')
