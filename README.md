@@ -22,6 +22,8 @@ Install the needed python packages by running this command in the repo:
 
 You will also need ffmpeg to be on your system path. If you want to use TTS features, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
 
+If you want to use the `speakanime` command, you will need the `espeak` command to be on your path (regardless of platform).
+
 Clone this repo,
 ```git clone https://github.com/benrucker/discord-jerma.git```
 
