@@ -8,6 +8,7 @@ jerma/voices/
 mimic.exe
 jerma/resources/soundclips/smash_kill.wav
 jerma/resources/soundclips/2319.wav
+.flake8
 
 # VS
 .vc/
