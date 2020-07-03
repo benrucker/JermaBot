@@ -1,5 +1,5 @@
-import eng_to_ipa as ipa
-import epitran
+# import eng_to_ipa as ipa
+# import epitran
 import os
 import regex as re
 import subprocess
