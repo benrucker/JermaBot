@@ -68,7 +68,9 @@ class TTS(commands.Cog):
         return outpath
 
     def strip_quotes(self, text: str):
+        print('removing quotes in:', text)
         to_remove = re.compile(r'[\'"]')
+        print('new:', to_remove.sub('', text))
         return to_remove.sub('', text)
 
     @commands.command()
@@ -124,7 +126,7 @@ class TTS(commands.Cog):
             raise discord.InvalidArgument()
         to_speak = self.strip_quotes(' '.join(args))  # ingest args
         to_speak = textconv.split(to_speak)  # split into workable list
-        to_speak = ' '.join(textconv.mixed_to_katakana(args))  # convert and rejoin
+        to_speak = ' '.join(textconv.mixed_to_katakana(to_speak))  # convert and rejoin
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         self.play_text(vc, to_speak, engine=self.jtts)
 
