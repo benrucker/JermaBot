@@ -10,6 +10,9 @@ def setup(bot):
     bot.add_cog(Control(bot))
 
 
+RECONNECT = False
+
+
 class Control(commands.Cog):
     """Cog for controlling the movement of a bot through voice channels."""
 
@@ -40,14 +43,14 @@ class Control(commands.Cog):
                 await vc.disconnect()
                 await asyncio.sleep(0.1)
                 print('reconnecting...')
-                vc = await dest.connect(reconnect=True)
+                vc = await dest.connect(reconnect=RECONNECT)
                 await asyncio.sleep(0.1)
             else:
                 print('Already in channel')
                 pass  # already there
         else:
             print('Joining', dest)
-            vc = await dest.connect(reconnect=True)
+            vc = await dest.connect(reconnect=RECONNECT)
         await asyncio.sleep(0.2)
         return vc
 
@@ -59,9 +62,9 @@ class Control(commands.Cog):
         except Exception as e:
             print(e)
             raise self.bot.JermaException(
-                    'User was not in a voice channel or something.',
-                    msg='Hey gamer, you\'re not in a voice channel. Totally uncool.'
-                    )
+                'User was not in a voice channel or something.',
+                msg='Hey gamer, you\'re not in a voice channel. Totally uncool.'
+            )
 
     def get_existing_voice_client(self, guild):
         for vc in self.bot.voice_clients:
