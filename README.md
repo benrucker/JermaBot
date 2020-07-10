@@ -37,6 +37,8 @@ cd jerma
 python jerma.py [-s SECRET_FILENAME]
                 (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak)
                 [-mv MYCROFT_VOICE]
+                [-jd JTALK_PATH]
+                [-jv JAPANESE_VOICE]
 ```
 * `-s` allows you to specify a specific text file that your bot token is stored in. If not included, Jerma will look for your token in a file called `secret.txt` in the base dirctory. This flag is optional.
 * `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
