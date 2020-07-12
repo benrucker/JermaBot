@@ -50,7 +50,7 @@ class Control(commands.Cog):
         elif vc and not vc.is_connected():
             print('Had voice client but was not connected to voice')
             print('reconnecting...')
-            await vc.disconnect()
+            await vc.disconnect(force=True)
             await asyncio.sleep(0.1)
             vc = await dest.connect(reconnect=RECONNECT)
         else:
