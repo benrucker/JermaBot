@@ -3,7 +3,7 @@ import discord
 import re
 import os
 from pydub.audio_segment import AudioSegment
-from .utils import ttsengine, textconv
+from .utils import ttsengine, textconverter
 from typing import Optional
 
 
@@ -124,11 +124,11 @@ class TTS(commands.Cog):
     async def speakanime(self, ctx, *args):
         if not args:
             raise discord.InvalidArgument()
-        to_speak = self.strip_quotes(' '.join(args))  # ingest args
-        to_speak = textconv.split(to_speak)  # split into workable list
-        to_speak = ' '.join(textconv.mixed_to_katakana(to_speak))  # convert and rejoin
+        words_in = self.strip_quotes(' '.join(args))  # ingest args
+        words_and_punct = textconverter.split_to_words_and_punctuation(words_in)
+        kana_to_speak = ' '.join(textconverter.mixed_lang_to_katakana(words_and_punct))
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
-        self.play_text(vc, to_speak, engine=self.jtts)
+        self.play_text(vc, kana_to_speak, engine=self.jtts)
 
     # TODO hide if jtts is none
     # TODO make this respect per-guild preferences
