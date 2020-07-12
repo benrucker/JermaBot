@@ -33,7 +33,7 @@ def eng_to_katakana(eng_text: str) -> Optional[str]:
     print('Converted to:', katakana)
     return katakana
 
-def mixed_to_katakana(text: List[str]) -> List[str]:
+def mixed_lang_to_katakana(text: List[str]) -> List[str]:
     out = []
     for word in text:
         match = jpattern.match(word)
@@ -45,7 +45,7 @@ def mixed_to_katakana(text: List[str]) -> List[str]:
             if kana: out.append(kana)
     return out
 
-def split(text: str):
+def split_to_words_and_punctuation(text: str):
     """Split sentences, retain punctuation as own entry."""
     return re.split(r'(\W+)', text)
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
     print(arg)
     # eng_to_katakana('penis titties anime tiddies. 私ワリンゴです。')
 
-    kana = mixed_to_katakana(arg)
+    kana = mixed_lang_to_katakana(arg)
     print(kana)
     kana_joined = ''.join(kana)
     print(kana_joined)
