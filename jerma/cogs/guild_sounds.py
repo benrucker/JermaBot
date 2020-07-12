@@ -1,12 +1,12 @@
+import asyncio
 from colorama import Fore as t
 from colorama import Style
 import discord
-from discord.ext import commands
-import time
-import os
-from glob import glob
 from discord.embeds import Embed
-import asyncio
+from discord.ext import commands
+from glob import glob
+import os
+import time
 
 
 # will move these up to a broader scope later
