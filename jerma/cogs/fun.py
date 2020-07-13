@@ -220,5 +220,6 @@ class Fun(commands.Cog):
                 .LoopingSource(
                     os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
                     self.bot.get_cog('SoundPlayer').source_factory,
-                    id)
+                    id,
+                    self.bot)
                 )
