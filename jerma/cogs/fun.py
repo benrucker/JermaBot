@@ -42,9 +42,9 @@ class Fun(commands.Cog):
         choice[2] = float(choice[2])
         return choice
 
-    @commands.command()
+    @commands.command(hidden=True)
     @is_whid()
-    async def jermasnap(self, ctx):
+    async def jermasnapeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee(self, ctx):
         """Snap the user's voice channel."""
         print('jermasnap')
         # if 374095810868019200 not in ctx.author.roles:
