@@ -47,9 +47,9 @@ class Fun(commands.Cog):
     async def jermasnap(self, ctx):
         """Snap the user's voice channel."""
         print('jermasnap')
-        if 374095810868019200 not in ctx.author.roles:
-            print('not a role thing')
-            return
+        # if 374095810868019200 not in ctx.author.roles:
+        #     print('not a role thing')
+        #     return
 
         vc = await self.bot.get_cog('Control').connect_to_user(ctx)
         soul_stone = self.get_soul_stone_channel(ctx)
