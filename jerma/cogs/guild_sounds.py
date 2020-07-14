@@ -5,6 +5,7 @@ import discord
 from discord.embeds import Embed
 from discord.ext import commands
 from glob import glob
+import random
 import os
 import time
 
@@ -47,6 +48,11 @@ class GuildSounds(commands.Cog):
             return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
         except KeyError:
             return None
+
+    def get_random_sound(self, guild: discord.Guild):
+        ginfo = self.bot.get_guildinfo(guild.id)
+        sounds = self.make_sounds_dict(guild.id)
+        return os.path.join(ginfo.sound_folder, random.choice(list(sounds.values())))
 
     def has_sound_file(self, message):
         if len(message.attachments) == 0:
@@ -217,6 +223,16 @@ class GuildSounds(commands.Cog):
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(ctx)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
+
+    @commands.command()
+    async def random(self, ctx):
+        sound = self.get_random_sound(ctx.guild)
+        if not sound:
+            raise self.bot.JermaException('Sorry gamer, but you need to add some sounds for me to play!')
+
+        control = self.bot.get_cog('Control')
+        vc = await control.connect_to_user(ctx)
+        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
 
     @commands.command(aliases=['sleep'])
     async def snooze(self, ctx):
