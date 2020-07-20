@@ -55,6 +55,7 @@ All commands are prefixed with `$` by default.
   * E.g. `$speak What's up guys, Jermabot here.`
 * `speakdrunk <stuff>` - Same as `speak` but more like a streamer during a Labo build.
 * `adderall <things>` - Same as `speak` but more like a streamer during a bitcoin joke.
+* `speakanime <thingz>` - Same as `speak` but with more anime.
 * `play <sound>` - Jerma joins the channel and plays the sound specified by name. Do not include the file extension. Will only seach in `discord-jerma\sounds`.
 * `birthday <name>` - Jerma joins the channel and plays a birthday song for the person with the given name.
 * `join` - Jerma joins the channel.
