@@ -14,6 +14,9 @@ import time
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
 NO  = ['no','n','nope','start over','nada', 'nah']
 
+y = t.YELLOW + Style.BRIGHT
+c = t.CYAN + Style.NORMAL
+
 
 async def manage_sounds_check(ctx):
     p = ctx.channel.permissions_for(ctx.author)
@@ -260,6 +263,42 @@ class GuildSounds(commands.Cog):
                 out += '\tfrom ' + x + ' to ' + y + '\n'
         return out[:-1]
 
+    def user_joined_channel(self, before, after):
+        joined_voice = not before.channel and after.channel
+        moved_chan = (before.channel and after.channel) and before.channel != after.channel
+        return joined_voice or moved_chan
+
+    async def play_join_sound(self, member, vc):
+        print(f'{y}Playing join sound if exists...')
+        join_sound = self.get_sound(member.name, member.guild)
+        if join_sound:
+            print(f'{y}Found join sound')
+            vc = await self.bot.get_cog('Control').connect_to_channel(vc, member.voice.channel)
+            print(f'{y}{vc}')
+            if not vc:
+                return
+            self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
+        else:
+            print('No join sound for user')
+
+    def old_voice_channel_has_no_people(self, vc):
+        return len([x for x in vc.channel.members if not x.bot]) == 0
+        # return len(vc.channel.members) <= 1
+
+    async def disconnect_from_voice(self, vc):
+        print(f'[{time.ctime()}] {y}Disconnecting from {c}{vc.guild} #{vc.channel} {y}because it is empty.')
+        await vc.disconnect()
+
+    def user_left_channel(self, before, after):
+        was_in_vc = before != None
+        not_in_vc = not after or not hasattr(after, 'channel') or not after.channel
+        return was_in_vc and not_in_vc
+
+    def play_leave_sound(self, member, vc):
+        leave_sound = self.get_yoni_leave_sound()
+        if leave_sound and member.id in [196742230659170304]:
+            self.bot.get_cog('SoundPlayer').play_sound_file(leave_sound, vc)
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
         """
@@ -275,12 +314,10 @@ class GuildSounds(commands.Cog):
         # after (VoiceState) – The voice state after the changes.
         print(f'[{time.ctime()}] Voice state update: {member.name}\n{self.voice_state_diff_str(before, after)}')
 
-        y = t.YELLOW + Style.BRIGHT
-        c = t.CYAN + Style.NORMAL
         old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
+        g = self.bot.get_guildinfo(member.guild.id)
 
         # don't play join sound if conditional
-        g = self.bot.get_guildinfo(member.guild.id)
         if g.is_snapping or g.is_snoozed():
             print(f'{y}Ignoring voice state update due to snap or snooze')
             return
@@ -295,29 +332,13 @@ class GuildSounds(commands.Cog):
                 print('Attempting to disconnect from old voice client')
                 await old_vc.disconnect()
             return
-        # play join sound
-        if after.channel and after.channel is not before.channel:
-            print(f'{y}Playing join sound if exists...')
-            join_sound = self.get_sound(member.name, member.guild)
-            if join_sound:
-                print(f'{y}Found join sound')
-                vc = await self.bot.get_cog('Control').connect_to_channel(old_vc, member.voice.channel)
-                print(f'{y}{vc}')
-                if vc is None:
-                    return
-                self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
-            return
-        # leave if channel is empty
-        elif old_vc and len(old_vc.channel.members) <= 1:
-            print(f'[{time.ctime()}] {y}Disconnecting from {c}{old_vc.guild} #{old_vc.channel} {y}because it is empty.')
-            await old_vc.disconnect()
-            return
-        # play leave sound
-        elif old_vc and not after or not hasattr(after, 'channel') and before.channel is old_vc.channel:
-            leave_sound = self.get_yoni_leave_sound()
-            if leave_sound and member.id == 196742230659170304:
-                self.bot.get_cog('SoundPlayer').play_sound_file(leave_sound, old_vc)
-                return
+        
+        if self.user_joined_channel(before, after):
+            await self.play_join_sound(member, old_vc)
+        elif old_vc and self.old_voice_channel_has_no_people(old_vc):
+            await self.disconnect_from_voice(old_vc)
+        elif old_vc and self.user_left_channel(before, after) and before.channel == old_vc.channel:
+            self.play_leave_sound(member, old_vc)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
