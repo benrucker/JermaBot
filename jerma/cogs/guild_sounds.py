@@ -273,7 +273,7 @@ class GuildSounds(commands.Cog):
         # member (Member) – The member whose voice states changed.
         # before (VoiceState) – The voice state prior to the changes.
         # after (VoiceState) – The voice state after the changes.
-        print('Voice state update: ' + member.name + '\n' + self.voice_state_diff_str(before, after))
+        print(f'[{time.ctime()}] Voice state update: {member.name}\n{self.voice_state_diff_str(before, after)}')
 
         y = t.YELLOW + Style.BRIGHT
         c = t.CYAN + Style.NORMAL
