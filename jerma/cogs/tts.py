@@ -15,6 +15,7 @@ class TTSNotEnabled(commands.CheckFailure):
     def __str__(self):
         return 'Hey, uh, gamer? TTS isn\'t enabled on this instance of JermaBot.'
 
+
 class JTTSNotEnabled(commands.CheckFailure):
     def __str__(self):
         return 'Hey man, I don\'t know how to say this but... JTTS isn\'t enabled on this instance of JermaBot.'

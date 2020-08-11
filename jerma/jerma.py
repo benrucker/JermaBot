@@ -16,7 +16,6 @@ from discord.ext import commands
 
 from cogs.utils import ttsengine
 from guild_info import GuildInfo
-from jerma_exception import JermaException as JermaExceptionClass
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
@@ -76,10 +75,6 @@ class JermaBot(commands.Bot):
             os.makedirs(os.path.join('guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
-    def JermaException(self, err, msg):
-        """Return a JermaException. Useful for added cogs to access."""
-        return JermaExceptionClass(err, msg)
-
     def get_rand_activity(self):
         """Return an Activity object with a random value."""
         info = random.choice(ACTIVITIES)
@@ -99,32 +94,22 @@ class JermaBot(commands.Bot):
 
     async def on_command_error(self, ctx, e):
         """Catch errors and handle them."""
-        if hasattr(e, 'original') and type(e.original) == JermaExceptionClass:
-            e2 = e.original
-            print(f'{t.RED}Caught JermaException: ' + str(e2))
-            await ctx.send(e2.message)
-        # if type(e) is commands.errors.CommandInvokeError:
-            #else:
-                #ben = get_ben()
-                #mention = ben.mention + ' something went bonkers.'
-                #await ctx.send(mention if ben else 'Something went crazy wrong. Sorry gamers.')
-        else:
-            if type(e) is commands.errors.CheckFailure:
-                await ctx.send('Something went wrong, dude. You probably don\'t have the correct server permissions to do that.')
+        if type(e) is commands.errors.CheckFailure:
+            await ctx.send('Something went wrong, dude. You probably don\'t have the correct server permissions to do that.')
 
-            # return to default discord.py behavior circa 2020.4.25
-            # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
-            if hasattr(ctx.command, 'on_error'):
+        # return to default discord.py behavior circa 2020.4.25
+        # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
+        if hasattr(ctx.command, 'on_error'):
+            return
+
+        cog = ctx.cog
+        if cog:
+            if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
                 return
 
-            cog = ctx.cog
-            if cog:
-                if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
-                    return
-
-            print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
-            traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
-            # end plaigarism
+        print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+        traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
+        # end plaigarism
 
     async def get_context_no_command(self, message, cls=commands.Context):
         """Construct a context object from a given message."""
