@@ -306,6 +306,6 @@ if __name__ == '__main__':
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
     bot.load_extension('cogs.scoreboard')
-    bot.load_extension('cogs.uncategorized')
+    # bot.load_extension('cogs.uncategorized')
 
     bot.run(secret)
