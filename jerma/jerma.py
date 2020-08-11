@@ -254,7 +254,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Run JermaBot')
     parser.add_argument('-s', '--secret_filename', help='location of bot token text file')
-    group = parser.add_mutually_exclusive_group(required=True)
+    group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-mycroft', '--mycroft_path', help='tell jerma to use mycroft at the given path')
     group.add_argument('-voice', '--voice_path', help='tell jerma to use windows voice.exe tts engine')
     group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
@@ -279,8 +279,11 @@ if __name__ == '__main__':
         tts = ttsengine.construct(engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
     elif args.voice_path:
         tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
-    else:
+    elif args.espeak:
         tts = ttsengine.construct(engine=ttsengine.ESPEAK) 
+    else:
+        print('Setting TTS to none')
+        tts = None
 
     try:
         os.makedirs(os.path.join('resources', 'soundclips', 'temp'))

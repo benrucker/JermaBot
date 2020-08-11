@@ -11,11 +11,18 @@ def setup(bot):
     bot.add_cog(TTS(bot, bot.tts_engine, bot.jtts_engine))
 
 
+def tts_enabled(ctx):
+    return ctx.cog.tts
+
+def jtts_enabled(ctx):
+    return ctx.cog.jtts
+
+
 class TTS(commands.Cog):
     """Cog for text-to-speech functionality."""
 
     def __init__(self, bot, tts_engine, jtts_engine):
-        self.bot = bot
+        self.bot: commands.Bot = bot
         self.tts: ttsengine.TTSEngineInterface = tts_engine
         self.jtts: ttsengine.TTSEngineInterface = jtts_engine
 
@@ -84,6 +91,7 @@ class TTS(commands.Cog):
     def convert_args_to_tts_text(self, args: list):
         return self.strip_quotes(' '.join(args))
 
+    @commands.check(tts_enabled)
     @commands.command()
     async def birthday(self, ctx, *args):
         """Wish someone a happy birthday!"""
@@ -95,6 +103,7 @@ class TTS(commands.Cog):
         birthday_with_name = self.birthday_sound(name_sound, ctx)
         self.play_sound_file(birthday_with_name, vc)
 
+    @commands.check(tts_enabled)
     @commands.command()
     async def speakfile(self, ctx, *args):
         """Send the input text as a sound file from text-to-speech."""
@@ -103,6 +112,7 @@ class TTS(commands.Cog):
         to_speak = self.convert_args_to_tts_text(args)
         await ctx.send(file=discord.File(self.text_to_wav(to_speak)))
 
+    @commands.check(tts_enabled)
     @commands.command()
     async def adderall(self, ctx, *args):
         """Text-to-speech but f a s t."""
@@ -113,6 +123,7 @@ class TTS(commands.Cog):
         sound_file = self.make_tts_sound_file(to_speak, speed='fast')
         self.play_sound_file(sound_file, vc)
 
+    @commands.check(tts_enabled)
     @commands.command()
     async def speak(self, ctx, *args):
         """Play your input text through text-to-speech."""
@@ -123,6 +134,7 @@ class TTS(commands.Cog):
         sound_file = self.make_tts_sound_file(to_speak)
         self.play_sound_file(sound_file, vc)
 
+    @commands.check(tts_enabled)
     @commands.command()
     async def speakdrunk(self, ctx, *args):
         """Text-to-speech but more drunk."""
@@ -140,6 +152,7 @@ class TTS(commands.Cog):
         return ' '.join(textconverter.mixed_lang_to_katakana(words_and_punct))
 
     # TODO add length detection to deal with long strings (split or truncate)
+    @commands.check(jtts_enabled)
     @commands.command(aliases=['sa'])
     async def speakanime(self, ctx, *args):
         if not args:
@@ -151,6 +164,7 @@ class TTS(commands.Cog):
 
     # TODO hide if jtts is none
     # TODO make this respect per-guild preferences
+    @commands.check(jtts_enabled)
     @commands.command()
     async def inflection(self, ctx, voice: Optional[str]):
         """Change the inflection of Japanese speech."""

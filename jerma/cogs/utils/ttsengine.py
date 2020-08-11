@@ -160,5 +160,4 @@ def construct(engine: int, path=None, voice=None, **kwargs):
         out = TTSOpenJtalk(path='open_jtalk', voice=voice, **kwargs)
     else:
         raise RuntimeError('Invalid tts engine specified.')
-
     return out
