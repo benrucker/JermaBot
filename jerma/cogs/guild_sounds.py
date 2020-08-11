@@ -4,6 +4,7 @@ from colorama import Style
 import discord
 from discord.embeds import Embed
 from discord.ext import commands
+from .control import JoinFailedError
 from glob import glob
 import random
 import os
@@ -36,6 +37,12 @@ def setup(bot):
     bot.add_cog(GuildSounds(bot))
 
 
+class GuildSoundsError(commands.CommandError):
+    def __init__(self, error, msg):
+        self.error = error
+        self.msg = msg
+
+
 class GuildSounds(commands.Cog):
     """Cog for maintaining guild-specific sound functionality."""
 
@@ -43,6 +50,13 @@ class GuildSounds(commands.Cog):
         self.bot = bot
         #self.path_to_guilds = path_to_guilds
         #self.sounds_dict  # keep this static until add,rm,or rename
+
+    async def cog_command_error(self, ctx, error):
+        if isinstance(error, GuildSoundsError):
+            print(error.error)
+            await ctx.send(error.msg)
+        elif isinstance(error, JoinFailedError):
+            await ctx.send(error)
 
     def get_sound(self, sound, guild: discord.Guild):
         ginfo = self.bot.get_guildinfo(guild.id)
@@ -130,14 +144,14 @@ class GuildSounds(commands.Cog):
     async def remove(self, ctx, *args):
         """Remove a sound clip."""
         if not args:
-            raise self.bot.JermaException('No sound specified in remove command.',
+            raise GuildSoundsError('No sound specified in remove command.',
                                 'Gamer, you gotta tell me which sound to remove.')
 
         sound_name = ' '.join(args)
         sound = self.get_sound(sound_name, ctx.guild)
 
         if not sound:
-            raise self.bot.JermaException('Sound ' + sound + ' not found.',
+            raise GuildSoundsError('Sound ' + sound + ' not found.',
                                 'Hey gamer, that sound doesn\'t exist.')
 
         self.delete_sound(sound, ctx.guild)
@@ -151,8 +165,8 @@ class GuildSounds(commands.Cog):
     async def rename(self, ctx, *args):
         """Rename a sound clip."""
         if not args:
-            raise self.bot.JermaException('No sound specified in rename command.',
-                                'Gamer, do it like this: `$rename old name, new name`')
+            raise GuildSoundsError('No sound specified in rename command.',
+                                'Yo gamer, do it like this: `$rename old name, new name`')
 
         old, new = ' '.join(args).split(', ')
         print(f'renaming {old} to {new} in {ctx.guild.name}')
@@ -163,7 +177,7 @@ class GuildSounds(commands.Cog):
                 self.rename_file(old_filename, new_filename)
                 await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
-                raise self.bot.JermaException(f'Error {type(e)} while renaming sound',
+                raise GuildSoundsError(f'Error {type(e)} while renaming sound',
                                     'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
         else:
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
@@ -214,24 +228,28 @@ class GuildSounds(commands.Cog):
     async def play(self, ctx, *args):
         """Play a sound."""
         if not args:
-            raise self.bot.JermaException('No sound specified in play command.',
+            raise GuildSoundsError('No sound specified in play command.',
                                 'Gamer, you gotta tell me which sound to play.')
 
         sound = ' '.join(args)
         current_sound = self.get_sound(sound, ctx.guild)
         if not current_sound:
-            raise self.bot.JermaException('Sound ' + sound + ' not found.',
+            raise GuildSoundsError('Sound ' + sound + ' not found.',
                                 'Hey gamer, that sound doesn\'t exist.')
 
         control = self.bot.get_cog('Control')
+        print('connecting to user...')
         vc = await control.connect_to_user(ctx)
+        print('should be connected')
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
+        print('dispatched sound_file_play')
 
     @commands.command()
     async def random(self, ctx):
         sound = self.get_random_sound(ctx.guild)
         if not sound:
-            raise self.bot.JermaException('Sorry gamer, but you need to add some sounds for me to play!')
+            raise GuildSoundsError('Guild has no sounds.',
+                'Sorry gamer, but you need to add some sounds for me to play!')
 
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(ctx)

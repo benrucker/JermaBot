@@ -13,11 +13,19 @@ def setup(bot):
 RECONNECT = False
 
 
+class JoinFailedError(commands.CommandError):
+    def __str__(self):
+        return 'Hey gamer, you\'re not in a voice channel. Totally uncool.'
+
 class Control(commands.Cog):
     """Cog for controlling the movement of a bot through voice channels."""
 
     def __init__(self, bot):
         self.bot = bot
+
+    async def cog_command_error(self, ctx, error):
+        if isinstance(error, JoinFailedError):
+            await ctx.send(error)
 
     # async def connect_to_channel(self, channel, vc=None):
     #     if not channel:
@@ -60,16 +68,18 @@ class Control(commands.Cog):
         return vc
 
     async def connect_to_user(self, ctx):
+        if not ctx.author.voice:
+            print('user\'s voice attr is false')
+            raise JoinFailedError()
+        else:
+            print(ctx.author.voice)
         try:
             vc = ctx.voice_client
             user_channel = ctx.author.voice.channel
             return await self.connect_to_channel(vc, user_channel)
         except Exception as e:
-            print(e)
-            raise self.bot.JermaException(
-                'User was not in a voice channel or something.',
-                msg='Hey gamer, you\'re not in a voice channel. Totally uncool.'
-            )
+            print('connection error: ' + e)
+            raise JoinFailedError()
 
     def get_existing_voice_client(self, guild):
         for vc in self.bot.voice_clients:
