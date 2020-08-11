@@ -269,6 +269,10 @@ class GuildSounds(commands.Cog):
         return joined_voice or moved_chan
 
     async def play_join_sound(self, member, vc):
+        print(f'{y}Checking if {member.voice.channel} has a user limit...')
+        print(member.voice.channel.user_limit)
+        if member.voice.channel.user_limit:
+            return
         print(f'{y}Playing join sound if exists...')
         join_sound = self.get_sound(member.name, member.guild)
         if join_sound:
@@ -321,9 +325,12 @@ class GuildSounds(commands.Cog):
         if g.is_snapping or g.is_snoozed():
             print(f'{y}Ignoring voice state update due to snap or snooze')
             return
-        elif member.guild.me.nick:
-            print(f'{y}Reset nickname in {member.guild}')
-            await member.guild.me.edit(nick=None)
+        # elif member.guild.me.nick:
+        else:
+            target_nick = "JermaBot ($speak broke)"
+            if member.guild.me.display_name != target_nick:
+                print(f'{y}Reset nickname in {member.guild}')
+                await member.guild.me.edit(nick=target_nick)
 
         # cleanup connection if kicked
         if member.id == self.bot.user.id:
