@@ -16,7 +16,7 @@ from discord.ext import commands
 
 from cogs.utils import ttsengine
 from guild_info import GuildInfo
-from jerma_exception import JermaException
+from jerma_exception import JermaException as JermaExceptionClass
 
 
 YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
@@ -78,7 +78,7 @@ class JermaBot(commands.Bot):
 
     def JermaException(self, err, msg):
         """Return a JermaException. Useful for added cogs to access."""
-        return JermaException(err, msg)
+        return JermaExceptionClass(err, msg)
 
     def get_rand_activity(self):
         """Return an Activity object with a random value."""
@@ -99,7 +99,7 @@ class JermaBot(commands.Bot):
 
     async def on_command_error(self, ctx, e):
         """Catch errors and handle them."""
-        if hasattr(e, 'original') and type(e.original) is JermaException:
+        if hasattr(e, 'original') and type(e.original) == JermaExceptionClass:
             e2 = e.original
             print(f'{t.RED}Caught JermaException: ' + str(e2))
             await ctx.send(e2.message)
