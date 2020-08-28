@@ -345,7 +345,7 @@ class GuildSounds(commands.Cog):
             return
         # elif member.guild.me.nick:
         else:
-            target_nick = "JermaBot ($speak broke)"
+            target_nick = "JermaBot"
             if member.guild.me.display_name != target_nick:
                 print(f'{y}Reset nickname in {member.guild}')
                 await member.guild.me.edit(nick=target_nick)
