@@ -95,6 +95,7 @@ class JermaBot(commands.Bot):
     async def on_command_error(self, ctx, e):
         """Catch errors and handle them."""
         if type(e) is commands.errors.CheckFailure:
+            print(e)
             await ctx.send('Something went wrong, dude. You probably don\'t have the correct server permissions to do that.')
 
         # return to default discord.py behavior circa 2020.4.25
