@@ -12,6 +12,9 @@ def setup(bot):
 
 
 class TTSNotEnabled(commands.CheckFailure):
+    def __init__(self):
+        print('debug hahaha')
+
     def __str__(self):
         return 'Hey, uh, gamer? TTS isn\'t enabled on this instance of JermaBot.'
 
