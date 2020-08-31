@@ -143,6 +143,14 @@ class TTS(commands.Cog):
         self.play_sound_file(sound_file, vc)
 
     @commands.command()
+    @commands.is_owner()
+    async def speakdebug(self, ctx, *args):
+        vc = await self.connect(ctx)
+        to_speak = self.convert_args_to_tts_text(args)
+        sound_file = self.make_tts_sound_file(to_speak)
+        self.play_sound_file(sound_file, vc)
+
+    @commands.command()
     @tts_enabled()
     async def speak(self, ctx, *args):
         """Play your input text through text-to-speech."""
