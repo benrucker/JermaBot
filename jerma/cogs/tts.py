@@ -12,9 +12,6 @@ def setup(bot):
 
 
 class TTSNotEnabled(commands.CheckFailure):
-    def __init__(self):
-        print('debug hahaha')
-
     def __str__(self):
         return 'Hey, uh, gamer? TTS isn\'t enabled on this instance of JermaBot.'
 
@@ -28,12 +25,14 @@ def tts_enabled():
     def pred(ctx):
         if not ctx.cog.tts:
             raise TTSNotEnabled()
+        return True
     return commands.check(pred)
 
 def jtts_enabled():
     def pred(ctx):
         if not ctx.cog.jtts:
             raise JTTSNotEnabled()
+        return True
     return commands.check(pred)
 
 class TTS(commands.Cog):
@@ -45,7 +44,9 @@ class TTS(commands.Cog):
         self.jtts: ttsengine.TTSEngineInterface = jtts_engine
 
     async def cog_command_error(self, ctx, error):
+        print('caught command error in tts')
         if isinstance(error, (TTSNotEnabled, JTTSNotEnabled)):
+            print('its a boy!')
             await ctx.send(error)
 
     async def connect(self, ctx):
