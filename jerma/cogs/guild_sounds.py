@@ -188,10 +188,10 @@ class GuildSounds(commands.Cog):
         #print('Finding sounds in:', sound_folder)
         for filepath in glob(os.path.join(sound_folder, '*')): # find all files in folder w/ wildcard
             filename = os.path.basename(filepath)
-            extension = filename.split('.')[1]
+            extension = filename.rsplit('.', 1)[1]
             if extension not in ['mp3', 'wav']:
                 continue
-            sounds[filename.split('.')[0]] = filename
+            sounds[filename.rsplit('.', 1)[0]] = filename
         return sounds
 
     def get_list_embed(self, guild_info):
