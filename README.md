@@ -35,8 +35,8 @@ Run the bot through the command line like this:
 ```
 cd jerma
 python jerma.py [-s SECRET_FILENAME]
-                (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak)
-                [-mv MYCROFT_VOICE]
+                [ (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak),
+                  (-mv MYCROFT_VOICE)]
                 [-jd JTALK_PATH]
                 [-jv JAPANESE_VOICE]
 ```
