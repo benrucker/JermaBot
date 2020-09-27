@@ -25,7 +25,7 @@ NO  = ['no','n','nope','start over','nada', 'nah']
 ACTIVITIES = [(ActivityType.listening, 'my heart.'),
               (ActivityType.listening, 'rats lofi'),
               (ActivityType.listening, 'Shigurain.'),
-              (ActivityType.listening, 'Kim!'),
+              (ActivityType.listening, 'a Scream Compilation.'),
               (ActivityType.listening, 'the DOOM OST.'),
               (ActivityType.listening, 'a clown podcast.'),
               (ActivityType.streaming, 'DARK SOULS III'),
@@ -33,6 +33,7 @@ ACTIVITIES = [(ActivityType.listening, 'my heart.'),
               (ActivityType.watching, 'chat make fun of me.'),
               (ActivityType.watching, 'E3® 2022.'),
               (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
+              (ActivityType.watching, 'your form, bro!'),
               (ActivityType.watching, 'the byeahs.'),  # comma on last item is good
              ]
 
