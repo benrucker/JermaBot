@@ -41,6 +41,8 @@ ACTIVITIES = [(ActivityType.listening, 'my heart.'),
 colorama.init(autoreset=True)  # set up colored console out
 guilds = dict()
 tts = None
+intents = discord.Intents.default()
+intents.members = True
 
 prefixes = ['$', '+']
 
@@ -48,7 +50,7 @@ prefixes = ['$', '+']
 class JermaBot(commands.Bot):
     """Base JermaBot class."""
 
-    def __init__(self, path, command_prefix=None):
+    def __init__(self, path, **kwargs):
         """
         Construct JermaBot.
 
@@ -57,7 +59,7 @@ class JermaBot(commands.Bot):
         """
         self.path = path
         self.guild_infos = dict()
-        super().__init__(command_prefix=command_prefix)
+        super().__init__(**kwargs)
 
     def get_guildinfo(self, id=None):
         """Return a GuildInfo object for the given guild id."""
@@ -277,7 +279,7 @@ if __name__ == '__main__':
     except:
         pass
 
-    bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'))
+    bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'), intents=intents)
     bot.tts_engine = tts
     if args.japanese_voice and args.japanese_dict:
         print('setting JTTS to openjtalk')
