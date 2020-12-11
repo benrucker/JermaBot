@@ -269,6 +269,9 @@ class GuildSounds(commands.Cog):
             await ctx.me.edit(nick=None)
             await ctx.send(f'**I HAVE AWOKEN**')
 
+    def get_muted_sound(self):
+        return os.path.join('resources', 'soundclips', 'muted.mp3')
+
     def get_yoni_leave_sound(self):
         sound = os.path.join('resources', 'soundclips', 'workhereisdone.wav')
         return sound
@@ -310,6 +313,14 @@ class GuildSounds(commands.Cog):
     async def disconnect_from_voice(self, vc):
         print(f'[{time.ctime()}] {y}Disconnecting from {c}{vc.guild} #{vc.channel} {y}because it is empty.')
         await vc.disconnect()
+
+    def was_user_server_muted(self, before, after):
+        return (not before.mute) and after.mute 
+
+    def play_mute(self, vc):
+        sound = self.get_muted_sound()
+        if sound:
+            self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
 
     def user_left_channel(self, before, after):
         was_in_vc = before != None
@@ -363,6 +374,8 @@ class GuildSounds(commands.Cog):
             await self.disconnect_from_voice(old_vc)
         elif old_vc and self.user_left_channel(before, after) and before.channel == old_vc.channel:
             self.play_leave_sound(member, old_vc)
+        elif old_vc and self.was_user_server_muted(before, after) and before.channel == old_vc.channel:
+            self.play_muted(old_vc)
 
     @commands.Cog.listener()
     async def on_guild_join(self, guild):
