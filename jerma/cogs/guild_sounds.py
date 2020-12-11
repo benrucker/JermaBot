@@ -291,6 +291,7 @@ class GuildSounds(commands.Cog):
         print(member.voice.channel.user_limit)
         if member.voice.channel.user_limit:
             return
+
         print(f'{y}Playing join sound if exists...')
         join_sound = self.get_sound(member.name, member.guild)
         if join_sound:
@@ -305,7 +306,6 @@ class GuildSounds(commands.Cog):
 
     def old_voice_channel_has_no_people(self, vc):
         return len([x for x in vc.channel.members if not x.bot]) == 0
-        # return len(vc.channel.members) <= 1
 
     async def disconnect_from_voice(self, vc):
         print(f'[{time.ctime()}] {y}Disconnecting from {c}{vc.guild} #{vc.channel} {y}because it is empty.')
@@ -343,7 +343,6 @@ class GuildSounds(commands.Cog):
         if g.is_snapping or g.is_snoozed():
             print(f'{y}Ignoring voice state update due to snap or snooze')
             return
-        # elif member.guild.me.nick:
         else:
             target_nick = "JermaBot"
             if member.guild.me.display_name != target_nick:
