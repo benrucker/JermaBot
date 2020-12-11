@@ -317,7 +317,7 @@ class GuildSounds(commands.Cog):
     def was_user_server_muted(self, before, after):
         return (not before.mute) and after.mute 
 
-    def play_mute(self, vc):
+    def play_muted(self, vc):
         sound = self.get_muted_sound()
         if sound:
             self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
