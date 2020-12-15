@@ -105,13 +105,13 @@ class Admin(commands.Cog):
 
     async def send_guild_diag(self, ctx):
         out = ''
-        out += f'Logged into **{len(self.bot.guilds)}** guilds:'
+        out += f'Logged into **{len(self.bot.guilds)}** guilds:\n'
         for guild in list(self.bot.guilds):
-            out += f'* {guild.name}:{guild.id}\n'
+            out += f'{guild.name} : {guild.id}\n'
         await ctx.send(out)
 
     async def send_message_diag(self, ctx):
-        await ctx.send(f'There are currently {len(self.bot.messages)} cached messages.')
+        await ctx.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
 
 
     async def send_vc_diag(self, ctx):
