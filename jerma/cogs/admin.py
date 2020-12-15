@@ -113,15 +113,14 @@ class Admin(commands.Cog):
     async def send_message_diag(self, ctx):
         await ctx.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
 
-
     async def send_vc_diag(self, ctx):
         await ctx.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
 
     async def send_latency_diag(self, ctx):
-        await ctx.send(f'Current websocket latency: {self.bot.latency}')
+        await ctx.send(f'Current websocket latency: {self.bot.latency/1000:.0} ms')
 
     async def send_emoji_diag(self, ctx):
-        out = f'JermaBot has access to {len(self.bot.emojis)} emojis, including '
+        out = f'JermaBot has access to {len(self.bot.emojis)} emojis including '
         e = random.sample(self.bot.emojis, 3)
         out += f'{e[0]}, {e[1]}, and {e[2]}.'
         await ctx.send(out)
