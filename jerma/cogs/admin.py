@@ -117,7 +117,7 @@ class Admin(commands.Cog):
         await ctx.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
 
     async def send_latency_diag(self, ctx):
-        latency = self.bot.latency / 1000
+        latency = self.bot.latency * 1000
         await ctx.send(f'Current websocket latency: {latency:.5} ms')
 
     async def send_emoji_diag(self, ctx):
