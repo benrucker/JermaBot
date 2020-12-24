@@ -236,7 +236,10 @@ class Fun(commands.Cog):
 
     def load_movies(self, guild_id: int):
         path = os.path.join('guilds', str(guild_id), 'movies')
-        return pickle.load(path)
+        if not os.path.exists(path):
+            return list()
+        with open(path) as f:
+            return pickle.load(f)
 
     def save_movies(self, guild_id, movies):
         path = os.path.join('guild', str(guild_id), 'movies')
