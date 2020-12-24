@@ -242,8 +242,8 @@ class Fun(commands.Cog):
             return pickle.load(f)
 
     def save_movies(self, guild_id, movies):
-        path = os.path.join(self.bot.path, 'guild', str(guild_id), 'movies')
-        with open(path, 'w+') as f:
+        path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
+        with open(path, 'w') as f:
             pickle.dump(movies, f)
 
     @commands.command()
