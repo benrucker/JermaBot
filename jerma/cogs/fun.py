@@ -243,7 +243,8 @@ class Fun(commands.Cog):
 
     def save_movies(self, guild_id, movies):
         path = os.path.join('guild', str(guild_id), 'movies')
-        pickle.dump(movies, path)
+        with open(path) as f:
+            pickle.dump(movies, f)
 
     @commands.command()
     async def movie(self, ctx, *, title: Optional[str]):
