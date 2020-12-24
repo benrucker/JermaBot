@@ -4,6 +4,15 @@ import asyncio
 import discord
 import time
 import random
+import fuzzywuzzy as fuzz
+from fuzzywuzzy import process
+from typing import Optional
+import pickle
+
+
+# will move these up to a broader scope later
+YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
+NO  = ['no','n','nope','start over','nada', 'nah']
 
 
 def setup(bot):
@@ -223,3 +232,59 @@ class Fun(commands.Cog):
                     id,
                     self.bot)
                 )
+
+
+    def load_movies(self, guild_id: int):
+        path = os.path.join('guilds', str(guild_id), 'movies')
+        return pickle.load(path)
+
+    def save_movies(self, guild_id, movies):
+        path = os.path.join('guild', str(guild_id), 'movies')
+        pickle.dump(movies, path)
+
+    @commands.command()
+    async def movie(self, ctx, *, title: Optional[str]):
+        """Add a movie to the movie list."""
+        # load movie list
+        movies = self.load_movies(ctx.guild.id)
+        # check for similar movies
+        highest = process.extractOne(title, movies)
+        if highest[1] > 90:
+            await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
+                            'Ya still wanna add **{title}**? **({random.choice(YES)}/{random.choice(NO)})**')
+
+        def check(message):
+            return message.author is ctx.author and message.content.lower().strip() in YES + NO
+
+        replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
+        if replace_msg.content.lower().strip() in NO:
+            await ctx.send('You got it, boss.')
+            return
+
+        # write to movie list
+        movies.append(title)
+        # save movie list
+        self.save_movies(ctx.guild.id, movies)
+        await ctx.send('Movie added. `$removie` to delete it or `$movies` to see the list.')
+
+    @commands.command()
+    async def movies(self, ctx):
+        await ctx.send('\n'.join(self.load_movies(ctx.guild.id)))
+
+    @commands.command()
+    async def removie(self, ctx, *, title):
+        movies = self.load_movies(ctx.guild.id)
+        highest = process.extractOne(title, movies)
+        await ctx.send(f'Just\'a confirm, ya wanna remove **{highest[0]}**? **({random.choice(YES)}/{random.choice(NO)})**')
+
+        def check(message):
+            return message.author is ctx.author and message.content.lower().strip() in YES + NO
+
+        replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
+        if replace_msg.content.lower().strip() in NO:
+            await ctx.send('Make up your mind next time, boss.')
+            return
+        
+        movies.remove(highest[0])
+        await ctx.send('Movie remov...ied.')
+        self.save_movies(ctx.guild.id, movies)
