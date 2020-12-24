@@ -238,8 +238,12 @@ class Fun(commands.Cog):
         path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
         if not os.path.exists(path):
             return list()
-        with open(path, 'rb') as f:
-            return pickle.load(f)
+        try:
+            with open(path, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(e)
+            return list()
 
     def save_movies(self, guild_id, movies):
         path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
