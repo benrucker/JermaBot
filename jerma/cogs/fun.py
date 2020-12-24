@@ -243,7 +243,7 @@ class Fun(commands.Cog):
 
     def save_movies(self, guild_id, movies):
         path = os.path.join(self.bot.path, 'guild', str(guild_id), 'movies')
-        with open(path, 'w+') as f:
+        with open(path, 'wb') as f:
             pickle.dump(movies, f)
 
     @commands.command()
@@ -255,7 +255,7 @@ class Fun(commands.Cog):
         highest = process.extractOne(title, movies)
         if highest and highest[1] > 90:
             await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
-                            'Ya still wanna add **{title}**? **({random.choice(YES)}/{random.choice(NO)})**')
+                           f'Ya still wanna add **{title}**? **(f{random.choice(YES)}/{random.choice(NO)})**')
 
             def check(message):
                 return message.author is ctx.author and message.content.lower().strip() in YES + NO
