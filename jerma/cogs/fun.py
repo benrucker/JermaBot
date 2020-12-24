@@ -256,13 +256,13 @@ class Fun(commands.Cog):
             await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
                             'Ya still wanna add **{title}**? **({random.choice(YES)}/{random.choice(NO)})**')
 
-        def check(message):
-            return message.author is ctx.author and message.content.lower().strip() in YES + NO
+            def check(message):
+                return message.author is ctx.author and message.content.lower().strip() in YES + NO
 
-        replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
-        if replace_msg.content.lower().strip() in NO:
-            await ctx.send('You got it, boss.')
-            return
+            replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
+            if replace_msg.content.lower().strip() in NO:
+                await ctx.send('You got it, boss.')
+                return
 
         # write to movie list
         movies.append(title)
