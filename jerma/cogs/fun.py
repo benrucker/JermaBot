@@ -11,8 +11,8 @@ import pickle
 
 
 # will move these up to a broader scope later
-YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
-NO  = ['no','n','nope','start over','nada', 'nah']
+YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah', 'yea', 'yush']
+NO  = ['no','n','nope','nay','nada', 'nah', 'na']
 
 
 def setup(bot):
