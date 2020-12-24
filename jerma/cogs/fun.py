@@ -241,8 +241,8 @@ class Fun(commands.Cog):
         try:
             with open(path, 'rb') as f:
                 return pickle.load(f)
-        except Exception as e:
-            print(e)
+        except:
+            print('caught exception while loading movie list')
             return list()
 
     def save_movies(self, guild_id, movies):
