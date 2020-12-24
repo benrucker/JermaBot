@@ -252,7 +252,7 @@ class Fun(commands.Cog):
         movies = self.load_movies(ctx.guild.id)
         # check for similar movies
         highest = process.extractOne(title, movies)
-        if highest[1] > 90:
+        if highest and highest[1] > 90:
             await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
                             'Ya still wanna add **{title}**? **({random.choice(YES)}/{random.choice(NO)})**')
 
@@ -278,6 +278,11 @@ class Fun(commands.Cog):
     async def removie(self, ctx, *, title):
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
+
+        if not highest:
+            await ctx.send('This is a bit awkward but... I don\'t know what movie you mean.')
+            return
+
         await ctx.send(f'Just\'a confirm, ya wanna remove **{highest[0]}**? **({random.choice(YES)}/{random.choice(NO)})**')
 
         def check(message):
