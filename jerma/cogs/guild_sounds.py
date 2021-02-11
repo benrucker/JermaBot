@@ -287,7 +287,7 @@ class GuildSounds(commands.Cog):
             a1 = getattr(v1, attr)
             a2 = getattr(v2, attr)
             if a1 != a2:
-                out += f'\t{attr}\tfrom {b}{a1}\t{n}to {b}{a2}\n'
+                out += f'\t{attr} from {b}{a1}\t{n}to {b}{a2}\n'
         return out[:-1]
 
     def user_joined_channel(self, before, after):
