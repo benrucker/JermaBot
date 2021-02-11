@@ -17,6 +17,8 @@ NO  = ['no','n','nope','start over','nada', 'nah']
 
 y = t.YELLOW + Style.BRIGHT
 c = t.CYAN + Style.NORMAL
+b = Style.BRIGHT
+n = Style.NORMAL
 
 
 async def manage_sounds_check(ctx):
@@ -278,10 +280,13 @@ class GuildSounds(commands.Cog):
 
     def voice_state_diff_str(self, v1, v2) -> str:
         """Return a descriptive string of differences between two voice states."""
+        attrs = ['afk','channel','deaf','mute','self_deaf','self_mute','self_stream','self_video']
         out = ''
-        for x, y in zip(repr(v1).split(' '), repr(v2).split(' ')):
-            if x != y:
-                out += '\tfrom ' + x + ' to ' + y + '\n'
+        for attr in attrs:
+            a1 = getattr(v1, attr)
+            a2 = getattr(v2, attr)
+            if a1 != a2:
+                out += f'\t{attr}\tfrom {b}{a1}\t{n}to {b}{a2}\n'
         return out[:-1]
 
     def user_joined_channel(self, before, after):
@@ -345,7 +350,8 @@ class GuildSounds(commands.Cog):
         # member (Member) – The member whose voice states changed.
         # before (VoiceState) – The voice state prior to the changes.
         # after (VoiceState) – The voice state after the changes.
-        print(f'[{time.ctime()}] Voice state update: {member.name}\n{self.voice_state_diff_str(before, after)}')
+        print(f'[{time.ctime()}] {y}Voice state update: {member.name} in {c}{member.guild}')
+        print(f'{self.voice_state_diff_str(before, after)}')
 
         old_vc = self.bot.get_cog('Control').get_existing_voice_client(member.guild)
         g = self.bot.get_guildinfo(member.guild.id)
