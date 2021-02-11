@@ -186,6 +186,7 @@ class TTS(commands.Cog):
     @commands.command(aliases=['sa'])
     @jtts_enabled()
     async def speakanime(self, ctx, *args):
+        """Text-to-speech but more Japanese."""
         if not args:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)

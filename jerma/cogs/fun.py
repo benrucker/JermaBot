@@ -277,6 +277,7 @@ class Fun(commands.Cog):
 
     @commands.command()
     async def movies(self, ctx):
+        """Look at the movie list."""
         movies = self.load_movies(ctx.guild.id)
         if len(movies) == 0:
             await ctx.send('Your movie queue is empty. Hear that? EMPTY!')
@@ -285,6 +286,7 @@ class Fun(commands.Cog):
 
     @commands.command()
     async def removie(self, ctx, *, title):
+        """Removie a movie from the movie list."""
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
 

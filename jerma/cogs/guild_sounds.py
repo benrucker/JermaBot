@@ -248,6 +248,7 @@ class GuildSounds(commands.Cog):
 
     @commands.command()
     async def random(self, ctx):
+        """Play a random sound!"""
         sound = self.get_random_sound(ctx.guild)
         if not sound:
             raise GuildSoundsError('Guild has no sounds.',
