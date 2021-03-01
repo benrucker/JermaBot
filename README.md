@@ -6,7 +6,7 @@ This bot is inspired by Jerma985! I promise that it's slightly taller than the r
 
 ## Setup
 
-You can add this bot to your server or install it locally.
+You can add this bot to your server (recommended) or install it locally.
 
 ### Adding JermaBot to your server
 
