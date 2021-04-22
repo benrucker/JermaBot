@@ -3,7 +3,7 @@
 <img src="jerma/resources/images/thumbnail.png" width="200" height="250" align="right" />
 
 [![Maintainability](https://api.codeclimate.com/v1/badges/11bccccb374395ea9f7d/maintainability)](https://codeclimate.com/github/benrucker/discord-jerma/maintainability)
-[![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](https://opensource.org/licenses/)
+[![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](LICENSE)
 
 This bot is inspired by Jerma985! I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
