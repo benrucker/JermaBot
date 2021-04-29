@@ -7,19 +7,19 @@
 
 This bot is inspired by Jerma985! I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
 
-## Setup
+# Setup
 
 You can add this bot to your server (recommended) or install it locally.
 
-### Adding JermaBot to your server
+## Adding JermaBot to your server
 
 Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot) and select your server! Currently, uptime is at 99%.
 
 Note: **some commands you might see in the code are guild-specfic**. Send `$help` to see what commands you can call.
 
-### Installing JermaBot locally
+## Installing JermaBot locally
 
-#### Setup:
+### Setup:
 Install the needed python packages by running this command in the repo:
 ```pip install -r requirements.txt```
 
@@ -32,7 +32,7 @@ Clone this repo,
 
 Then, store your bot token in a file called `secret.txt` in the folder `discord-jerma/`.
 
-#### Running JermaBot:
+### Running JermaBot:
 
 Run the bot through the command line like this:
 ```
@@ -51,7 +51,7 @@ python jerma.py [-s SECRET_FILENAME]
 
 On Linux, use `python3` instead of `python`.
 
-## Some Commands
+# Notable Commands
 All commands are prefixed with `$` by default.
 
 * `speak <words>` - Jerma joins the channel and says what you input.
@@ -60,6 +60,7 @@ All commands are prefixed with `$` by default.
 * `adderall <things>` - Same as `speak` but more like a streamer during a bitcoin joke.
 * `speakanime <thingz>` - Same as `speak` but with more anime.
 * `play <sound>` - Jerma joins the channel and plays the sound specified by name. Do not include the file extension. Will only seach in `discord-jerma\sounds`.
+  * NOTE: If a sound is named the same as a member's username, that sound will play each time they join the voice call.
 * `birthday <name>` - Jerma joins the channel and plays a birthday song for the person with the given name.
 * `join` - Jerma joins the channel.
 * `leave` - Jerma leaves the channel.
