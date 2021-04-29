@@ -375,7 +375,7 @@ class GuildSounds(commands.Cog):
                 await old_vc.disconnect()
             return
         
-        if self.user_joined_channel(before, after):
+        if self.user_joined_channel(before, after) and not member.voice.afk:
             await self.play_join_sound(member, old_vc)
         elif old_vc and self.old_voice_channel_has_no_people(old_vc):
             await self.disconnect_from_voice(old_vc)
