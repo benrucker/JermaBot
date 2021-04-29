@@ -1,9 +1,11 @@
-import discord
-from discord.ext import commands
-import os
-import glob
-import random
 import asyncio
+import glob
+import os
+import random
+
+import discord
+from colorama import Fore as t
+from discord.ext import commands
 
 
 def setup(bot):
@@ -102,3 +104,8 @@ class Control(commands.Cog):
             self.bot.get_cog('SoundPlayer').play_sound_file(sound, ctx.voice_client)
             await asyncio.sleep(1)
             await ctx.guild.voice_client.disconnect()
+        else:
+            print(f'{t.RED}Leave conditional failed')
+            print(f'ctx.voice_client =', ctx.voice_client)
+            if ctx.voice_client:
+                print(f'is_connected =', ctx.voice_client.is_connected())
