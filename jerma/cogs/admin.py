@@ -75,7 +75,7 @@ class Admin(commands.Cog):
         return updated
 
     @commands.is_owner()
-    @commands.command(hidden=True)
+    @commands.command()
     async def reload(self, ctx, ext: str):
         self.bot.reload_extension(ext)
         await ctx.send('Reloadception complete.')
@@ -101,3 +101,11 @@ class Admin(commands.Cog):
     async def unload(self, ctx, ext: str):
         self.bot.unload_extension(ext)
         await ctx.send('Unloaded, pew pew.')
+
+    @commands.is_owner()
+    @commands.command()
+    async def usercount(self, ctx):
+        count = 0
+        for guild in self.bot.guilds:
+            count += guild.member_count
+        await ctx.send(count)

@@ -34,11 +34,11 @@ ACTIVITIES = [(ActivityType.listening, 'my heart.'),
               (ActivityType.watching, 'chat make fun of me.'),
               (ActivityType.watching, 'E3® 2022.'),
               (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
-              (ActivityType.watching, 'the byeahs.'),  # comma on last item is good
+              (ActivityType.watching, 'the byeahs.'),
              ]
 
 
-colorama.init(autoreset=True)  # set up colored console out
+colorama.init(autoreset=True)
 guilds = dict()
 tts = None
 
@@ -48,7 +48,7 @@ prefixes = ['$', '+']
 class JermaBot(commands.Bot):
     """Base JermaBot class."""
 
-    def __init__(self, path, command_prefix=None):
+    def __init__(self, path, command_prefix=None, intents=discord.Intents.default):
         """
         Construct JermaBot.
 
@@ -57,7 +57,7 @@ class JermaBot(commands.Bot):
         """
         self.path = path
         self.guild_infos = dict()
-        super().__init__(command_prefix=command_prefix)
+        super().__init__(command_prefix=command_prefix, intents=intents)
 
     def get_guildinfo(self, id=None):
         """Return a GuildInfo object for the given guild id."""
@@ -290,7 +290,10 @@ if __name__ == '__main__':
     except:
         pass
 
-    bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'))
+    intents = discord.Intents.default()
+    intents.members = True
+
+    bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'), intents=intents)
     bot.tts_engine = tts
     if args.japanese_voice and args.japanese_dict:
         print('setting JTTS to openjtalk')
@@ -309,6 +312,5 @@ if __name__ == '__main__':
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
     bot.load_extension('cogs.scoreboard')
-    # bot.load_extension('cogs.uncategorized')
 
     bot.run(secret)
