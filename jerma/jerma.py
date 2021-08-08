@@ -34,11 +34,11 @@ ACTIVITIES = [(ActivityType.listening, 'my heart.'),
               (ActivityType.watching, 'E3® 2022.'),
               (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
               (ActivityType.watching, 'your form, bro!'),
-              (ActivityType.watching, 'the byeahs.'),  # comma on last item is good
+              (ActivityType.watching, 'the byeahs.'),
              ]
 
 
-colorama.init(autoreset=True)  # set up colored console out
+colorama.init(autoreset=True)
 guilds = dict()
 tts = None
 intents = discord.Intents.default()
@@ -298,6 +298,5 @@ if __name__ == '__main__':
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
     bot.load_extension('cogs.scoreboard')
-    # bot.load_extension('cogs.uncategorized')
 
     bot.run(secret)
