@@ -107,7 +107,7 @@ class Admin(commands.Cog):
         out = ''
         out += f'Logged into **{len(self.bot.guilds)}** guilds:\n'
         for guild in list(self.bot.guilds):
-            out += f'    {guild.name} : {guild.id}\n'
+            out += f'    {guild.name} : {str(guild.id)[:5]}\n'
         await ctx.send(out)
 
     async def send_message_diag(self, ctx):
