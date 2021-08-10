@@ -5,7 +5,14 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/11bccccb374395ea9f7d/maintainability)](https://codeclimate.com/github/benrucker/discord-jerma/maintainability)
 [![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](LICENSE)
 
-This bot is inspired by Jerma985! I promise that it's slightly taller than the real thing. JermaBot is currently geared towards adding sound functionality to servers, but more Jerma-centric commands are planned for the future.
+JermaBot is a bot inspired by Jerma985. It is a 24/7 general-purpose bot with an emphasis on adding sound functionality to your server.
+
+## Feature Highlights
+
+* **Text-To-Speech** - For those who cannot talk in voice, JermaBot offers TTS. Just call the `speak` command.
+* **Sound File Management** - Add a sound file to JermaBot using `addsound` and you will be able to play it back in a voice channel at any time with `play`.
+* **Join Sounds** - A grand entrance is a good entrance, so if a sound's filename matches your username, JermaBot will play it automatically when you join a voice channel.
+* **Fun** - A plethora of random commands are at your disposal, such as `downsmash`, `jermalofi`, and `drake`.
 
 # Setup
 
@@ -20,17 +27,29 @@ Note: **some commands you might see in the code are guild-specfic**. Send `$help
 ## Installing JermaBot locally
 
 ### Setup:
-Install the needed python packages by running this command in the repo:
-```pip install -r requirements.txt```
 
-You will also need ffmpeg to be on your system path. If you want to use TTS features, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
+1. Install FFMPEG
+    * `ffmpeg` needs to be on your system path.
+2. Set up TTS (Required only for `speak`)
+    * If you want to use `speak`, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
+3. Set up Japanese TTS (Required only for `speakanime`)
+    1. Install `espeak` from [here](http://espeak.sourceforge.net/).
+    2. Make sure that `espeak` is on your system path.
+    3. Download the voice "Mei" from [here](https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.6/).
+    4. Put the "Mei" voice files somewhere safe, you will need to add that path to JermaBot's startup parameters.
+4. Clone the repo by pasting this in the command line:
 
-If you want to use the `speakanime` command, you will need the `espeak` command to be on your path (regardless of platform).
-
-Clone this repo,
 ```git clone https://github.com/benrucker/discord-jerma.git```
 
-Then, store your bot token in a file called `secret.txt` in the folder `discord-jerma/`.
+5. `cd` into the repo with this command:
+
+```cd discord-jerma```
+
+6. Install the needed Python packages by pasting this in the command line:
+
+```pip install -r requirements.txt```
+
+7. Store your bot's token in a file called `secret.txt` in the folder `discord-jerma/`.
 
 ### Running JermaBot:
 
@@ -51,25 +70,6 @@ python jerma.py [-s SECRET_FILENAME]
 
 On Linux, use `python3` instead of `python`.
 
-# Notable Commands
-All commands are prefixed with `$` by default.
+# Usage
 
-* `speak <words>` - Jerma joins the channel and says what you input.
-  * E.g. `$speak What's up guys, Jermabot here.`
-* `speakdrunk <stuff>` - Same as `speak` but more like a streamer during a Labo build.
-* `adderall <things>` - Same as `speak` but more like a streamer during a bitcoin joke.
-* `speakanime <thingz>` - Same as `speak` but with more anime.
-* `play <sound>` - Jerma joins the channel and plays the sound specified by name. Do not include the file extension. Will only seach in `discord-jerma\sounds`.
-  * NOTE: If a sound is named the same as a member's username, that sound will play each time they join the voice call.
-* `birthday <name>` - Jerma joins the channel and plays a birthday song for the person with the given name.
-* `join` - Jerma joins the channel.
-* `leave` - Jerma leaves the channel.
-* `jermalofi` - Jerma joins the channel and plays some rats lofi.
-* `help` - Lists all commands available to users.
-* `stop` - Stops audio from playing, if any.
-* `jermahelp` - Sends a DM to the command caller detailing commands.
-* `help` - Autogenerate a list of all commands available to you.
-* `list` - Lists the sounds available in the `play` command.
-* `volume` - Change the volume for sounds to be played at.
-
-Good luck, gamer!
+Once JermaBot has joined your server, send `$help` to see a list of commands. Do `$help <command>` to see more details about a certain command (e.g. `$help speak`).
