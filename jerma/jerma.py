@@ -115,129 +115,30 @@ class JermaBot(commands.Bot):
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
 
-    async def get_context_no_command(self, message, cls=commands.Context):
-        """Construct a context object from a given message."""
-        view = discord.ext.commands.view.StringView(message.content)
-        ctx = cls(prefix=None, view=view, bot=self, message=message)
-
-        if self._skip_check(message.author.id, self.user.id):
-            return ctx
-
-        prefix = await self.get_prefix(message)
-        invoked_prefix = prefix
-
-        if isinstance(prefix, str):
-            if not view.skip_string(prefix):
-                return ctx
-        else:
-            try:
-                # if the context class' __init__ consumes something from the view this
-                # will be wrong.  That seems unreasonable though.
-                if message.content.startswith(tuple(prefix)):
-                    invoked_prefix = discord.utils.find(view.skip_string, prefix)
-                else:
-                    return ctx
-
-            except TypeError:
-                if not isinstance(prefix, list):
-                    raise TypeError("get_prefix must return either a string or a list of string, "
-                                    "not {}".format(prefix.__class__.__name__))
-
-                # It's possible a bad command_prefix got us here.
-                for value in prefix:
-                    if not isinstance(value, str):
-                        raise TypeError("Iterable command_prefix or list returned from get_prefix must "
-                                        "contain only strings, not {}".format(value.__class__.__name__))
-
-                # Getting here shouldn't happen
-                raise
-
-        invoker = view.get_word()
-        ctx.invoked_with = invoker
-        ctx.prefix = invoked_prefix
-        ctx.command = invoker
-        return ctx
-
-    # -------------- Overrides --------------------
-    async def get_context(self, message, *, cls=discord.ext.commands.Context):
-        """Construct a context object from a given command."""
-        view = discord.ext.commands.view.StringView(message.content)
-        ctx = cls(prefix=None, view=view, bot=self, message=message)
-
-        if self._skip_check(message.author.id, self.user.id):
-            return ctx
-
-        prefix = await self.get_prefix(message)
-        invoked_prefix = prefix
-
-        if isinstance(prefix, str):
-            if not view.skip_string(prefix):
-                return ctx
-        else:
-            try:
-                # if the context class' __init__ consumes something from the view this
-                # will be wrong.  That seems unreasonable though.
-                if message.content.startswith(tuple(prefix)):
-                    invoked_prefix = discord.utils.find(view.skip_string, prefix)
-                else:
-                    return ctx
-
-            except TypeError:
-                if not isinstance(prefix, list):
-                    raise TypeError("get_prefix must return either a string or a list of string, "
-                                    "not {}".format(prefix.__class__.__name__))
-
-                # It's possible a bad command_prefix got us here.
-                for value in prefix:
-                    if not isinstance(value, str):
-                        raise TypeError("Iterable command_prefix or list returned from get_prefix must "
-                                        "contain only strings, not {}".format(value.__class__.__name__))
-
-                # Getting here shouldn't happen
-                raise
-
-        invoker = view.get_word()
-        ctx.invoked_with = invoker
-        ctx.prefix = invoked_prefix
-        ctx.command = self.all_commands.get(invoker)
-        return ctx
-
     async def process_commands(self, message):
         """Process commands."""
         if message.author.bot:
             return
 
-        ctx = await self.get_context_no_command(message)
-        # print(type(ctx.prefix), ctx.prefix)
-        if ctx.prefix == '+':
-            await self.get_cog('Scoreboard').process_scoreboard(ctx)
-        else:
-            ctx.command = self.all_commands.get(ctx.invoked_with)
-            await self.invoke(ctx)
+        ctx = await self.get_context(message)
+        await self.invoke(ctx)
 
     async def on_message(self, message):
         """Log info about recevied messages and send to process."""
         if message.content.startswith('$$'):
             return  # protection against hackerbot commands
-        # elif message.content.startswith('+'):
-        #     await process_scoreboard(await get_context(message))
-        #     return
 
-        if message.content.startswith(('$', '+')):
+        if message.content.startswith(('$')):
             print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
         elif message.author == self.user:
             print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
         await self.process_commands(message)
-        #except AttributeError as _:
-        #    pass # ignore embed-only messages
-        #except Exception as e:
-        #    print(e)
 
 
 if __name__ == '__main__':
     global source_path, bot
-    source_path = os.path.dirname(os.path.abspath(__file__))  # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__)) 
 
     logging.basicConfig(level=logging.INFO)
 
@@ -297,6 +198,5 @@ if __name__ == '__main__':
     bot.load_extension('cogs.tts')
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
-    bot.load_extension('cogs.scoreboard')
 
     bot.run(secret)
