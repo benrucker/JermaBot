@@ -18,7 +18,7 @@ class TTSNotEnabled(commands.CheckFailure):
 
 class JTTSNotEnabled(commands.CheckFailure):
     def __str__(self):
-        return 'Hey man, I don\'t know how to say this but... JTTS isn\'t enabled on this instance of JermaBot.'
+        return 'Hey man, I don\'t know how to say this but... Japanese TTS isn\'t enabled on this instance of JermaBot.'
 
 
 def tts_enabled():
