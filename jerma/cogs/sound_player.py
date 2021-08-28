@@ -20,23 +20,21 @@ class SoundPlayer(commands.Cog):
         source.volume = self.bot.get_guildinfo(vc.channel.guild.id).volume
         self.stop_audio(vc)
         vc.play(source)
-        c = t.CYAN
-        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {c}{vc.guild} #{vc.channel}')
-
-    def stop_audio(self, vc):
-        if vc.is_playing():
-            vc.stop()
-            silence = os.path.join('resources', 'soundclips', 'silence.wav')
-            self.play_sound_file(silence, vc)
-            #time.sleep(.07)
-            while vc.is_playing():
-                continue
+        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {t.CYAN}{vc.guild} #{vc.channel}')
 
     @commands.command()
     async def stop(self, ctx):
         """Stop any currently playing audio."""
         vc = ctx.voice_client
         self.stop_audio(vc)
+
+    def stop_audio(self, vc):
+        if vc.is_playing():
+            vc.stop()
+            silence = os.path.join('resources', 'soundclips', 'silence.wav')
+            self.play_sound_file(silence, vc)
+            while vc.is_playing():
+                continue
 
     @commands.command()
     async def volume(self, ctx, *args):
@@ -49,7 +47,7 @@ class SoundPlayer(commands.Cog):
         vol = int(args[0])
         fvol = vol / 100
         ginfo.volume = fvol
-        if ctx.voice_client and ctx.voice_client.source:  # short-circuit statement
+        if ctx.voice_client and ctx.voice_client.source:
             ctx.voice_client.source.volume = fvol
 
         react = ctx.message.add_reaction
