@@ -18,24 +18,25 @@ from cogs.utils import ttsengine
 from guild_info import GuildInfo
 
 
-YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
-NO  = ['no','n','nope','start over','nada', 'nah']
+YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
+NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
 
 
-ACTIVITIES = [(ActivityType.listening, 'my heart.'),
-              (ActivityType.listening, 'rats lofi'),
-              (ActivityType.listening, 'Shigurain.'),
-              (ActivityType.listening, 'a Scream Compilation.'),
-              (ActivityType.listening, 'the DOOM OST.'),
-              (ActivityType.listening, 'a clown podcast.'),
-              (ActivityType.streaming, 'DARK SOULS III'),
-              (ActivityType.streaming, 'Just Cause 4 for 3DS'),
-              (ActivityType.watching, 'chat make fun of me.'),
-              (ActivityType.watching, 'E3® 2022.'),
-              (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
-              (ActivityType.watching, 'your form, bro!'),
-              (ActivityType.watching, 'the byeahs.'),
-             ]
+ACTIVITIES = [
+    (ActivityType.listening, 'my heart.'),
+    (ActivityType.listening, 'rats lofi'),
+    (ActivityType.listening, 'Shigurain.'),
+    (ActivityType.listening, 'a Scream Compilation.'),
+    (ActivityType.listening, 'the DOOM OST.'),
+    (ActivityType.listening, 'a clown podcast.'),
+    (ActivityType.streaming, 'DARK SOULS III'),
+    (ActivityType.streaming, 'Just Cause 4 for 3DS'),
+    (ActivityType.watching, 'chat make fun of me.'),
+    (ActivityType.watching, 'E3® 2022.'),
+    (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
+    (ActivityType.watching, 'your form, bro!'),
+    (ActivityType.watching, 'the byeahs.'),
+]
 
 
 colorama.init(autoreset=True)
@@ -75,7 +76,8 @@ class JermaBot(commands.Bot):
     def initialize_guild_infos(self):
         """Construct dictionary of guildinfo objects."""
         for guild in self.guilds:
-            os.makedirs(os.path.join('guilds', f'{guild.id}', 'sounds'), exist_ok=True)
+            os.makedirs(os.path.join(
+                'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
     def get_rand_activity(self):
@@ -111,7 +113,8 @@ class JermaBot(commands.Bot):
             if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
                 return
 
-        print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+        print('Ignoring exception in command {}:'.format(
+            ctx.command), file=sys.stderr)
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
 
@@ -131,27 +134,34 @@ class JermaBot(commands.Bot):
         if message.content.startswith(('$')):
             print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
         elif message.author == self.user:
-            print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
+            print(
+                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
         await self.process_commands(message)
 
 
 if __name__ == '__main__':
     global source_path, bot
-    source_path = os.path.dirname(os.path.abspath(__file__)) 
+    source_path = os.path.dirname(os.path.abspath(__file__))
 
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description='Run JermaBot')
-    parser.add_argument('-s', '--secret_filename', help='location of bot token text file')
+    parser.add_argument('-s', '--secret_filename',
+                        help='location of bot token text file')
     group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument('-mycroft', '--mycroft_path', help='tell jerma to use mycroft at the given path')
-    group.add_argument('-voice', '--voice_path', help='tell jerma to use windows voice.exe tts engine')
+    group.add_argument('-mycroft', '--mycroft_path',
+                       help='tell jerma to use mycroft at the given path')
+    group.add_argument('-voice', '--voice_path',
+                       help='tell jerma to use windows voice.exe tts engine')
     group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
                        action='store_true')
-    parser.add_argument('-mv', '--mycroft_voice', help='name of OR path to the voice to use with mycroft')
-    parser.add_argument('-jv', '--japanese_voice', help='path to voice to use with Japanese TTS')
-    parser.add_argument('-jd', '--japanese_dict', help='path to dictionary to use with Japanese TTS')
+    parser.add_argument('-mv', '--mycroft_voice',
+                        help='name of OR path to the voice to use with mycroft')
+    parser.add_argument('-jv', '--japanese_voice',
+                        help='path to voice to use with Japanese TTS')
+    parser.add_argument('-jd', '--japanese_dict',
+                        help='path to dictionary to use with Japanese TTS')
     args = parser.parse_args()
 
     if args.secret_filename:
@@ -166,11 +176,12 @@ if __name__ == '__main__':
             _v = args.mycroft_voice
         else:
             _v = 'ap'
-        tts = ttsengine.construct(engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
+        tts = ttsengine.construct(
+            engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
     elif args.voice_path:
         tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
     elif args.espeak:
-        tts = ttsengine.construct(engine=ttsengine.ESPEAK) 
+        tts = ttsengine.construct(engine=ttsengine.ESPEAK)
     else:
         print('Setting TTS to none')
         tts = None
