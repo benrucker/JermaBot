@@ -11,8 +11,9 @@ import pickle
 
 
 # will move these up to a broader scope later
-YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah', 'yea', 'yush']
-NO  = ['no','n','nope','nay','nada', 'nah', 'na']
+YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course',
+       'ye', 'y', 'ya', 'yah', 'yea', 'yush']
+NO = ['no', 'n', 'nope', 'nay', 'nada', 'nah', 'na']
 
 
 def setup(bot):
@@ -31,25 +32,20 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def get_soul_stone_channel(self, ctx):
-        for channel in ctx.guild.voice_channels:
-            if channel.id == 343939767068655616:
-                return channel
-        raise Exception('channel not found')
-
-    def get_snap_sound(self):
-        sounds = []
-        snaps_folder = os.path.join('resources', 'soundclips', 'snaps')
-        snaps_db = os.path.join(snaps_folder, 'sounds.txt')
-        with open(snaps_db, 'r', encoding='utf-8') as file:
-            for sound in file.read().split('\n'):
-                sounds.append(sound.split(' '))
-        print(sounds)
-        choice = random.choice(sounds)
-        choice[0] = os.path.join(snaps_folder, choice[0])
-        choice[1] = float(choice[1])
-        choice[2] = float(choice[2])
-        return choice
+    @commands.command()
+    async def jermalofi(self, ctx):
+        """Chill with a sick jam."""
+        print('jermalofi')
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        id = ctx.guild.id
+        vc.play(self.bot.get_cog('SoundPlayer')
+                .LoopingSource(
+                    os.path.join('resources', 'soundclips',
+                                 'birthdayloop.wav'),
+                    self.bot.get_cog('SoundPlayer').source_factory,
+                    id,
+                    self.bot)
+                )
 
     @commands.command(hidden=True)
     @is_whid()
@@ -80,19 +76,21 @@ class Fun(commands.Cog):
         do_moonlight = random.random() < 0.25
         if do_moonlight:
             await ctx.guild.voice_client.move_to(soul_stone)
-            vc.play(discord.FFmpegPCMAudio(os.path.join('soundclips', 'moonlight.wav')))
+            vc.play(discord.FFmpegPCMAudio(
+                os.path.join('soundclips', 'moonlight.wav')))
             await asyncio.sleep(1)
             self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
         else:
-            vc.play(discord.FFmpegPCMAudio(os.path.join('resources', 'soundclips', 'snaps', 'up in smoke.mp3')))
+            vc.play(discord.FFmpegPCMAudio(os.path.join(
+                'resources', 'soundclips', 'snaps', 'up in smoke.mp3')))
             await asyncio.sleep(1)
             self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
-    def get_quarantine_sound(self):
-        sound = os.path.join('resources', 'soundclips', '2319.wav')
-        with open(os.path.join('resources', 'soundclips', '2319.txt'), 'r', encoding='utf-8') as file:
-            a = file.readline().split(' ')
-        return [sound, float(a[0]), float(a[1])]
+    def get_soul_stone_channel(self, ctx):
+        for channel in ctx.guild.voice_channels:
+            if channel.id == 343939767068655616:
+                return channel
+        raise Exception('channel not found')
 
     @commands.command(aliases=['q'])
     @is_whid()
@@ -123,12 +121,6 @@ class Fun(commands.Cog):
         await user.move_to(dest_channel)
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
-
-    def get_smash_sound(self):
-        sound = os.path.join('resources', 'soundclips', 'smash_kill.wav')
-        with open(os.path.join('resources', 'soundclips', 'smash_kill.txt'), 'r', encoding='utf-8') as file:
-            a = file.readline().split(' ')
-        return [sound, float(a[0]), float(a[1])]
 
     @commands.command()
     @is_whid()
@@ -188,19 +180,38 @@ class Fun(commands.Cog):
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
-    async def _add_emoji_and_delete_msg(self, emoji, msg_to_react, msg_to_delete):
-        await msg_to_delete.delete(delay=1)
-        await msg_to_react.add_reaction(str(emoji))
-        await asyncio.sleep(5)
-        await msg_to_react.remove_reaction(str(emoji), self.bot.user)
+    def get_snap_sound(self):
+        sounds = []
+        snaps_folder = os.path.join('resources', 'soundclips', 'snaps')
+        snaps_db = os.path.join(snaps_folder, 'sounds.txt')
+        with open(snaps_db, 'r', encoding='utf-8') as file:
+            for sound in file.read().split('\n'):
+                sounds.append(sound.split(' '))
+        print(sounds)
+        choice = random.choice(sounds)
+        choice[0] = os.path.join(snaps_folder, choice[0])
+        choice[1] = float(choice[1])
+        choice[2] = float(choice[2])
+        return choice
+
+    def get_quarantine_sound(self):
+        return self.get_sound('2319')
+
+    def get_smash_sound(self):
+        return self.get_sound('smash_kill')
+
+    def get_sound(self, sound_name):
+        sound = os.path.join('resources', 'soundclips', f'{sound_name}.wav')
+        with open(os.path.join('resources', 'soundclips', f'{sound_name}.txt'), 'r', encoding='utf-8') as file:
+            delay, length = file.readline().split(' ')
+        return [sound, float(delay), float(length)]
 
     @commands.command()
     async def e(self, ctx, emoji_name: str):
         """Add the specified emoji to the most recent message sent."""
         msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
-        # find emoji in server
+
         emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
-        # if not found, search all
         if not emoji:
             emoji = discord.utils.get(self.bot.emojis, name=emoji_name)
         await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
@@ -219,43 +230,16 @@ class Fun(commands.Cog):
         emoji = self.bot.get_emoji(679179726740258826)
         await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
 
-    @commands.command()
-    async def jermalofi(self, ctx):
-        """Chill with a sick jam."""
-        print('jermalofi')
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
-        id = ctx.guild.id
-        vc.play(self.bot.get_cog('SoundPlayer')
-                .LoopingSource(
-                    os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
-                    self.bot.get_cog('SoundPlayer').source_factory,
-                    id,
-                    self.bot)
-                )
-
-
-    def load_movies(self, guild_id: int):
-        path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
-        if not os.path.exists(path):
-            return list()
-        try:
-            with open(path, 'rb') as f:
-                return pickle.load(f)
-        except:
-            print('caught exception while loading movie list')
-            return list()
-
-    def save_movies(self, guild_id, movies):
-        path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
-        with open(path, 'wb') as f:
-            pickle.dump(movies, f)
+    async def _add_emoji_and_delete_msg(self, emoji, msg_to_react, msg_to_delete):
+        await msg_to_delete.delete(delay=1)
+        await msg_to_react.add_reaction(str(emoji))
+        await asyncio.sleep(5)
+        await msg_to_react.remove_reaction(str(emoji), self.bot.user)
 
     @commands.command()
     async def movie(self, ctx, *, title: Optional[str]):
         """Add a movie to the movie list."""
-        # load movie list
         movies = self.load_movies(ctx.guild.id)
-        # check for similar movies
         highest = process.extractOne(title, movies)
         if highest and highest[1] > 90:
             await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
@@ -303,7 +287,23 @@ class Fun(commands.Cog):
         if replace_msg.content.lower().strip() in NO:
             await ctx.send('Make up your mind next time, boss.')
             return
-        
+
         movies.remove(highest[0])
         await ctx.send('Movie remov...ied.')
         self.save_movies(ctx.guild.id, movies)
+
+    def load_movies(self, guild_id: int):
+        path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
+        if not os.path.exists(path):
+            return list()
+        try:
+            with open(path, 'rb') as f:
+                return pickle.load(f)
+        except:
+            print('caught exception while loading movie list')
+            return list()
+
+    def save_movies(self, guild_id, movies):
+        path = os.path.join(self.bot.path, 'guilds', str(guild_id), 'movies')
+        with open(path, 'wb') as f:
+            pickle.dump(movies, f)
