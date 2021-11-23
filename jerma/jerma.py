@@ -18,27 +18,28 @@ from cogs.utils import ttsengine
 from guild_info import GuildInfo
 
 
-YES = ['yes','yeah','yep','yeppers','of course','ye','y','ya','yah']
-NO  = ['no','n','nope','start over','nada', 'nah']
+YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
+NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
 
 
-ACTIVITIES = [(ActivityType.listening, 'my heart.'),
-              (ActivityType.listening, 'rats lofi'),
-              (ActivityType.listening, 'Shigurain.'),
-              (ActivityType.listening, 'a Scream Compilation.'),
-              (ActivityType.listening, 'the DOOM OST.'),
-              (ActivityType.listening, 'a clown podcast.'),
-              (ActivityType.streaming, 'DARK SOULS III'),
-              (ActivityType.streaming, 'Just Cause 4 for 3DS'),
-              (ActivityType.watching, 'chat make fun of me.'),
-              (ActivityType.watching, 'E3® 2022.'),
-              (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
-              (ActivityType.watching, 'your form, bro!'),
-              (ActivityType.watching, 'the byeahs.'),  # comma on last item is good
-             ]
+ACTIVITIES = [
+    (ActivityType.listening, 'my heart.'),
+    (ActivityType.listening, 'rats lofi'),
+    (ActivityType.listening, 'Shigurain.'),
+    (ActivityType.listening, 'a Scream Compilation.'),
+    (ActivityType.listening, 'the DOOM OST.'),
+    (ActivityType.listening, 'a clown podcast.'),
+    (ActivityType.streaming, 'DARK SOULS III'),
+    (ActivityType.streaming, 'Just Cause 4 for 3DS'),
+    (ActivityType.watching, 'chat make fun of me.'),
+    (ActivityType.watching, 'E3® 2022.'),
+    (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
+    (ActivityType.watching, 'your form, bro!'),
+    (ActivityType.watching, 'the byeahs.'),
+]
 
 
-colorama.init(autoreset=True)  # set up colored console out
+colorama.init(autoreset=True)
 guilds = dict()
 tts = None
 intents = discord.Intents.default()
@@ -75,7 +76,8 @@ class JermaBot(commands.Bot):
     def initialize_guild_infos(self):
         """Construct dictionary of guildinfo objects."""
         for guild in self.guilds:
-            os.makedirs(os.path.join('guilds', f'{guild.id}', 'sounds'), exist_ok=True)
+            os.makedirs(os.path.join(
+                'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
     def get_rand_activity(self):
@@ -111,146 +113,55 @@ class JermaBot(commands.Bot):
             if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
                 return
 
-        print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+        print('Ignoring exception in command {}:'.format(
+            ctx.command), file=sys.stderr)
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
-
-    async def get_context_no_command(self, message, cls=commands.Context):
-        """Construct a context object from a given message."""
-        view = discord.ext.commands.view.StringView(message.content)
-        ctx = cls(prefix=None, view=view, bot=self, message=message)
-
-        if self._skip_check(message.author.id, self.user.id):
-            return ctx
-
-        prefix = await self.get_prefix(message)
-        invoked_prefix = prefix
-
-        if isinstance(prefix, str):
-            if not view.skip_string(prefix):
-                return ctx
-        else:
-            try:
-                # if the context class' __init__ consumes something from the view this
-                # will be wrong.  That seems unreasonable though.
-                if message.content.startswith(tuple(prefix)):
-                    invoked_prefix = discord.utils.find(view.skip_string, prefix)
-                else:
-                    return ctx
-
-            except TypeError:
-                if not isinstance(prefix, list):
-                    raise TypeError("get_prefix must return either a string or a list of string, "
-                                    "not {}".format(prefix.__class__.__name__))
-
-                # It's possible a bad command_prefix got us here.
-                for value in prefix:
-                    if not isinstance(value, str):
-                        raise TypeError("Iterable command_prefix or list returned from get_prefix must "
-                                        "contain only strings, not {}".format(value.__class__.__name__))
-
-                # Getting here shouldn't happen
-                raise
-
-        invoker = view.get_word()
-        ctx.invoked_with = invoker
-        ctx.prefix = invoked_prefix
-        ctx.command = invoker
-        return ctx
-
-    # -------------- Overrides --------------------
-    async def get_context(self, message, *, cls=discord.ext.commands.Context):
-        """Construct a context object from a given command."""
-        view = discord.ext.commands.view.StringView(message.content)
-        ctx = cls(prefix=None, view=view, bot=self, message=message)
-
-        if self._skip_check(message.author.id, self.user.id):
-            return ctx
-
-        prefix = await self.get_prefix(message)
-        invoked_prefix = prefix
-
-        if isinstance(prefix, str):
-            if not view.skip_string(prefix):
-                return ctx
-        else:
-            try:
-                # if the context class' __init__ consumes something from the view this
-                # will be wrong.  That seems unreasonable though.
-                if message.content.startswith(tuple(prefix)):
-                    invoked_prefix = discord.utils.find(view.skip_string, prefix)
-                else:
-                    return ctx
-
-            except TypeError:
-                if not isinstance(prefix, list):
-                    raise TypeError("get_prefix must return either a string or a list of string, "
-                                    "not {}".format(prefix.__class__.__name__))
-
-                # It's possible a bad command_prefix got us here.
-                for value in prefix:
-                    if not isinstance(value, str):
-                        raise TypeError("Iterable command_prefix or list returned from get_prefix must "
-                                        "contain only strings, not {}".format(value.__class__.__name__))
-
-                # Getting here shouldn't happen
-                raise
-
-        invoker = view.get_word()
-        ctx.invoked_with = invoker
-        ctx.prefix = invoked_prefix
-        ctx.command = self.all_commands.get(invoker)
-        return ctx
 
     async def process_commands(self, message):
         """Process commands."""
         if message.author.bot:
             return
 
-        ctx = await self.get_context_no_command(message)
-        # print(type(ctx.prefix), ctx.prefix)
-        if ctx.prefix == '+':
-            await self.get_cog('Scoreboard').process_scoreboard(ctx)
-        else:
-            ctx.command = self.all_commands.get(ctx.invoked_with)
-            await self.invoke(ctx)
+        ctx = await self.get_context(message)
+        await self.invoke(ctx)
 
     async def on_message(self, message):
         """Log info about recevied messages and send to process."""
         if message.content.startswith('$$'):
             return  # protection against hackerbot commands
-        # elif message.content.startswith('+'):
-        #     await process_scoreboard(await get_context(message))
-        #     return
 
-        if message.content.startswith(('$', '+')):
+        if message.content.startswith(('$')):
             print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
         elif message.author == self.user:
-            print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
+            print(
+                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
 
         await self.process_commands(message)
-        #except AttributeError as _:
-        #    pass # ignore embed-only messages
-        #except Exception as e:
-        #    print(e)
 
 
 if __name__ == '__main__':
     global source_path, bot
-    source_path = os.path.dirname(os.path.abspath(__file__))  # /a/b/c/d/e
+    source_path = os.path.dirname(os.path.abspath(__file__))
 
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description='Run JermaBot')
-    parser.add_argument('-s', '--secret_filename', help='location of bot token text file')
+    parser.add_argument('-s', '--secret_filename',
+                        help='location of bot token text file')
     group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument('-mycroft', '--mycroft_path', help='tell jerma to use mycroft at the given path')
-    group.add_argument('-voice', '--voice_path', help='tell jerma to use windows voice.exe tts engine')
+    group.add_argument('-mycroft', '--mycroft_path',
+                       help='tell jerma to use mycroft at the given path')
+    group.add_argument('-voice', '--voice_path',
+                       help='tell jerma to use windows voice.exe tts engine')
     group.add_argument('-espeak', help='tell jerma to use espeak tts engine',
                        action='store_true')
-    parser.add_argument('-mv', '--mycroft_voice', help='name of OR path to the voice to use with mycroft')
-    parser.add_argument('-jv', '--japanese_voice', help='path to voice to use with Japanese TTS')
-    parser.add_argument('-jd', '--japanese_dict', help='path to dictionary to use with Japanese TTS')
+    parser.add_argument('-mv', '--mycroft_voice',
+                        help='name of OR path to the voice to use with mycroft')
+    parser.add_argument('-jv', '--japanese_voice',
+                        help='path to voice to use with Japanese TTS')
+    parser.add_argument('-jd', '--japanese_dict',
+                        help='path to dictionary to use with Japanese TTS')
     args = parser.parse_args()
 
     if args.secret_filename:
@@ -265,11 +176,12 @@ if __name__ == '__main__':
             _v = args.mycroft_voice
         else:
             _v = 'ap'
-        tts = ttsengine.construct(engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
+        tts = ttsengine.construct(
+            engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
     elif args.voice_path:
         tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
     elif args.espeak:
-        tts = ttsengine.construct(engine=ttsengine.ESPEAK) 
+        tts = ttsengine.construct(engine=ttsengine.ESPEAK)
     else:
         print('Setting TTS to none')
         tts = None
@@ -297,7 +209,5 @@ if __name__ == '__main__':
     bot.load_extension('cogs.tts')
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
-    bot.load_extension('cogs.scoreboard')
-    # bot.load_extension('cogs.uncategorized')
 
     bot.run(secret)
