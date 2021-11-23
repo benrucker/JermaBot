@@ -61,12 +61,12 @@ class JermaBot(commands.Bot):
         self.guild_infos = dict()
         super().__init__(**kwargs)
 
-    def get_guildinfo(self, id=None):
+    def get_guildinfo(self, gid=None):
         """Return a GuildInfo object for the given guild id."""
-        if not id:
+        if not gid:
             return self.guild_infos
         else:
-            return self.guild_infos[id]
+            return self.guild_infos[gid]
 
     def make_guildinfo(self, guild: discord.Guild):
         """Set a guildinfo object to a certain id."""
