@@ -209,10 +209,10 @@ class GuildSounds(commands.Cog):
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
         if r:
             t = time.localtime(r)
-            await ctx.me.edit(nick='JermaSnore')
+            await ctx.me.edit(nick=snoozed_nickname)
             await ctx.send(f'Snoozed until {t.tm_hour % 12}:{t.tm_min:02} {t.tm_zone}. See you then, champ!')
         else:
-            await ctx.me.edit(nick=None)
+            await ctx.me.edit(nick=regular_nickname)
             await ctx.send(f'**I HAVE AWOKEN**')
 
     def has_sound_file(self, message):
@@ -300,11 +300,9 @@ class GuildSounds(commands.Cog):
         if g.is_snapping or g.is_snoozed():
             print(f'{y}Ignoring voice state update due to snap or snooze')
             return
-        else:
-            target_nick = "JermaBot"
-            if member.guild.me.display_name != target_nick:
+        elif not g.is_snoozed() and member.guild.me.display_name == snoozed_nickname:
                 print(f'{y}Reset nickname in {member.guild}')
-                await member.guild.me.edit(nick=target_nick)
+                await member.guild.me.edit(nick=regular_nickname)
 
         # cleanup connection if kicked
         if member.id == self.bot.user.id:
