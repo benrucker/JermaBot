@@ -384,7 +384,7 @@ class GuildSounds(commands.Cog):
             self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
 
     def play_leave_sound(self, member, vc):
-        if member.id is 196742230659170304:
+        if member.id == 196742230659170304:
             leave_sound = self.get_yoni_leave_sound()
             if leave_sound:
                 self.bot.get_cog('SoundPlayer').play_sound_file(
