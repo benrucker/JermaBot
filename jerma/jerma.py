@@ -22,23 +22,6 @@ YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
 NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
 
 
-ACTIVITIES = [
-    (ActivityType.listening, 'my heart.'),
-    (ActivityType.listening, 'rats lofi'),
-    (ActivityType.listening, 'Shigurain.'),
-    (ActivityType.listening, 'a Scream Compilation.'),
-    (ActivityType.listening, 'the DOOM OST.'),
-    (ActivityType.listening, 'a clown podcast.'),
-    (ActivityType.streaming, 'DARK SOULS III'),
-    (ActivityType.streaming, 'Just Cause 4 for 3DS'),
-    (ActivityType.watching, 'chat make fun of me.'),
-    (ActivityType.watching, 'E3® 2022.'),
-    (ActivityType.watching, 'GrillMasterxBBQ\'s vids.'),
-    (ActivityType.watching, 'your form, bro!'),
-    (ActivityType.watching, 'the byeahs.'),
-]
-
-
 colorama.init(autoreset=True)
 guilds = dict()
 tts = None
@@ -80,14 +63,9 @@ class JermaBot(commands.Bot):
                 'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
-    def get_rand_activity(self):
-        """Return an Activity object with a random value."""
-        info = random.choice(ACTIVITIES)
-        return Activity(name=info[1], type=info[0])
-
     async def on_ready(self):
         """Initialize some important data and indicate startup success."""
-        await self.change_presence(activity=self.get_rand_activity())
+        # await self.change_presence(activity=self.get_rand_activity())
 
         if len(self.get_guildinfo()) == 0:
             self.initialize_guild_infos()
@@ -209,5 +187,6 @@ if __name__ == '__main__':
     bot.load_extension('cogs.tts')
     bot.load_extension('cogs.admin')
     bot.load_extension('cogs.fun')
+    bot.load_extension('cogs.presence')
 
     bot.run(secret)
