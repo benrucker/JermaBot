@@ -31,6 +31,7 @@ class Admin(commands.Cog):
             self.bot.unload_extension(ext)
         await self.bot.close()
 
+    @commands.is_owner()
     @commands.command(hidden=True)
     async def perish(self, ctx):
         """Shut down the bot."""
