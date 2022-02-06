@@ -24,7 +24,6 @@ class Admin(commands.Cog):
         for g in self.bot.get_guildinfo().values():
             if g.is_snoozed():
                 await self.bot.get_guild(g.id).me.edit(nick=None)
-            g.exit()
         extensions = self.bot.extensions.copy()
         for ext in extensions:
             print(f'Unloading {ext}')

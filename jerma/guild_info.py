@@ -20,14 +20,6 @@ class GuildInfo():
         self.folder = os.path.join('guilds', str(self.id))
         self.sound_folder = os.path.join(self.folder, 'sounds')
         self.sounds = self.make_sounds_dict()
-        try:
-            self.leaderboard = pickle.load(
-                open(os.path.join(self.folder, 'leaderboard'), 'rb'))
-        except Exception as e:
-            print(e)
-            self.leaderboard = dict()
-            with open(os.path.join(self.folder, 'leaderboard'), 'xb') as file:
-                pickle.dump(self.leaderboard, file)
 
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
@@ -46,23 +38,6 @@ class GuildInfo():
             self.snooze_resume = None
             return False
         return True
-
-    def exit(self):
-        if len(self.leaderboard) > 0:
-            with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
-                pickle.dump(self.leaderboard, file)
-
-    def add_point(self, user, amount=1):
-        try:
-            self.leaderboard[user] += amount
-        except KeyError:
-            self.leaderboard[user] = amount
-
-    def reset_score(self, user):
-        try:
-            self.leaderboard.pop(user)
-        except KeyError:
-            pass
 
     def make_sounds_dict(self):
         sounds = {}
