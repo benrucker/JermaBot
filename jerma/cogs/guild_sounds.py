@@ -62,6 +62,8 @@ class GuildSounds(commands.Cog):
             await ctx.send(error.msg)
         elif isinstance(error, JoinFailedError):
             await ctx.send(error)
+        else:
+            raise error
 
     @commands.command()
     async def play(self, ctx, *args):
@@ -83,6 +85,17 @@ class GuildSounds(commands.Cog):
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
 
+    def get_sound(self, sound, guild: discord.Guild):
+        print('getting sound')
+        ginfo = self.bot.get_guildinfo(guild.id)
+        print('got ginfo')
+        print('ginfo.sounds:', ginfo.sounds)
+        try: 
+            sound_filename = ginfo.sounds[sound.lower()]
+            return os.path.join(ginfo.sound_folder, sound_filename)
+        except KeyError:
+            return None
+
     @commands.command()
     async def random(self, ctx):
         """Play a random sound!"""
@@ -95,18 +108,10 @@ class GuildSounds(commands.Cog):
         vc = await control.connect_to_user(ctx)
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
 
-    def get_sound(self, sound, guild: discord.Guild):
-        ginfo = self.bot.get_guildinfo(guild.id)
-        sounds = self.make_sounds_dict(guild.id)
-        try:
-            return os.path.join(ginfo.sound_folder, sounds[sound.lower()])
-        except KeyError:
-            return None
-
     def get_random_sound(self, guild: discord.Guild):
         ginfo = self.bot.get_guildinfo(guild.id)
-        sounds = self.make_sounds_dict(guild.id)
-        return os.path.join(ginfo.sound_folder, random.choice(list(sounds.values())))
+        sound_filename = random.choice(list(ginfo.sounds.values()))
+        return os.path.join(ginfo.sound_folder, sound_filename)
 
     @commands.command(name='list', aliases=['sounds'])
     async def _list(self, ctx):
@@ -128,10 +133,9 @@ class GuildSounds(commands.Cog):
         await ctx.send('Alright gamer, send the new sound.')
 
         def check(message):
-            return message.author is ctx.author and self.has_sound_file(message)
+            return message.author == ctx.author and self.has_sound_file(message)
 
         message = await self.bot.wait_for('message', timeout=20, check=check)
-
         # determine name of sound
         sound_name = ' '.join(sound_name).lower()
         if sound_name:
@@ -143,9 +147,9 @@ class GuildSounds(commands.Cog):
         else:
             filename = message.attachments[0].filename
         filename = filename.lower()
-
+        
         # remove old sound if there
-        name = filename.split('.')[0].lower()
+        name = filename.rsplit('.', 1)[0].lower()
         existing = self.get_sound(name, ctx.guild)
         if existing:
             await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
@@ -196,9 +200,11 @@ class GuildSounds(commands.Cog):
             new_filename = old_filename[:33] + new.lower() + old_filename[-4:]
             try:
                 self.rename_file(old_filename, new_filename)
+                self.bot.get_guildinfo(ctx.guild.id).remove_sound(old)
+                self.bot.get_guildinfo(ctx.guild.id).add_sound(new.lower() + old_filename[-4:])
                 await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
-                raise GuildSoundsError(f'Error {type(e)} while renaming sound',
+                raise GuildSoundsError(f'Error {type(e)} while renaming sound:\n{e}',
                                        'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
         else:
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
@@ -227,13 +233,15 @@ class GuildSounds(commands.Cog):
             filename = sound.filename.lower()
         path = os.path.join(folder, filename)
         await sound.save(path)
+        self.bot.get_guildinfo(guild.id).add_sound(filename)
 
     def delete_sound(self, filepath, guild: discord.Guild):
         path = self.bot.get_guildinfo(guild.id).sound_folder
         if 'sounds' not in filepath:
-            filepath = os.path.join(path, filepath)
-        print('deleting ' + filepath)
-        os.remove(filepath)
+            fullpath = os.path.join(path, filepath)
+        print('deleting ' + fullpath)
+        os.remove(fullpath)
+        self.bot.get_guildinfo(guild.id).remove_sound(filepath)
 
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
@@ -247,7 +255,7 @@ class GuildSounds(commands.Cog):
 
     def make_list_embed(self, guild_info):
         _lim = 1024
-        sounds = '\n'.join(sorted(self.make_sounds_dict(guild_info.id)))
+        sounds = '\n'.join(sorted(guild_info.sounds))
         overflow = None
         if len(sounds) > _lim:
             _split = sounds.rindex('\n', 0, len(sounds) // 2)
@@ -263,18 +271,6 @@ class GuildSounds(commands.Cog):
             text="Message your server admins to get custom sounds added!")
 
         return sound_embed
-
-    def make_sounds_dict(self, id):
-        sounds = {}
-        sound_folder = os.path.join(
-            self.bot.path, self.get_guild_sound_path(id))
-        for filepath in glob(os.path.join(sound_folder, '*')):
-            filename = os.path.basename(filepath)
-            extension = filename.rsplit('.', 1)[1]
-            if extension not in ['mp3', 'wav']:
-                continue
-            sounds[filename.rsplit('.', 1)[0]] = filename
-        return sounds
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
@@ -301,8 +297,8 @@ class GuildSounds(commands.Cog):
             print(f'{y}Ignoring voice state update due to snap or snooze')
             return
         elif not g.is_snoozed() and member.guild.me.display_name == snoozed_nickname:
-                print(f'{y}Reset nickname in {member.guild}')
-                await member.guild.me.edit(nick=regular_nickname)
+            print(f'{y}Reset nickname in {member.guild}')
+            await member.guild.me.edit(nick=regular_nickname)
 
         # cleanup connection if kicked
         if member.id == self.bot.user.id:
