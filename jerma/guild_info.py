@@ -1,14 +1,15 @@
+from glob import glob
 import os
 import time
 import pickle
 import traceback
 import sys
 
-FOUR_HOURS = 4*60*60 
+FOUR_HOURS = 4*60*60
+
 
 class GuildInfo():
     """This class holds information about the state of the bot in a given guild."""
-
 
     def __init__(self, guild):
         self.name = guild.name
@@ -18,8 +19,10 @@ class GuildInfo():
         self.volume = .6
         self.folder = os.path.join('guilds', str(self.id))
         self.sound_folder = os.path.join(self.folder, 'sounds')
+        self.sounds = self.make_sounds_dict()
         try:
-            self.leaderboard = pickle.load(open(os.path.join(self.folder, 'leaderboard'), 'rb'))
+            self.leaderboard = pickle.load(
+                open(os.path.join(self.folder, 'leaderboard'), 'rb'))
         except Exception as e:
             print(e)
             self.leaderboard = dict()
@@ -29,7 +32,7 @@ class GuildInfo():
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
 
-    def toggle_snooze(self, duration=4): 
+    def toggle_snooze(self, duration=4):
         if self.is_snoozed():
             self.snooze_resume = None
         else:
@@ -43,7 +46,7 @@ class GuildInfo():
             self.snooze_resume = None
             return False
         return True
-    
+
     def exit(self):
         if len(self.leaderboard) > 0:
             with open(os.path.join(self.folder, 'leaderboard'), 'wb') as file:
@@ -60,3 +63,27 @@ class GuildInfo():
             self.leaderboard.pop(user)
         except KeyError:
             pass
+
+    def make_sounds_dict(self):
+        sounds = {}
+        for filepath in glob(os.path.join(self.sound_folder, '*')):
+            filename = os.path.basename(filepath)
+            name, extension = filename.rsplit('.', 1)
+            if extension not in ['mp3', 'wav']:
+                continue
+            sounds[name] = filename
+        return sounds
+
+    def add_sound(self, sound):
+        if any([sound.endswith(x) for x in ['.mp3', '.wav']]):
+            name, extension = sound.rsplit('.', 1)
+            self.sounds[name] = sound
+        else:
+            print('Invalid file type')
+
+    def remove_sound(self, sound):
+        if any([sound.endswith(x) for x in ['.mp3', '.wav']]):
+            name, extension = sound.rsplit('.', 1)
+            del self.sounds[name]
+        else:
+            del self.sounds[sound]
