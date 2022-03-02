@@ -239,8 +239,8 @@ class GuildSounds(commands.Cog):
         path = self.bot.get_guildinfo(guild.id).sound_folder
         # if 'sounds' not in filepath:
         #     fullpath = os.path.join(path, filepath)
-        print('deleting ' + fullpath)
-        os.remove(fullpath)
+        print('deleting ' + path)
+        os.remove(path)
         self.bot.get_guildinfo(guild.id).remove_sound(filepath)
 
     def rename_file(self, old_filepath, new_filepath):
