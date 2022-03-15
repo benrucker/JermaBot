@@ -32,22 +32,33 @@ Note: **some commands you might see in the code are guild-specfic**. Send `$help
     * `ffmpeg` needs to be on your system path.
 2. Set up TTS (Required only for `speak`)
     * If you want to use `speak`, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
+    * The official JermaBot instance uses [Mycroft Mimic](https://mimic.mycroft.ai/) as the TTS engine.
+      1. Follow the mimic install directions
+      2. Substitute `https://sourceforge.net/projects/pcre/files/pcre2/10.23/pcre2-10.23.zip` for the `ftp` link in `mimic1/dependency.sh`
+      3. Add the path to `mimic` to the launch flags
 3. Set up Japanese TTS (Required only for `speakanime`)
-    1. Install `espeak` from [here](http://espeak.sourceforge.net/).
+    1. Install `espeak` from [here](http://espeak.sourceforge.net/), if you're on Windows, or run `sudo apt install espeak` on Linux.
     2. Make sure that `espeak` is on your system path.
-    3. Download the voice "Mei" from [here](https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.6/).
-    4. Put the "Mei" voice files somewhere safe, you will need to add that path to JermaBot's startup parameters.
+    3. Install `open_jtalk` with `sudo apt install open-jtalk`.
+    4. Download the voice "Mei" from [here](https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.8/MMDAgent_Example-1.8.zip).
+    5. Put the "Mei" voice files somewhere safe, you will need to add that path to JermaBot's startup parameters.
 4. Clone the repo by pasting this in the command line:
 
-```git clone https://github.com/benrucker/discord-jerma.git```
+```
+git clone https://github.com/benrucker/discord-jerma.git
+```
 
 5. `cd` into the repo with this command:
 
-```cd discord-jerma```
+```
+cd discord-jerma
+```
 
 6. Install the needed Python packages by pasting this in the command line:
 
-```pip install -r requirements.txt```
+```
+pip install -r requirements.txt
+```
 
 7. Store your bot's token in a file called `secret.txt` in the folder `discord-jerma/`.
 
