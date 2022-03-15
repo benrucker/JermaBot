@@ -9,9 +9,9 @@ JermaBot is a bot inspired by Jerma985. It is a 24/7 general-purpose bot with an
 
 ## Feature Highlights
 
-* **Text-To-Speech** - For those who cannot talk in voice, JermaBot offers TTS. Just call the `speak` command.
-* **Sound File Management** - Add a sound file to JermaBot using `addsound` and you will be able to play it back in a voice channel at any time with `play`.
-* **Join Sounds** - A grand entrance is a good entrance, so if a sound's filename matches your username, JermaBot will play it automatically when you join a voice channel.
+* **Text-To-Speech** - For those who cannot talk in voice, JermaBot offers TTS. Just use the `speak` command.
+* **Sound File Management** - Add a sound file to JermaBot using `addsound` and you can play it back in a voice channel at any time with `play`.
+* **Join Sounds** - A grand entrance is a good entrance, so if a sound's name matches your username, JermaBot will play it automatically when you join a voice channel.
 * **Fun** - A plethora of random commands are at your disposal, such as `downsmash`, `jermalofi`, and `drake`.
 
 # Setup
