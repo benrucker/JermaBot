@@ -175,7 +175,7 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('No sound specified in remove command.',
                                    'Gamer, you gotta tell me which sound to remove.')
 
-        sound_name = ' '.join(args)
+        sound_name = ' '.join(args).lower()
         sound = self.get_sound(sound_name, ctx.guild)
 
         if not sound:
@@ -228,20 +228,21 @@ class GuildSounds(commands.Cog):
         return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
 
     async def add_sound_to_guild(self, sound, guild, filename=None):
-        folder = self.get_guild_sound_path(guild)
+        sound_folder = self.get_guild_sound_path(guild)
         if not filename:
             filename = sound.filename.lower()
-        path = os.path.join(folder, filename)
+        path = os.path.join(sound_folder, filename)
         await sound.save(path)
         self.bot.get_guildinfo(guild.id).add_sound(filename)
 
     def delete_sound(self, filepath, guild: discord.Guild):
-        path = self.bot.get_guildinfo(guild.id).sound_folder
-        # if 'sounds' not in filepath:
-        #     fullpath = os.path.join(path, filepath)
-        print('deleting ' + path)
-        os.remove(path)
-        self.bot.get_guildinfo(guild.id).remove_sound(filepath)
+        if 'sounds' not in filepath:
+            sound_folder = self.get_guild_sound_path(guild)
+            filepath = os.path.join(sound_folder, filepath)
+        print('deleting ' + filepath)
+        os.remove(filepath)        
+        sound_name = os.path.basename(filepath)
+        self.bot.get_guildinfo(guild.id).remove_sound(sound_name)
 
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
