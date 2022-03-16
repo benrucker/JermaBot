@@ -224,6 +224,13 @@ class GuildSounds(commands.Cog):
             await ctx.me.edit(nick=regular_nickname)
             await ctx.send(f'**I HAVE AWOKEN**')
 
+    @commands.command()
+    @commands.is_owner()
+    async def reload_sounds(self, ctx):
+        for guild in self.bot.guilds:
+            self.bot.get_guildinfo(guild.id).reload_sounds()
+        await ctx.send('Sounds reloaded.')
+
     def has_sound_file(self, message):
         if len(message.attachments) == 0:
             return False

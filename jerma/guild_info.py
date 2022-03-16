@@ -49,6 +49,9 @@ class GuildInfo():
             sounds[name] = filename
         return sounds
 
+    def reload_sounds(self):
+        self.sounds = self.make_sounds_dict()
+
     def add_sound(self, sound):
         if any([sound.endswith(x) for x in ['.mp3', '.wav']]):
             name, extension = sound.rsplit('.', 1)
