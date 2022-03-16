@@ -193,15 +193,15 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('No sound specified in rename command.',
                                    'Yo gamer, do it like this: `$rename old name, new name`')
 
-        old, new = ' '.join(args).split(', ')
+        old, new = ' '.join(args).lower().split(', ')
         print(f'renaming {old} to {new} in {ctx.guild.name}')
         old_filename = self.get_sound(old, ctx.guild)
         if old_filename:
-            new_filename = old_filename[:33] + new.lower() + old_filename[-4:]
+            new_filename = old_filename[:33] + new + old_filename[-4:]
             try:
                 self.rename_file(old_filename, new_filename)
                 self.bot.get_guildinfo(ctx.guild.id).remove_sound(old)
-                self.bot.get_guildinfo(ctx.guild.id).add_sound(new.lower() + old_filename[-4:])
+                self.bot.get_guildinfo(ctx.guild.id).add_sound(new + old_filename[-4:])
                 await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
                 raise GuildSoundsError(f'Error {type(e)} while renaming sound:\n{e}',
