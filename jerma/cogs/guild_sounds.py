@@ -195,13 +195,16 @@ class GuildSounds(commands.Cog):
 
         old, new = ' '.join(args).lower().split(', ')
         print(f'renaming {old} to {new} in {ctx.guild.name}')
+        guild_info = self.bot.get_guildinfo(ctx.guild.id)
+        folder = guild_info.sound_folder
         old_filename = self.get_sound(old, ctx.guild)
+        extension = os.path.splitext(old_filename)[1]
         if old_filename:
-            new_filename = old_filename[:33] + new + old_filename[-4:]
+            new_filename = os.path.join(folder, new + extension)
             try:
                 self.rename_file(old_filename, new_filename)
-                self.bot.get_guildinfo(ctx.guild.id).remove_sound(old)
-                self.bot.get_guildinfo(ctx.guild.id).add_sound(new + old_filename[-4:])
+                guild_info.remove_sound(old)
+                guild_info.add_sound(new + extension)
                 await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
                 raise GuildSoundsError(f'Error {type(e)} while renaming sound:\n{e}',
