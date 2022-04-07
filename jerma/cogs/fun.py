@@ -16,8 +16,8 @@ YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course',
 NO = ['no', 'n', 'nope', 'nay', 'nada', 'nah', 'na']
 
 
-def setup(bot):
-    bot.add_cog(Fun(bot))
+async def setup(bot):
+    await bot.add_cog(Fun(bot))
 
 
 def is_whid():

@@ -1,22 +1,18 @@
 import argparse
 import logging
 import os
-import random
 import sys
 import time
 import traceback
 
 import colorama
+import discord
 from colorama import Fore as t
 from colorama import Style
-import discord
-from discord.activity import Activity
-from discord.enums import ActivityType
 from discord.ext import commands
 
 from cogs.utils import ttsengine
 from guild_info import GuildInfo
-
 
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
 NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
@@ -44,6 +40,15 @@ class JermaBot(commands.Bot):
         self.path = path
         self.guild_infos = dict()
         super().__init__(**kwargs)
+
+    async def setup_hook(self):
+        await self.load_extension('cogs.guild_sounds')
+        await self.load_extension('cogs.sound_player')
+        await self.load_extension('cogs.control')
+        await self.load_extension('cogs.tts')
+        await self.load_extension('cogs.admin')
+        await self.load_extension('cogs.fun')
+        await self.load_extension('cogs.presence')
 
     def get_guildinfo(self, gid=None):
         """Return a GuildInfo object for the given guild id."""
@@ -169,7 +174,11 @@ if __name__ == '__main__':
     except:
         pass
 
-    bot = JermaBot(source_path, command_prefix=commands.when_mentioned_or('$', '+'), intents=intents)
+    bot = JermaBot(
+        source_path,
+        command_prefix=commands.when_mentioned_or('$', '+'),
+        intents=intents
+    )
     bot.tts_engine = tts
     if args.japanese_voice and args.japanese_dict:
         print('setting JTTS to openjtalk')
@@ -180,13 +189,5 @@ if __name__ == '__main__':
     else:
         print('setting jtts to None')
         bot.jtts_engine = None
-
-    bot.load_extension('cogs.guild_sounds')
-    bot.load_extension('cogs.sound_player')
-    bot.load_extension('cogs.control')
-    bot.load_extension('cogs.tts')
-    bot.load_extension('cogs.admin')
-    bot.load_extension('cogs.fun')
-    bot.load_extension('cogs.presence')
 
     bot.run(secret)

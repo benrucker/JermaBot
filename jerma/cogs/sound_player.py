@@ -5,8 +5,8 @@ import os
 import time
 
 
-def setup(bot):
-    bot.add_cog(SoundPlayer(bot))
+async def setup(bot):
+    await bot.add_cog(SoundPlayer(bot))
 
 
 class SoundPlayer(commands.Cog):

@@ -7,8 +7,8 @@ from .utils import ttsengine, textconverter
 from typing import Optional
 
 
-def setup(bot):
-    bot.add_cog(TTS(bot, bot.tts_engine, bot.jtts_engine))
+async def setup(bot):
+    await bot.add_cog(TTS(bot, bot.tts_engine, bot.jtts_engine))
 
 
 class TTSNotEnabled(commands.CheckFailure):

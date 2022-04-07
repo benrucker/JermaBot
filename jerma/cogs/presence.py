@@ -21,8 +21,8 @@ PRESENCES = [
 ]
 shuffle(PRESENCES)
 
-def setup(bot):
-    bot.add_cog(Presence(bot))
+async def setup(bot):
+    await bot.add_cog(Presence(bot))
 
 
 class Presence(commands.Cog):
