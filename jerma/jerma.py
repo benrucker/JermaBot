@@ -131,7 +131,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Run JermaBot')
     parser.add_argument('-s', '--secret_filename',
-                        help='location of bot token text file')
+                        help='location of bot token text file',
+                        default='secret.txt')
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-mycroft', '--mycroft_path',
                        help='tell jerma to use mycroft at the given path')
@@ -147,27 +148,38 @@ if __name__ == '__main__':
                         help='path to dictionary to use with Japanese TTS')
     args = parser.parse_args()
 
-    if args.secret_filename:
-        file = open(args.secret)
-    else:
-        file = open('secret.txt')
-    secret = file.read()
-    file.close()
+    with open(args.secret_filename) as f:
+        secret = f.read().strip()
 
     if args.mycroft_path:
-        if args.mycroft_voice:
-            _v = args.mycroft_voice
-        else:
-            _v = 'ap'
+        voice = args.mycroft_voice if args.mycroft_voice else 'ap'
         tts = ttsengine.construct(
-            engine=ttsengine.MYCROFT, path=args.mycroft_path, voice=_v)
+            engine=ttsengine.MYCROFT,
+            path=args.mycroft_path,
+            voice=voice
+        )
     elif args.voice_path:
-        tts = ttsengine.construct(engine=ttsengine.VOICE, path=args.voice_path)
+        tts = ttsengine.construct(
+            engine=ttsengine.VOICE,
+            path=args.voice_path
+        )
     elif args.espeak:
-        tts = ttsengine.construct(engine=ttsengine.ESPEAK)
+        tts = ttsengine.construct(
+            engine=ttsengine.ESPEAK
+        )
     else:
         print('Setting TTS to none')
         tts = None
+
+    if args.japanese_voice and args.japanese_dict:
+        print('setting JTTS to openjtalk')
+        print('openjtalk voice at:', args.japanese_voice)
+        jtts = ttsengine.construct(engine=ttsengine.OPEN_JTALK,
+                                              voice=args.japanese_voice,
+                                              dic=args.japanese_dict)
+    else:
+        print('setting jtts to None')
+        jtts = None
 
     try:
         os.makedirs(os.path.join('resources', 'soundclips', 'temp'))
@@ -180,14 +192,5 @@ if __name__ == '__main__':
         intents=intents
     )
     bot.tts_engine = tts
-    if args.japanese_voice and args.japanese_dict:
-        print('setting JTTS to openjtalk')
-        print('openjtalk voice at:', args.japanese_voice)
-        bot.jtts_engine = ttsengine.construct(engine=ttsengine.OPEN_JTALK,
-                                              voice=args.japanese_voice,
-                                              dic=args.japanese_dict)
-    else:
-        print('setting jtts to None')
-        bot.jtts_engine = None
-
+    bot.jtts_engine = jtts
     bot.run(secret)
