@@ -38,8 +38,8 @@ async def manage_sounds_check(ctx):
         p.mute_members
 
 
-def setup(bot):
-    bot.add_cog(GuildSounds(bot))
+async def setup(bot):
+    await bot.add_cog(GuildSounds(bot))
 
 
 class GuildSoundsError(commands.CommandError):

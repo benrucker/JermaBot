@@ -8,8 +8,8 @@ from colorama import Fore as t
 from discord.ext import commands
 
 
-def setup(bot):
-    bot.add_cog(Control(bot))
+async def setup(bot):
+    await bot.add_cog(Control(bot))
 
 
 RECONNECT = False

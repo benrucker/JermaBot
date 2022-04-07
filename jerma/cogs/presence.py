@@ -23,8 +23,8 @@ PRESENCES = [
 shuffle(PRESENCES)
 PRESENCES = [p for pair in zip(PRESENCES, repeat(GUILD_AD)) for p in pair]
 
-def setup(bot):
-    bot.add_cog(Presence(bot))
+async def setup(bot):
+    await bot.add_cog(Presence(bot))
 
 
 class Presence(commands.Cog):

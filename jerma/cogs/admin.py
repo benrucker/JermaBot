@@ -5,8 +5,8 @@ from typing import Optional, Tuple
 import random
 
 
-def setup(bot):
-    bot.add_cog(Admin(bot))
+async def setup(bot):
+    await bot.add_cog(Admin(bot))
 
 
 class Admin(commands.Cog):
