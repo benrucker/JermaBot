@@ -50,6 +50,16 @@ class JermaBot(commands.Bot):
         await self.load_extension('cogs.fun')
         await self.load_extension('cogs.presence')
 
+    async def on_ready(self):
+        """Initialize some important data and indicate startup success."""
+        if len(self.get_guildinfo()) == 0:
+            self.initialize_guild_infos()
+
+        print(f'Logged into {len(self.guilds)} guilds:')
+        for guild in list(self.guilds):
+            print(f'\t{guild.name}:{guild.id}')
+        print("Let's fucking go, bois.")
+
     def get_guildinfo(self, gid=None):
         """Return a GuildInfo object for the given guild id."""
         if not gid:
@@ -68,18 +78,6 @@ class JermaBot(commands.Bot):
                 'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
 
-    async def on_ready(self):
-        """Initialize some important data and indicate startup success."""
-        # await self.change_presence(activity=self.get_rand_activity())
-
-        if len(self.get_guildinfo()) == 0:
-            self.initialize_guild_infos()
-
-        print(f'Logged into {len(self.guilds)} guilds:')
-        for guild in list(self.guilds):
-            print(f'\t{guild.name}:{guild.id}')
-        print("Let's fucking go, bois.")
-
     async def on_command_error(self, ctx, e):
         """Catch errors and handle them."""
         if type(e) is commands.errors.CheckFailure:
@@ -96,29 +94,23 @@ class JermaBot(commands.Bot):
             if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
                 return
 
-        print('Ignoring exception in command {}:'.format(
-            ctx.command), file=sys.stderr)
+        print(
+            'Ignoring exception in command {}:'.format(ctx.command),
+            file=sys.stderr
+        )
         traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
         # end plaigarism
 
-    async def process_commands(self, message):
-        """Process commands."""
-        if message.author.bot:
-            return
-
-        ctx = await self.get_context(message)
-        await self.invoke(ctx)
-
     async def on_message(self, message):
         """Log info about recevied messages and send to process."""
-        if message.content.startswith('$$'):
-            return  # protection against hackerbot commands
-
         if message.content.startswith(('$')):
-            print(f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}')
+            print(
+                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}'
+            )
         elif message.author == self.user:
             print(
-                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}')
+                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}'
+            )
 
         await self.process_commands(message)
 
@@ -175,8 +167,8 @@ if __name__ == '__main__':
         print('setting JTTS to openjtalk')
         print('openjtalk voice at:', args.japanese_voice)
         jtts = ttsengine.construct(engine=ttsengine.OPEN_JTALK,
-                                              voice=args.japanese_voice,
-                                              dic=args.japanese_dict)
+                                   voice=args.japanese_voice,
+                                   dic=args.japanese_dict)
     else:
         print('setting jtts to None')
         jtts = None
