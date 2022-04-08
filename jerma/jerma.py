@@ -9,10 +9,12 @@ import colorama
 import discord
 from colorama import Fore as t
 from colorama import Style
+from discord import app_commands
 from discord.ext import commands
 
 from cogs.utils import ttsengine
 from guild_info import GuildInfo
+from cogs.s_guild_sounds import SGuildSounds
 
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
 NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
@@ -22,7 +24,7 @@ colorama.init(autoreset=True)
 guilds = dict()
 tts = None
 intents = discord.Intents.default()
-intents.members = True
+# intents.members = True
 
 prefixes = ['$', '+']
 
@@ -185,4 +187,8 @@ if __name__ == '__main__':
     )
     bot.tts_engine = tts
     bot.jtts_engine = jtts
+
+    slash_commands = app_commands.CommandTree(bot)
+    slash_commands.add_command(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
+
     bot.run(secret)
