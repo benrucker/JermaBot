@@ -20,7 +20,7 @@ You can add this bot to your server (recommended) or install it locally.
 
 ## Adding JermaBot to your server
 
-[**Click here to invite JermaBot to your server!**](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot)
+[**Click here to invite JermaBot to your server!**](https://discord.com/api/oauth2/authorize?client_id=579445833938763816&permissions=412404181056&scope=bot%20applications.commands)
 
 Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally.
 
