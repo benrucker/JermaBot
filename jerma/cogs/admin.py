@@ -1,10 +1,10 @@
-from discord.ext import commands
+import random
 import subprocess
 import sys
-from typing import Optional, Tuple
-import random
+from typing import Optional
 
-from ..jerma import JermaBot
+from discord.ext import commands
+from discord.ext.commands import Bot
 
 
 async def setup(bot):
@@ -12,8 +12,8 @@ async def setup(bot):
 
 
 class Admin(commands.Cog):
-    def __init__(self, bot: JermaBot):
-        self.bot: JermaBot = bot
+    def __init__(self, bot: Bot):
+        self.bot: Bot = bot
 
     @commands.is_owner()
     @commands.command()
@@ -41,9 +41,19 @@ class Admin(commands.Cog):
     def _git_pull(self):
         """Run git pull and return the result."""
         if (sys.platform.startswith('win')):
-            result = subprocess.run(['git', 'pull'], shell=True, text=True, capture_output=True)
+            result = subprocess.run(
+                ['git', 'pull'],
+                shell=True,
+                text=True,
+                capture_output=True
+            )
         else:
-            result = subprocess.run(['git pull'], shell=True, text=True, capture_output=True)
+            result = subprocess.run(
+                ['git pull'],
+                shell=True,
+                text=True,
+                capture_output=True
+            )
         return result
 
     async def _handle_pull(self, ctx) -> bool:
@@ -137,7 +147,7 @@ class Admin(commands.Cog):
         await self.send_latency_diag(ctx)
         if not lightweight:
             await self.send_emoji_diag(ctx)
-    
+
     @commands.is_owner()
     @commands.command()
     async def usercount(self, ctx):

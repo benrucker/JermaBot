@@ -1,6 +1,8 @@
 import os
 from discord import app_commands
+from discord.ext import commands
 import discord
+
 
 class GuildSoundsError(BaseException):
     def __init__(self, error, msg):
@@ -8,16 +10,19 @@ class GuildSoundsError(BaseException):
         self.msg = msg
 
 
-class SGuildSounds(app_commands.Group):
+async def setup(bot):
+    await bot.add_cog(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
+
+
+class SGuildSounds(commands.Cog):
     """Maintains guild-specific sound functionality."""
 
     def __init__(self, bot, *args, **kwargs):
         self.bot = bot
         super().__init__(*args, **kwargs)
 
-    @app_commands.command()
-    @app_commands.describe(sound='The sound to play.')
-    # @app_commands.autocomplete(sound=sound_autocomplete)
+    @ app_commands.command()
+    @ app_commands.describe(sound='The sound to play.')
     async def play(self, interaction: discord.Interaction, sound: str):
         """Play a sound."""
         sound = sound
@@ -33,20 +38,33 @@ class SGuildSounds(app_commands.Group):
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
 
+    @ play.autocomplete('sound')
+    async def sound_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        typed_in: str
+    ) -> list[app_commands.Choice[str]]:
+        typed_in = typed_in.lower()
+        sounds = self.bot.get_guildinfo(interaction.guild.id).sounds
+        direct_matches = [
+            app_commands.Choice(name=s, value=s)
+            for s in sounds if s.startswith(typed_in)
+        ]
+        return direct_matches
+
+    def get_sound(self, sound, guild: discord.Guild):
+        ginfo = self.bot.get_guildinfo(guild.id)
+        sounds = ginfo.sounds
+        sound_folder = ginfo.sound_folder
+        try:
+            sound_filename = sounds[sound.lower()]
+            return os.path.join(sound_folder, sound_filename)
+        except KeyError:
+            return None
+
     @app_commands.command()
     @app_commands.describe(say='The phrase to say.')
     # @app_commands.autocomplete(sound=sound_autocomplete)
     async def say(self, interaction: discord.Interaction, say: str):
         """Play a sound."""
         await interaction.response.send_message(say)
-
-    def get_sound(self, sound, guild: discord.Guild):
-        print('getting sound')
-        ginfo = self.bot.get_guildinfo(guild.id)
-        print('got ginfo')
-        print('ginfo.sounds:', ginfo.sounds)
-        try: 
-            sound_filename = ginfo.sounds[sound.lower()]
-            return os.path.join(ginfo.sound_folder, sound_filename)
-        except KeyError:
-            return None
