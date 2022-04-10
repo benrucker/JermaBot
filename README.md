@@ -5,7 +5,7 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/11bccccb374395ea9f7d/maintainability)](https://codeclimate.com/github/benrucker/discord-jerma/maintainability)
 [![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](LICENSE)
 
-JermaBot is a bot inspired by Jerma985. It is a 24/7 general-purpose bot with an emphasis on adding sound functionality to your server.
+JermaBot is a Discord bot inspired by Jerma985. It is a 24/7 general-purpose bot with an emphasis on adding sound functionality to your server.
 
 ## Feature Highlights
 
@@ -20,7 +20,9 @@ You can add this bot to your server (recommended) or install it locally.
 
 ## Adding JermaBot to your server
 
-Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally. Click [this link](https://discordapp.com/api/oauth2/authorize?client_id=579445833938763816&permissions=120859712&scope=bot) and select your server! Currently, uptime is at 99%.
+[**Click here to invite JermaBot to your server!**](https://discord.com/api/oauth2/authorize?client_id=579445833938763816&permissions=412404181056&scope=bot%20applications.commands)
+
+Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally.
 
 Note: **some commands you might see in the code are guild-specfic**. Send `$help` to see what commands you can call.
 
