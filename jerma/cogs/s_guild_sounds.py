@@ -11,8 +11,9 @@ class GuildSoundsError(BaseException):
 class SGuildSounds(app_commands.Group):
     """Maintains guild-specific sound functionality."""
 
-    def __init__(self, bot):
+    def __init__(self, bot, *args, **kwargs):
         self.bot = bot
+        super().__init__(*args, **kwargs)
 
     @app_commands.command()
     @app_commands.describe(sound='The sound to play.')
@@ -31,6 +32,13 @@ class SGuildSounds(app_commands.Group):
         print('should be connected')
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
+
+    @app_commands.command()
+    @app_commands.describe(say='The phrase to say.')
+    # @app_commands.autocomplete(sound=sound_autocomplete)
+    async def say(self, interaction: discord.Interaction, say: str):
+        """Play a sound."""
+        await interaction.response.send_message(say)
 
     def get_sound(self, sound, guild: discord.Guild):
         print('getting sound')

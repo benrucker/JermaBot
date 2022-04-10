@@ -4,14 +4,16 @@ import sys
 from typing import Optional, Tuple
 import random
 
+from ..jerma import JermaBot
+
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))
 
 
 class Admin(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: JermaBot):
+        self.bot: JermaBot = bot
 
     @commands.is_owner()
     @commands.command()
@@ -78,13 +80,13 @@ class Admin(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def reload(self, ctx, ext: str):
-        self.bot.reload_extension(ext)
+        await self.bot.reload_extension(ext)
         await ctx.send('Reloadception complete.')
 
     async def _reload_all_cogs(self, ctx):
         await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
-        for ext in self.bot.extensions:
-            self.bot.reload_extension(ext)
+        for ext in self.bot.extensions.copy():
+            await self.bot.reload_extension(ext)
 
     @commands.is_owner()
     @commands.command()
@@ -94,13 +96,13 @@ class Admin(commands.Cog):
     @commands.is_owner()
     @commands.command(hidden=True)
     async def load(self, ctx, ext: str):
-        self.bot.load_extension(ext)
+        await self.bot.load_extension(ext)
         await ctx.send('Loading 99% complete.')
 
     @commands.is_owner()
     @commands.command()
     async def unload(self, ctx, ext: str):
-        self.bot.unload_extension(ext)
+        await self.bot.unload_extension(ext)
         await ctx.send('Unloaded, pew pew.')
 
     async def send_guild_diag(self, ctx):
@@ -143,3 +145,9 @@ class Admin(commands.Cog):
         for guild in self.bot.guilds:
             count += guild.member_count
         await ctx.send(count)
+
+    @commands.is_owner()
+    @commands.command()
+    async def sync_guild_commands(self, ctx):
+        await self.bot.tree.sync(guild=ctx.guild)
+        await ctx.send('Done.')
