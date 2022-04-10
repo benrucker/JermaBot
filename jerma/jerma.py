@@ -45,6 +45,8 @@ class JermaBot(commands.Bot):
 
     async def setup_hook(self) -> None:
         await self.load_extension("cogs.admin")
+        await self.load_extension("cogs.control")
+        await self.load_extension("cogs.s_guild_sounds")
         return await super().setup_hook()
 
     async def on_ready(self):
@@ -146,7 +148,5 @@ if __name__ == '__main__':
     )
     bot.tts_engine = tts
     bot.jtts_engine = jtts
-
-    bot.tree.add_command(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
 
     bot.run(secret)
