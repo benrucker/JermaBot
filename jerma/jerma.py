@@ -43,14 +43,9 @@ class JermaBot(commands.Bot):
         self.guild_infos = dict()
         super().__init__(**kwargs)
 
-    async def setup_hook(self):
-        await self.load_extension('cogs.guild_sounds')
-        await self.load_extension('cogs.sound_player')
-        await self.load_extension('cogs.control')
-        await self.load_extension('cogs.tts')
-        await self.load_extension('cogs.admin')
-        await self.load_extension('cogs.fun')
-        await self.load_extension('cogs.presence')
+    async def setup_hook(self) -> None:
+        await self.load_extension("cogs.admin")
+        return await super().setup_hook()
 
     async def on_ready(self):
         """Initialize some important data and indicate startup success."""
@@ -79,42 +74,6 @@ class JermaBot(commands.Bot):
             os.makedirs(os.path.join(
                 'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
             self.guild_infos[guild.id] = GuildInfo(guild)
-
-    async def on_command_error(self, ctx, e):
-        """Catch errors and handle them."""
-        if type(e) is commands.errors.CheckFailure:
-            print(e)
-            await ctx.send('Something went wrong, dude. You probably don\'t have the correct server permissions to do that.')
-
-        # return to default discord.py behavior circa 2020.4.25
-        # https://github.com/Rapptz/discord.py/discord/ext/commands/bot.py
-        if hasattr(ctx.command, 'on_error'):
-            return
-
-        cog = ctx.cog
-        if cog:
-            if discord.ext.commands.Cog._get_overridden_method(cog.cog_command_error) is not None:
-                return
-
-        print(
-            'Ignoring exception in command {}:'.format(ctx.command),
-            file=sys.stderr
-        )
-        traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
-        # end plaigarism
-
-    async def on_message(self, message):
-        """Log info about recevied messages and send to process."""
-        if message.content.startswith(('$')):
-            print(
-                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {t.BLUE}{Style.BRIGHT}{message.content}'
-            )
-        elif message.author == self.user:
-            print(
-                f'[{time.ctime()}] {message.author.name} - {message.guild} #{message.channel}: {message.content}'
-            )
-
-        await self.process_commands(message)
 
 
 if __name__ == '__main__':
@@ -188,7 +147,6 @@ if __name__ == '__main__':
     bot.tts_engine = tts
     bot.jtts_engine = jtts
 
-    slash_commands = app_commands.CommandTree(bot)
-    slash_commands.add_command(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
+    bot.tree.add_command(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
 
     bot.run(secret)
