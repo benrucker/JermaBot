@@ -4,12 +4,6 @@ from discord.ext import commands
 import discord
 
 
-class GuildSoundsError(BaseException):
-    def __init__(self, error, msg):
-        self.error = error
-        self.msg = msg
-
-
 async def setup(bot):
     await bot.add_cog(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
 
@@ -21,24 +15,27 @@ class SGuildSounds(commands.Cog):
         self.bot = bot
         super().__init__(*args, **kwargs)
 
-    @ app_commands.command()
-    @ app_commands.describe(sound='The sound to play.')
+    @app_commands.command()
+    @app_commands.describe(sound='The sound to play.')
     async def play(self, interaction: discord.Interaction, sound: str):
         """Play a sound."""
-        sound = sound
+        if not interaction.user.voice:
+            await interaction.response.send_message('Hey gamer, you\'re not in a voice channel. Totally uncool.')
+        
+        sound = sound.lower()
         current_sound = self.get_sound(sound, interaction.guild)
         if not current_sound:
-            raise GuildSoundsError('Sound ' + sound + ' not found.',
-                                   'Hey gamer, that sound doesn\'t exist.')
-
+            await interaction.response.send_message('Hey gamer, that sound doesn\'t exist.')
+            return 
+        
         control = self.bot.get_cog('Control')
         print('connecting to user...')
-        vc = await control.connect_to_user(interaction.user.voice)
+        vc = await control.connect_to_user(interaction.user.voice, interaction.guild)
         print('should be connected')
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
 
-    @ play.autocomplete('sound')
+    @play.autocomplete('sound')
     async def sound_autocomplete(
         self,
         interaction: discord.Interaction,
