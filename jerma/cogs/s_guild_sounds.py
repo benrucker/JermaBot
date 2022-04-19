@@ -32,11 +32,8 @@ class SGuildSounds(commands.Cog):
             return
         
         control = self.bot.get_cog('Control')
-        print('connecting to user...')
         vc = await control.connect_to_user(intr.user.voice, intr.guild)
-        print('should be connected')
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
-        print('dispatched sound_file_play')
         await intr.response.send_message('Playing sound.', ephemeral=True)
 
     @play.autocomplete('sound')
@@ -45,16 +42,24 @@ class SGuildSounds(commands.Cog):
         intr: Interaction,
         typed_in: str
     ) -> list[app_commands.Choice[str]]:
-        print('Autocompleting sound:', typed_in)
         typed_in = typed_in.lower()
         sounds = self.bot.get_guildinfo(intr.guild.id).sounds
-        print('sounds:', sounds)
-        direct_matches = [
+        direct_matches = {
+            s for s in sounds if s.startswith(typed_in)
+        }
+        close_matches = {
+            s for s in sounds if self.letters_appear_in_order(typed_in, s)
+        }.difference(direct_matches)
+        return [
             app_commands.Choice(name=s, value=s)
-            for s in sounds if s.startswith(typed_in)
+            for s in list(sorted(direct_matches)) + list(sorted(close_matches))
         ]
-        print(direct_matches)
-        return direct_matches
+
+    def letters_appear_in_order(self, part: str, full: str):
+        part: list = list(part)
+        while full and part:
+            full = full[full.find(part.pop(0)) + 1:]
+        return not part
 
     def get_sound(self, sound, guild: discord.Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
