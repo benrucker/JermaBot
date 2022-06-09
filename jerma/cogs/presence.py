@@ -1,9 +1,10 @@
-from itertools import cycle
+from itertools import cycle, repeat
 import discord
 from discord.enums import ActivityType
 from discord.ext import commands, tasks
 from random import shuffle
 
+GUILD_AD = (ActivityType.playing, 'new server! https://discord.gg/RmHAkp7Dss')
 PRESENCES = [
     (ActivityType.listening, 'my heart.'),
     (ActivityType.listening, 'rats lofi'),
@@ -20,6 +21,7 @@ PRESENCES = [
     (ActivityType.watching, 'the byeahs.'),
 ]
 shuffle(PRESENCES)
+PRESENCES = [p for pair in zip(PRESENCES, repeat(GUILD_AD)) for p in pair]
 
 async def setup(bot):
     await bot.add_cog(Presence(bot))
