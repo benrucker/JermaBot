@@ -1,44 +1,78 @@
 import os
-from discord import app_commands
+from discord import app_commands, Interaction
+from discord.ext import commands
 import discord
 
-class GuildSoundsError(BaseException):
-    def __init__(self, error, msg):
-        self.error = error
-        self.msg = msg
+from jermabot import JermaBot
+from guild_info import GuildInfo
+
+async def setup(bot):
+    await bot.add_cog(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
 
 
-class SGuildSounds(app_commands.Group):
+class SGuildSounds(commands.Cog):
     """Maintains guild-specific sound functionality."""
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot, *args, **kwargs):
+        self.bot: JermaBot = bot
+        super().__init__(*args, **kwargs)
 
     @app_commands.command()
     @app_commands.describe(sound='The sound to play.')
-    # @app_commands.autocomplete(sound=sound_autocomplete)
-    async def play(self, interaction: discord.Interaction, sound: str):
+    async def play(self, intr: Interaction, sound: str):
         """Play a sound."""
-        sound = sound
-        current_sound = self.get_sound(sound, interaction.guild)
+        if not intr.user.voice:
+            await intr.response.send_message('Hey gamer, you\'re not in a voice channel. Totally uncool.')
+            return
+        
+        sound = sound.lower()
+        current_sound = self.get_sound(sound, intr.guild)
         if not current_sound:
-            raise GuildSoundsError('Sound ' + sound + ' not found.',
-                                   'Hey gamer, that sound doesn\'t exist.')
-
+            await intr.response.send_message('Hey gamer, that sound doesn\'t exist.')
+            return
+        
         control = self.bot.get_cog('Control')
-        print('connecting to user...')
-        vc = await control.connect_to_user(interaction.user.voice)
-        print('should be connected')
+        vc = await control.connect_to_user(intr.user.voice, intr.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
-        print('dispatched sound_file_play')
+        await intr.response.send_message('Playing sound.', ephemeral=True)
+
+    @play.autocomplete('sound')
+    async def sound_autocomplete(
+        self,
+        intr: Interaction,
+        typed_in: str
+    ) -> list[app_commands.Choice[str]]:
+        typed_in = typed_in.lower()
+        sounds = self.bot.get_guildinfo(intr.guild.id).sounds
+        direct_matches = {
+            s for s in sounds if s.startswith(typed_in)
+        }
+        close_matches = {
+            s for s in sounds if self.letters_appear_in_order(typed_in, s)
+        }.difference(direct_matches)
+        return [
+            app_commands.Choice(name=s, value=s)
+            for s in list(sorted(direct_matches)) + list(sorted(close_matches))
+        ]
+
+    def letters_appear_in_order(self, part: str, full: str):
+        part: list = list(part)
+        while full and part:
+            full = full[full.find(part.pop(0)) + 1:]
+        return not part
 
     def get_sound(self, sound, guild: discord.Guild):
-        print('getting sound')
-        ginfo = self.bot.get_guildinfo(guild.id)
-        print('got ginfo')
-        print('ginfo.sounds:', ginfo.sounds)
-        try: 
-            sound_filename = ginfo.sounds[sound.lower()]
-            return os.path.join(ginfo.sound_folder, sound_filename)
+        ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
+        sounds = ginfo.sounds
+        sound_folder = ginfo.sound_folder
+        try:
+            sound_filename = sounds[sound.lower()]
+            return os.path.join(sound_folder, sound_filename)
         except KeyError:
             return None
+
+    @app_commands.command()
+    @app_commands.describe(say='The phrase to say.')
+    async def say(self, intr: Interaction, say: str):
+        """Play a sound."""
+        await intr.response.send_message(say)

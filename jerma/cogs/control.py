@@ -35,16 +35,16 @@ class Control(commands.Cog):
         """Join the user's voice channel."""
         _ = await self.connect_to_user(ctx)
 
-    async def connect_to_user(self, ctx):
-        if not ctx.author.voice:
+    async def connect_to_user(self, user_voice, guild):
+        if not user_voice:
             print('user\'s voice attr is false')
             raise JoinFailedError()
         else:
-            print(ctx.author.voice)
+            print(user_voice)
 
         try:
-            vc = ctx.voice_client
-            user_channel = ctx.author.voice.channel
+            vc = guild.voice_client
+            user_channel = user_voice.channel
             return await self.connect_to_channel(vc, user_channel)
         except Exception as e:
             print('connection error: ' + e)
