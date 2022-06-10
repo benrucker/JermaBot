@@ -58,7 +58,10 @@ class SGuildSounds(commands.Cog):
     def letters_appear_in_order(self, part: str, full: str):
         part: list = list(part)
         while full and part:
-            full = full[full.find(part.pop(0)) + 1:]
+            index = full.find(part.pop(0))
+            if index == -1:
+                return False
+            full = full[index + 1:]
         return not part
 
     def get_sound(self, sound, guild: discord.Guild):
