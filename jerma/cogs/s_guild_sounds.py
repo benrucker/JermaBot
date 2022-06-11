@@ -22,19 +22,19 @@ class SGuildSounds(commands.Cog):
     async def play(self, intr: Interaction, sound: str):
         """Play a sound."""
         if not intr.user.voice:
-            await intr.response.send_message('Hey gamer, you\'re not in a voice channel. Totally uncool.')
+            await intr.response.send_message('Hey gamer, you\'re not in a voice channel. Totally uncool.', ephemeral=True)
             return
         
         sound = sound.lower()
         current_sound = self.get_sound(sound, intr.guild)
         if not current_sound:
-            await intr.response.send_message('Hey gamer, that sound doesn\'t exist.')
+            await intr.response.send_message('Hey gamer, that sound doesn\'t exist.', ephemeral=True)
             return
         
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(intr.user.voice, intr.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
-        await intr.response.send_message('Playing sound.', ephemeral=True)
+        await intr.response.send_message(f'Playing **{sound}*')
 
     @play.autocomplete('sound')
     async def sound_autocomplete(
