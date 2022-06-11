@@ -1,15 +1,17 @@
 import asyncio
+import os
+import random
+import time
+from glob import glob
+
+import discord
 from colorama import Fore as t
 from colorama import Style
-import discord
 from discord.embeds import Embed
 from discord.ext import commands
-from .control import JoinFailedError
-from glob import glob
-import random
-import os
-import time
 
+from cogs.control import Control, JoinFailedError
+from guild_info import GuildInfo
 
 # will move these up to a broader scope later
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
@@ -78,21 +80,20 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('Sound ' + sound + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
-        control = self.bot.get_cog('Control')
+        control: Control = self.bot.get_cog('Control')
         print('connecting to user...')
-        vc = await control.connect_to_user(ctx)
+        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
         print('should be connected')
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
 
     def get_sound(self, sound, guild: discord.Guild):
-        print('getting sound')
-        ginfo = self.bot.get_guildinfo(guild.id)
-        print('got ginfo')
-        print('ginfo.sounds:', ginfo.sounds)
+        ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
+        sounds = ginfo.sounds
+        sound_folder = ginfo.sound_folder
         try: 
-            sound_filename = ginfo.sounds[sound.lower()]
-            return os.path.join(ginfo.sound_folder, sound_filename)
+            sound_filename = sounds[sound.lower()]
+            return os.path.join(sound_folder, sound_filename)
         except KeyError:
             return None
 
