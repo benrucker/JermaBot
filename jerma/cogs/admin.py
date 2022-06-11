@@ -161,3 +161,11 @@ class Admin(commands.Cog):
     async def sync_guild_commands(self, ctx):
         await self.bot.tree.sync(guild=ctx.guild)
         await ctx.send('Done.')
+
+    @commands.is_owner()
+    @commands.command()
+    async def sync_here(self, ctx):
+        self.bot.tree.copy_global_to(guild=ctx.guild)
+        cmds = await self.bot.tree.sync(guild=ctx.guild)
+        print('synced:', cmds)
+        await ctx.send(f"Synced tree here.")
