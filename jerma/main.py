@@ -12,14 +12,13 @@ from jermabot import JermaBot
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
 NO = ['no', 'n', 'nope', 'start over', 'nada', 'nah']
 
-
 colorama.init(autoreset=True)
 guilds = dict()
 tts = None
 intents = discord.Intents.default()
+intents.message_content = True
 
 prefixes = ['$']
-
 
 if __name__ == '__main__':
     global source_path, bot
