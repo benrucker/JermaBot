@@ -7,7 +7,7 @@ from jermabot import JermaBot
 from guild_info import GuildInfo
 
 async def setup(bot):
-    await bot.add_cog(SGuildSounds(bot), guild=discord.Object(id=571004411137097731))
+    await bot.add_cog(SGuildSounds(bot))
 
 
 class SGuildSounds(commands.Cog):
