@@ -20,9 +20,13 @@ class JermaBot(commands.Bot):
         super().__init__(**kwargs)
 
     async def setup_hook(self) -> None:
-        await self.load_extension("cogs.admin")
-        await self.load_extension("cogs.control")
-        await self.load_extension("cogs.sound_player")
+        await self.load_extension('cogs.admin')
+        await self.load_extension('cogs.sound_player')
+        await self.load_extension('cogs.control')
+        await self.load_extension('cogs.tts')
+        await self.load_extension('cogs.fun')
+        await self.load_extension('cogs.presence')
+        await self.load_extension('cogs.guild_sounds')
         await self.load_extension("cogs.s_guild_sounds")
         return await super().setup_hook()
 
