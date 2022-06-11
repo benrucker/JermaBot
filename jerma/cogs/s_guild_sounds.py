@@ -34,7 +34,7 @@ class SGuildSounds(commands.Cog):
         control = self.bot.get_cog('Control')
         vc = await control.connect_to_user(intr.user.voice, intr.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
-        await intr.response.send_message(f'Playing **{sound}*')
+        await intr.response.send_message(f'Playing **{sound}**')
 
     @play.autocomplete('sound')
     async def sound_autocomplete(
