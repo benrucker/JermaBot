@@ -50,9 +50,10 @@ class SGuildSounds(commands.Cog):
         close_matches = {
             s for s in sounds if self.letters_appear_in_order(typed_in, s)
         }.difference(direct_matches)
+        matches = (list(sorted(direct_matches)) + list(sorted(close_matches)))[:25]
         return [
             app_commands.Choice(name=s, value=s)
-            for s in list(sorted(direct_matches)) + list(sorted(close_matches))
+            for s in matches
         ]
 
     def letters_appear_in_order(self, part: str, full: str):
