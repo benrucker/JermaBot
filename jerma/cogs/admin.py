@@ -1,10 +1,14 @@
+from contextlib import redirect_stdout
+import io
 import random
 import subprocess
 import sys
+import textwrap
+import traceback
 from typing import Optional
 
 from discord.ext import commands
-from discord.ext.commands import Bot
+from discord.ext.commands import Bot, Context
 
 
 async def setup(bot):
@@ -169,3 +173,51 @@ class Admin(commands.Cog):
         cmds = await self.bot.tree.sync(guild=ctx.guild)
         print('synced:', cmds)
         await ctx.send(f"Synced tree here.")
+
+    @commands.is_owner()
+    @commands.command(hidden=True, name='eval')
+    async def _eval(self, ctx: Context, *, body: str):
+        """Borrowed from https://github.com/Rapptz/RoboDanny/blob/90d31d4d86ea3808179e0974bcab99976bc429d8/cogs/admin.py#L215"""
+
+        env = {
+            'bot': self.bot,
+            'ctx': ctx,
+            'channel': ctx.channel,
+            'author': ctx.author,
+            'guild': ctx.guild,
+            'message': ctx.message,
+            '_': self._last_result,
+        }
+
+        env.update(globals())
+
+        body = self.cleanup_code(body)
+        stdout = io.StringIO()
+
+        to_compile = f'async def func():\n{textwrap.indent(body, "  ")}'
+
+        try:
+            exec(to_compile, env)
+        except Exception as e:
+            return await ctx.send(f'```py\n{e.__class__.__name__}: {e}\n```')
+
+        func = env['func']
+        try:
+            with redirect_stdout(stdout):
+                ret = await func()
+        except Exception as e:
+            value = stdout.getvalue()
+            await ctx.send(f'```py\n{value}{traceback.format_exc()}\n```')
+        else:
+            value = stdout.getvalue()
+            try:
+                await ctx.message.add_reaction('\u2705')
+            except:
+                pass
+
+            if ret is None:
+                if value:
+                    await ctx.send(f'```py\n{value}\n```')
+            else:
+                self._last_result = ret
+                await ctx.send(f'```py\n{value}{ret}\n```')
