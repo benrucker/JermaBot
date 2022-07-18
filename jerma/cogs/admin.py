@@ -180,6 +180,7 @@ class Admin(commands.Cog):
         """Borrowed from https://github.com/Rapptz/RoboDanny/blob/90d31d4d86ea3808179e0974bcab99976bc429d8/cogs/admin.py#L215"""
 
         env = {
+            'self': self,
             'bot': self.bot,
             'ctx': ctx,
             'channel': ctx.channel,
