@@ -140,7 +140,7 @@ class TTS(commands.Cog):
 
     async def connect(self, ctx):
         control: Control = self.bot.get_cog('Control')
-        return control.connect_to_user(ctx.author.voice, ctx.guild)
+        return await control.connect_to_user(ctx.author.voice, ctx.guild)
 
     def join_words_to_tts_text(self, words: list):
         return self.strip_quotes(' '.join(words))
