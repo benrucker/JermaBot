@@ -106,7 +106,7 @@ class GuildSounds(commands.Cog):
                                    'Sorry gamer, but you need to add some sounds for me to play!')
 
         control = self.bot.get_cog('Control')
-        vc = await control.connect_to_user(ctx)
+        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
 
     def get_random_sound(self, guild: discord.Guild):

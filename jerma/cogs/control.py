@@ -33,7 +33,7 @@ class Control(commands.Cog):
     @commands.command()
     async def join(self, ctx):
         """Join the user's voice channel."""
-        _ = await self.connect_to_user(ctx)
+        _ = await self.connect_to_user(ctx.author.voice, ctx.guild)
 
     async def connect_to_user(self, user_voice, guild):
         if not user_voice:

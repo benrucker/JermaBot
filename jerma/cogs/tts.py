@@ -1,10 +1,13 @@
-from discord.ext import commands
-import discord
-import re
 import os
-from pydub.audio_segment import AudioSegment
-from .utils import ttsengine, textconverter
+import re
 from typing import Optional
+
+import discord
+from discord.ext import commands
+from pydub.audio_segment import AudioSegment
+
+from cogs.control import Control
+from .utils import textconverter, ttsengine
 
 
 async def setup(bot):
@@ -136,7 +139,8 @@ class TTS(commands.Cog):
         await ctx.send(f'Mr. Stark, I\'m feeling {voice}.')
 
     async def connect(self, ctx):
-        return await self.bot.get_cog('Control').connect_to_user(ctx)
+        control: Control = self.bot.get_cog('Control')
+        return control.connect_to_user(ctx.author.voice, ctx.guild)
 
     def join_words_to_tts_text(self, words: list):
         return self.strip_quotes(' '.join(words))
