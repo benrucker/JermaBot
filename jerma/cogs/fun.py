@@ -36,7 +36,7 @@ class Fun(commands.Cog):
     async def jermalofi(self, ctx):
         """Chill with a sick jam."""
         print('jermalofi')
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
         id = ctx.guild.id
         vc.play(self.bot.get_cog('SoundPlayer')
                 .LoopingSource(
@@ -56,7 +56,7 @@ class Fun(commands.Cog):
         #     print('not a role thing')
         #     return
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
         soul_stone = self.get_soul_stone_channel(ctx)
 
         users = ctx.author.voice.channel.members
@@ -101,7 +101,7 @@ class Fun(commands.Cog):
 
         name = ' '.join(args[0:])
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
         dest_channel = self.get_soul_stone_channel(ctx)
 
         users = ctx.author.voice.channel.members
@@ -131,7 +131,7 @@ class Fun(commands.Cog):
 
         name = ' '.join(args[0:])
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
         dest_channel = self.get_soul_stone_channel(ctx)
 
         users = ctx.author.voice.channel.members
@@ -160,7 +160,7 @@ class Fun(commands.Cog):
 
         name = ' '.join(args[0:])
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx)
+        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
 
         users = ctx.author.voice.channel.members
         user = None
