@@ -161,6 +161,7 @@ class GuildSounds(commands.Cog):
             replace_msg = await self.bot.wait_for('message', timeout=20, check=check2)
             if replace_msg.content.lower().strip() in YES:
                 self.delete_sound(os.path.split(existing)[1], ctx.guild)
+                await ctx.send('Expunging the old sound...')
             else:
                 await ctx.send('Yeah, I like the old one better too.')
                 return
