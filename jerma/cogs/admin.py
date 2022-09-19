@@ -175,6 +175,13 @@ class Admin(commands.Cog):
         await ctx.send(f"Synced tree here.")
 
     @commands.is_owner()
+    @commands.command()
+    async def sync_global(self, ctx):
+        cmds = await self.bot.tree.sync()
+        print('synced:', cmds)
+        await ctx.send(f"Synced tree globally.\n{cmds}")
+
+    @commands.is_owner()
     @commands.command(hidden=True, name='eval')
     async def _eval(self, ctx: Context, *, body: str):
         """Borrowed from https://github.com/Rapptz/RoboDanny/blob/90d31d4d86ea3808179e0974bcab99976bc429d8/cogs/admin.py#L215"""
