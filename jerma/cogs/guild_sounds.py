@@ -91,7 +91,7 @@ class GuildSounds(commands.Cog):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
         sounds = ginfo.sounds
         sound_folder = ginfo.sound_folder
-        try: 
+        try:
             sound_filename = sounds[sound.lower()]
             return os.path.join(sound_folder, sound_filename)
         except KeyError:
@@ -118,11 +118,7 @@ class GuildSounds(commands.Cog):
     async def _list(self, ctx):
         """Send the user a list of sounds that can be played."""
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
-        # avatar = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='avatar.png')
-        # thumbnail = discord.File(os.path.join('resources', 'images', 'avatar.png'), filename='thumbnail.png')
-        await ctx.author.send(embed=self.make_list_embed(ginfo),
-                              #files=[avatar, thumbnail],
-                              )
+        await ctx.author.send(embed=self.make_list_embed(ginfo))
         await ctx.message.add_reaction("✉")
 
     @commands.command(aliases=['add'])
@@ -148,7 +144,7 @@ class GuildSounds(commands.Cog):
         else:
             filename = message.attachments[0].filename
         filename = filename.lower()
-        
+
         # remove old sound if there
         name = filename.rsplit('.', 1)[0].lower()
         existing = self.get_sound(name, ctx.guild)
@@ -160,8 +156,8 @@ class GuildSounds(commands.Cog):
 
             replace_msg = await self.bot.wait_for('message', timeout=20, check=check2)
             if replace_msg.content.lower().strip() in YES:
-                self.delete_sound(os.path.split(existing)[1], ctx.guild)
                 await ctx.send('Expunging the old sound...')
+                self.delete_sound(os.path.split(existing)[1], ctx.guild)
             else:
                 await ctx.send('Yeah, I like the old one better too.')
                 return
@@ -252,7 +248,7 @@ class GuildSounds(commands.Cog):
             sound_folder = self.get_guild_sound_path(guild)
             filepath = os.path.join(sound_folder, filepath)
         print('deleting ' + filepath)
-        os.remove(filepath)        
+        os.remove(filepath)
         sound_name = os.path.basename(filepath)
         self.bot.get_guildinfo(guild.id).remove_sound(sound_name)
 
