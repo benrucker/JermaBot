@@ -266,7 +266,7 @@ class Fun(commands.Cog):
         if len(movies) == 0:
             await ctx.send('Your movie queue is empty. Hear that? EMPTY!')
         else:
-            await ctx.send('\n'.join(self.load_movies(ctx.guild.id)))
+            await ctx.send('\n'.join(sorted(self.load_movies(ctx.guild.id), key=str.lower)))
 
     @commands.command()
     async def removie(self, ctx, *, title):
