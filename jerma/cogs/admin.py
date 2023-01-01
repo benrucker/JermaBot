@@ -243,8 +243,7 @@ class Admin(commands.Cog):
 
     @app_commands.command()
     @app_commands.describe(content="stuff to spit back out, kinda sneakily")
-    @app_commands.guilds(571004411137097731)
-    @app_commands.guilds(173840048343482368)
+    @app_commands.guilds(571004411137097731, 173840048343482368)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
     async def spit(self, intr: Interaction, content: str):
