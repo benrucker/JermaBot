@@ -7,6 +7,7 @@ import textwrap
 import traceback
 from typing import Optional
 
+from discord import app_commands, Interaction
 from discord.ext import commands
 from discord.ext.commands import Bot, Context
 
@@ -163,8 +164,10 @@ class Admin(commands.Cog):
     @commands.is_owner()
     @commands.command()
     async def sync_guild_commands(self, ctx):
+        print('Syncing guild commands')
         await self.bot.tree.sync(guild=ctx.guild)
         await ctx.send('Done.')
+        print('Done syncing commands')
 
     @commands.is_owner()
     @commands.command()
@@ -237,3 +240,14 @@ class Admin(commands.Cog):
 
         # remove `foo`
         return content.strip('` \n')
+
+    @app_commands.command()
+    @app_commands.describe(content="stuff to spit back out, kinda sneakily")
+    @app_commands.guilds(571004411137097731)
+    @app_commands.guilds(173840048343482368)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def spit(self, intr: Interaction, content: str):
+        """Spit fire"""
+        await intr.response.send_message('spitting', ephemeral=True)
+        await intr.channel.send(content)
