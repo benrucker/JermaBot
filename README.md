@@ -47,19 +47,27 @@ Note: **some commands you might see in the code are guild-specfic**. Send `$help
 4. Clone the repo by pasting this in the command line:
 
 ```
-git clone https://github.com/benrucker/discord-jerma.git
+git clone https://github.com/benrucker/JermaBot.git
 ```
 
 5. `cd` into the repo with this command:
 
 ```
-cd discord-jerma
+cd JermaBot
 ```
 
 6. Install the needed Python packages by pasting this in the command line:
 
 ```
-pip install -r requirements.txt
+# linux/macOS
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
+
+# windows
+python -m venv .venv
+./.venv/Scripts/activate
+python -m pip install -r requirements.txt
 ```
 
 7. Store your bot's token in a file called `secret.txt` in the folder `discord-jerma/`.
