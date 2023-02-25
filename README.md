@@ -16,11 +16,11 @@ JermaBot is a Discord bot inspired by Jerma985. It is a 24/7 general-purpose bot
 
 # Setup
 
-You can add this bot to your server (recommended) or install it locally.
+You can add this bot to your server or install it locally.
 
-## Adding JermaBot to your server
+## Adding JermaBot to your server (recommended)
 
-[**Click here to invite JermaBot to your server!**](https://discord.com/api/oauth2/authorize?client_id=579445833938763816&permissions=412404181056&scope=bot%20applications.commands)
+> [**Click here to invite JermaBot to your server!**](https://discord.com/api/oauth2/authorize?client_id=579445833938763816&permissions=412404181056&scope=bot%20applications.commands)
 
 Inviting Jerma to your server is the easiest way to get to use him! I recommend this over installing him locally.
 
