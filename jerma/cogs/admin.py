@@ -12,6 +12,13 @@ from discord.ext import commands
 from discord.ext.commands import Bot, Context
 
 
+ADMIN_GUILDS = [
+    571004411137097731,
+    173840048343482368,
+    953432146587058216,
+]
+
+
 async def setup(bot):
     await bot.add_cog(Admin(bot))
 
@@ -37,16 +44,21 @@ class Admin(commands.Cog):
         await self.bot.close()
 
     @commands.is_owner()
-    @commands.command()
-    async def update(self, ctx, *args):
+    @commands.hybrid_command()
+    @app_commands.describe(reload="Reloads all cogs if true.")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def update(self, intr: Interaction, reload: bool | None):
         """Update the bot."""
-        updated = await self._handle_pull(ctx)
-        if '-r' in args:
-            await self._reload_all_cogs(ctx)
+        updated = await self._handle_pull(intr)
+        if reload:
+            await self._reload_all_cogs(intr)
+
         if updated:
-            await ctx.send('Patch applied, sister.')
+            await intr.send('Patch applied, sister.')
         else:
-            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+            await intr.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
         return updated
 
     def _git_pull(self):
