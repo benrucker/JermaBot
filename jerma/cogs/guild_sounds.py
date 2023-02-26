@@ -10,6 +10,7 @@ from colorama import Fore as t
 from colorama import Style
 from discord.embeds import Embed
 from discord.ext import commands
+from discord.ext.commands import Context
 
 from cogs.control import Control, JoinFailedError
 from guild_info import GuildInfo
@@ -59,12 +60,12 @@ class GuildSounds(commands.Cog):
         #self.path_to_guilds = path_to_guilds
         # self.sounds_dict  # keep this static until add,rm,or rename
 
-    async def cog_command_error(self, ctx, error):
+    async def cog_command_error(self, intr: Interaction | Context, error):
         if isinstance(error, GuildSoundsError):
             print(error.error)
-            await ctx.send(error.msg)
+            await intr.send(error.msg)
         elif isinstance(error, JoinFailedError):
-            await ctx.send(error)
+            await intr.send(error)
         else:
             raise error
 
