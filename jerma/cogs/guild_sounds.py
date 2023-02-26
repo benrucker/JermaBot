@@ -129,7 +129,10 @@ class GuildSounds(commands.Cog):
         """Send the user a list of sounds that can be played."""
         ginfo: GuildInfo = self.bot.get_guildinfo(ctx.guild.id)
         await ctx.author.send(embed=self.make_list_embed(ginfo))
-        await ctx.message.add_reaction("✉")
+        if ctx.interaction:
+            await ctx.send("List sent!", ephemeral=True)
+        else:
+            await ctx.message.add_reaction("✉")
 
     @commands.command(aliases=['add'])
     @commands.check(manage_sounds_check)
