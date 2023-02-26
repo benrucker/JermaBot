@@ -1,9 +1,10 @@
-from glob import glob
 import os
-import time
 import pickle
-import traceback
 import sys
+import time
+import traceback
+from glob import glob
+from typing import Dict
 
 FOUR_HOURS = 4*60*60
 
@@ -19,7 +20,7 @@ class GuildInfo():
         self.volume = .6
         self.folder = os.path.join('guilds', str(self.id))
         self.sound_folder = os.path.join(self.folder, 'sounds')
-        self.sounds = self.make_sounds_dict()
+        self.sounds: Dict[str, str] = self.make_sounds_dict()
 
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
@@ -39,7 +40,7 @@ class GuildInfo():
             return False
         return True
 
-    def make_sounds_dict(self):
+    def make_sounds_dict(self) -> Dict[str, str]:
         sounds = {}
         for filepath in glob(os.path.join(self.sound_folder, '*')):
             filename = os.path.basename(filepath)
