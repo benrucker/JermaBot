@@ -5,6 +5,7 @@ import time
 from glob import glob
 
 import discord
+from discord import Interaction
 from colorama import Fore as t
 from colorama import Style
 from discord.embeds import Embed
@@ -97,22 +98,23 @@ class GuildSounds(commands.Cog):
         except KeyError:
             return None
 
-    @commands.command()
-    async def random(self, ctx):
+    @commands.hybrid_command()
+    async def random(self, intr: Interaction):
         """Play a random sound!"""
-        sound = self.get_random_sound(ctx.guild)
+        sound, sound_name = self.get_random_sound(intr.guild)
         if not sound:
             raise GuildSoundsError('Guild has no sounds.',
                                    'Sorry gamer, but you need to add some sounds for me to play!')
 
         control = self.bot.get_cog('Control')
-        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
+        vc = await control.connect_to_user(intr.author.voice, intr.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
+        await intr.send(f"Playing **{sound_name}**")
 
     def get_random_sound(self, guild: discord.Guild):
-        ginfo = self.bot.get_guildinfo(guild.id)
-        sound_filename = random.choice(list(ginfo.sounds.values()))
-        return os.path.join(ginfo.sound_folder, sound_filename)
+        ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
+        sound_name, sound_filename = random.choice(list(ginfo.sounds.items()))
+        return os.path.join(ginfo.sound_folder, sound_filename), sound_name
 
     @commands.command(name='list', aliases=['sounds'])
     async def _list(self, ctx):
