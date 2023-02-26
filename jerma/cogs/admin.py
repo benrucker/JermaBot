@@ -232,6 +232,7 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def sync_global(self, ctx: Context):
         """Sync global application commands"""
+        await ctx.defer()
         cmds = await self.bot.tree.sync()
         print('synced:', cmds)
         await ctx.send(f"Synced tree globally.\n```{cmds}```")
