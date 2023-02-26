@@ -14,6 +14,7 @@ from discord.ext.commands import Bot, Context
 
 from cogs.control import Control, JoinFailedError
 from guild_info import GuildInfo
+from jermabot import JermaBot
 
 # will move these up to a broader scope later
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
@@ -60,7 +61,7 @@ class GuildSoundsError(commands.CommandError):
 class GuildSounds(commands.Cog):
     """Cog for maintaining guild-specific sound functionality."""
 
-    def __init__(self, bot: Bot):
+    def __init__(self, bot: JermaBot):
         self.bot = bot
         #self.path_to_guilds = path_to_guilds
         # self.sounds_dict  # keep this static until add,rm,or rename
@@ -123,10 +124,10 @@ class GuildSounds(commands.Cog):
         sound_name, sound_filename = random.choice(list(ginfo.sounds.items()))
         return os.path.join(ginfo.sound_folder, sound_filename), sound_name
 
-    @commands.command(name='list', aliases=['sounds'])
-    async def _list(self, ctx):
+    @commands.hybrid_command(name='list', aliases=['sounds'])
+    async def _list(self, ctx: Context):
         """Send the user a list of sounds that can be played."""
-        ginfo = self.bot.get_guildinfo(ctx.guild.id)
+        ginfo: GuildInfo = self.bot.get_guildinfo(ctx.guild.id)
         await ctx.author.send(embed=self.make_list_embed(ginfo))
         await ctx.message.add_reaction("✉")
 

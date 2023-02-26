@@ -1,9 +1,11 @@
 import os
+from typing import Optional
 
 import discord
 from discord.ext import commands
 
 from guild_info import GuildInfo
+
 
 class JermaBot(commands.Bot):
     """Base JermaBot class."""
@@ -40,7 +42,7 @@ class JermaBot(commands.Bot):
             print(f'\t{guild.name}:{guild.id}')
         print("Let's fucking go, bois.")
 
-    def get_guildinfo(self, gid=None) -> GuildInfo | dict[int, GuildInfo]:
+    def get_guildinfo(self, gid: None | int) -> GuildInfo | dict[int, GuildInfo]:
         """Return a GuildInfo object for the given guild id."""
         if not gid:
             return self.guild_infos
