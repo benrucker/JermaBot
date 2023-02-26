@@ -5,12 +5,12 @@ import time
 from glob import glob
 
 import discord
-from discord import Interaction
+from discord import app_commands
 from colorama import Fore as t
 from colorama import Style
 from discord.embeds import Embed
 from discord.ext import commands
-from discord.ext.commands import Context
+from discord.ext.commands import Bot, Context
 
 from cogs.control import Control, JoinFailedError
 from guild_info import GuildInfo
@@ -26,6 +26,11 @@ n = Style.NORMAL
 
 regular_nickname = 'JermaBot'
 snoozed_nickname = 'JermaSnore'
+
+ADMIN_GUILDS = [
+    571004411137097731,
+    173840048343482368,
+]
 
 
 async def manage_sounds_check(ctx):
@@ -55,17 +60,17 @@ class GuildSoundsError(commands.CommandError):
 class GuildSounds(commands.Cog):
     """Cog for maintaining guild-specific sound functionality."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
         #self.path_to_guilds = path_to_guilds
         # self.sounds_dict  # keep this static until add,rm,or rename
 
-    async def cog_command_error(self, intr: Interaction | Context, error):
+    async def cog_command_error(self, ctx: Context, error):
         if isinstance(error, GuildSoundsError):
             print(error.error)
-            await intr.send(error.msg)
+            await ctx.send(error.msg)
         elif isinstance(error, JoinFailedError):
-            await intr.send(error)
+            await ctx.send(error)
         else:
             raise error
 
@@ -100,17 +105,17 @@ class GuildSounds(commands.Cog):
             return None
 
     @commands.hybrid_command()
-    async def random(self, intr: Interaction):
+    async def random(self, ctx: Context):
         """Play a random sound!"""
-        sound, sound_name = self.get_random_sound(intr.guild)
+        sound, sound_name = self.get_random_sound(ctx.guild)
         if not sound:
             raise GuildSoundsError('Guild has no sounds.',
                                    'Sorry gamer, but you need to add some sounds for me to play!')
 
         control = self.bot.get_cog('Control')
-        vc = await control.connect_to_user(intr.author.voice, intr.guild)
+        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
-        await intr.send(f"Playing **{sound_name}**")
+        await ctx.send(f"Playing **{sound_name}**")
 
     def get_random_sound(self, guild: discord.Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
@@ -214,7 +219,7 @@ class GuildSounds(commands.Cog):
         else:
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
 
-    @commands.command(aliases=['sleep'])
+    @commands.hybrid_command(aliases=['sleep'])
     async def snooze(self, ctx):
         """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
@@ -226,9 +231,13 @@ class GuildSounds(commands.Cog):
             await ctx.me.edit(nick=regular_nickname)
             await ctx.send(f'**I HAVE AWOKEN**')
 
-    @commands.command()
+    @commands.hybrid_command()
     @commands.is_owner()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
     async def reload_sounds(self, ctx):
+        """Reload the in-memory sound paths cache"""
         for guild in self.bot.guilds:
             self.bot.get_guildinfo(guild.id).reload_sounds()
         await ctx.send('Sounds reloaded.')
