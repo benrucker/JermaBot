@@ -114,6 +114,7 @@ class GuildSounds(commands.Cog):
 
     def get_random_sound(self, guild: discord.Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
+        print(ginfo.sounds)
         sound_name, sound_filename = random.choice(list(ginfo.sounds.items()))
         return os.path.join(ginfo.sound_folder, sound_filename), sound_name
 
