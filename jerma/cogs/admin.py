@@ -20,13 +20,6 @@ class Admin(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot: Bot = bot
 
-    @commands.is_owner()
-    @commands.command()
-    async def moveto(self, ctx, id: int):
-        dest = ctx.guild.get_channel(id)
-        print(id, dest)
-        await self.bot.get_cog('Control').connect_to_channel(ctx, dest)
-
     async def shutdown(self):
         for g in self.bot.get_guildinfo().values():
             if g.is_snoozed():
