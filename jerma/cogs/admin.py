@@ -20,6 +20,12 @@ class Admin(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot: Bot = bot
 
+    @commands.is_owner()
+    @commands.command(hidden=True)
+    async def perish(self, ctx):
+        """Shut down the bot."""
+        await self.shutdown()
+
     async def shutdown(self):
         for g in self.bot.get_guildinfo().values():
             if g.is_snoozed():
@@ -31,10 +37,17 @@ class Admin(commands.Cog):
         await self.bot.close()
 
     @commands.is_owner()
-    @commands.command(hidden=True)
-    async def perish(self, ctx):
-        """Shut down the bot."""
-        await self.shutdown()
+    @commands.command()
+    async def update(self, ctx, *args):
+        """Update the bot."""
+        updated = await self._handle_pull(ctx)
+        if '-r' in args:
+            await self._reload_all_cogs(ctx)
+        if updated:
+            await ctx.send('Patch applied, sister.')
+        else:
+            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+        return updated
 
     def _git_pull(self):
         """Run git pull and return the result."""
@@ -74,32 +87,19 @@ class Admin(commands.Cog):
 
     @commands.is_owner()
     @commands.command()
-    async def update(self, ctx, *args):
-        """Update the bot."""
-        updated = await self._handle_pull(ctx)
-        if '-r' in args:
-            await self._reload_all_cogs(ctx)
-        if updated:
-            await ctx.send('Patch applied, sister.')
-        else:
-            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
-        return updated
-
-    @commands.is_owner()
-    @commands.command()
     async def reload(self, ctx, ext: str):
         await self.bot.reload_extension(ext)
         await ctx.send('Reloadception complete.')
-
-    async def _reload_all_cogs(self, ctx):
-        await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
-        for ext in self.bot.extensions.copy():
-            await self.bot.reload_extension(ext)
 
     @commands.is_owner()
     @commands.command()
     async def reloadall(self, ctx):
         await self._reload_all_cogs(ctx)
+
+    async def _reload_all_cogs(self, ctx):
+        await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
+        for ext in self.bot.extensions.copy():
+            await self.bot.reload_extension(ext)
 
     @commands.is_owner()
     @commands.command(hidden=True)
@@ -112,6 +112,16 @@ class Admin(commands.Cog):
     async def unload(self, ctx, ext: str):
         await self.bot.unload_extension(ext)
         await ctx.send('Unloaded, pew pew.')
+
+    @commands.is_owner()
+    @commands.command()
+    async def diag(self, ctx, lightweight: Optional[bool]):
+        await self.send_guild_diag(ctx)
+        await self.send_message_diag(ctx)
+        await self.send_vc_diag(ctx)
+        await self.send_latency_diag(ctx)
+        if not lightweight:
+            await self.send_emoji_diag(ctx)
 
     async def send_guild_diag(self, ctx):
         out = ''
@@ -138,16 +148,6 @@ class Admin(commands.Cog):
         e = random.sample(self.bot.emojis, 3)
         out += f'{e[0]}, {e[1]}, and {e[2]}.'
         await ctx.send(out)
-
-    @commands.is_owner()
-    @commands.command()
-    async def diag(self, ctx, lightweight: Optional[bool]):
-        await self.send_guild_diag(ctx)
-        await self.send_message_diag(ctx)
-        await self.send_vc_diag(ctx)
-        await self.send_latency_diag(ctx)
-        if not lightweight:
-            await self.send_emoji_diag(ctx)
 
     @commands.is_owner()
     @commands.command()
