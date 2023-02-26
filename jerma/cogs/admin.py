@@ -7,7 +7,7 @@ import textwrap
 import traceback
 from typing import Optional
 
-from discord import app_commands, Interaction
+from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Bot, Context
 
@@ -31,9 +31,9 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def perish(self, intr: Interaction):
+    async def perish(self, ctx: Context):
         """Shut down the bot."""
-        await intr.send("o7")
+        await ctx.send("o7")
         await self.shutdown()
 
     async def shutdown(self):
@@ -52,16 +52,16 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def update(self, intr: Interaction, reload: bool | None):
+    async def update(self, ctx: Context, reload: bool | None):
         """Update the bot."""
-        updated = await self._handle_pull(intr)
+        updated = await self._handle_pull(ctx)
         if reload:
-            await self._reload_all_cogs(intr)
+            await self._reload_all_cogs(ctx)
 
         if updated:
-            await intr.send('Patch applied, sister.')
+            await ctx.send('Patch applied, sister.')
         else:
-            await intr.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
+            await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
         return updated
 
     def _git_pull(self):
@@ -106,22 +106,22 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def reload(self, intr: Interaction, ext: str):
+    async def reload(self, ctx: Context, ext: str):
         """Reload an extension"""
         await self.bot.reload_extension(ext)
-        await intr.send('Reloadception complete.')
+        await ctx.send('Reloadception complete.')
 
     @commands.is_owner()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def reloadall(self, intr: Interaction):
+    async def reloadall(self, ctx: Context):
         """Reload all extensions"""
-        await self._reload_all_cogs(intr)
+        await self._reload_all_cogs(ctx)
 
-    async def _reload_all_cogs(self, intr: Interaction):
-        await intr.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
+    async def _reload_all_cogs(self, ctx: Context):
+        await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
         for ext in self.bot.extensions.copy():
             await self.bot.reload_extension(ext)
 
@@ -131,10 +131,10 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def load(self, intr: Interaction, ext: str):
+    async def load(self, ctx: Context, ext: str):
         """Load an extension"""
         await self.bot.load_extension(ext)
-        await intr.send('Loading 99% complete.')
+        await ctx.send('Loading 99% complete.')
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -142,10 +142,10 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def unload(self, intr: Interaction, ext: str):
+    async def unload(self, ctx: Context, ext: str):
         """Unload an extension"""
         await self.bot.unload_extension(ext)
-        await intr.send('Unloaded, pew pew.')
+        await ctx.send('Unloaded, pew pew.')
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -153,16 +153,16 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def diag(self, intr: Interaction, lightweight: Optional[bool]):
+    async def diag(self, ctx: Context, lightweight: Optional[bool]):
         """Get some diagnostic information"""
-        await self.send_guild_diag(intr)
-        await self.send_message_diag(intr)
-        await self.send_vc_diag(intr)
-        await self.send_latency_diag(intr)
+        await self.send_guild_diag(ctx)
+        await self.send_message_diag(ctx)
+        await self.send_vc_diag(ctx)
+        await self.send_latency_diag(ctx)
         if not lightweight:
-            await self.send_emoji_diag(intr)
+            await self.send_emoji_diag(ctx)
 
-    async def send_guild_diag(self, intr: Interaction):
+    async def send_guild_diag(self, ctx: Context):
         out = ''
         out += f'Logged into **{len(self.bot.guilds)}** guilds:\n'
         for guild in list(self.bot.guilds):
@@ -170,70 +170,71 @@ class Admin(commands.Cog):
                 out += '    ...'
                 break
             out += f'    {guild.name} : {str(guild.id)[:5]}\n'
-        await intr.send(out[:2000])
+        await ctx.send(out[:2000])
 
-    async def send_message_diag(self, intr: Interaction):
-        await intr.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
+    async def send_message_diag(self, ctx: Context):
+        await ctx.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
 
-    async def send_vc_diag(self, intr: Interaction):
-        await intr.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
+    async def send_vc_diag(self, ctx: Context):
+        await ctx.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
 
-    async def send_latency_diag(self, intr: Interaction):
+    async def send_latency_diag(self, ctx: Context):
         latency = self.bot.latency * 1000
-        await intr.send(f'Current websocket latency: {latency:.5} ms')
+        await ctx.send(f'Current websocket latency: {latency:.5} ms')
 
-    async def send_emoji_diag(self, intr: Interaction):
+    async def send_emoji_diag(self, ctx: Context):
         out = f'JermaBot has access to {len(self.bot.emojis)} emojis including '
         e = random.sample(self.bot.emojis, 3)
         out += f'{e[0]}, {e[1]}, and {e[2]}.'
-        await intr.send(out)
+        await ctx.send(out)
 
     @commands.is_owner()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def usercount(self, intr: Interaction):
+    async def usercount(self, ctx: Context):
         """Get the number of users JermaBot is connected to"""
         count = 0
         for guild in self.bot.guilds:
             count += guild.member_count
-        await intr.send(count)
+        await ctx.send(count)
 
     @commands.is_owner()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def sync_guild_commands(self, intr: Interaction):
+    async def sync_guild_commands(self, ctx: Context):
         """Sync application commands specific to this guild"""
         print('Syncing guild commands')
-        cmds = await self.bot.tree.sync(guild=intr.guild)
+        cmds = await self.bot.tree.sync(guild=ctx.guild)
         print(f'Done syncing commands.\n{cmds}')
-        await intr.send(f'Done...\n```{cmds}```')
+        await ctx.send(f'Done...\n```{cmds}```')
 
     @commands.is_owner()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def sync_here(self, intr: Interaction):
+    async def sync_here(self, ctx: Context):
         """Copy global commands to this guild & sync this guild"""
-        self.bot.tree.copy_global_to(guild=intr.guild)
-        cmds = await self.bot.tree.sync(guild=intr.guild)
+        await ctx.defer()
+        self.bot.tree.copy_global_to(guild=ctx.guild)
+        cmds = await self.bot.tree.sync(guild=ctx.guild)
         print('synced:', cmds)
-        await intr.send(f"Synced tree here.\n```{cmds}```")
+        await ctx.send(f"Synced tree here.\n```{cmds}```")
 
     @commands.is_owner()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def sync_global(self, intr: Interaction):
+    async def sync_global(self, ctx: Context):
         """Sync global application commands"""
         cmds = await self.bot.tree.sync()
         print('synced:', cmds)
-        await intr.send(f"Synced tree globally.\n```{cmds}```")
+        await ctx.send(f"Synced tree globally.\n```{cmds}```")
 
     @commands.is_owner()
     @commands.command(hidden=True, name='eval')
@@ -297,7 +298,7 @@ class Admin(commands.Cog):
     @app_commands.guilds(571004411137097731, 173840048343482368)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def spit(self, intr: Interaction, content: str):
+    async def spit(self, ctx: Context, content: str):
         """Spit fire"""
-        await intr.response.send_message('spitting', ephemeral=True)
-        await intr.channel.send(content)
+        await ctx.response.send_message('spitting', ephemeral=True)
+        await ctx.channel.send(content)
