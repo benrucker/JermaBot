@@ -124,8 +124,11 @@ class Admin(commands.Cog):
         out = ''
         out += f'Logged into **{len(self.bot.guilds)}** guilds:\n'
         for guild in list(self.bot.guilds):
+            if len(out) > 1900:
+                out += '    ...'
+                break
             out += f'    {guild.name} : {str(guild.id)[:5]}\n'
-        await ctx.send(out)
+        await ctx.send(out[:2000])
 
     async def send_message_diag(self, ctx):
         await ctx.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
