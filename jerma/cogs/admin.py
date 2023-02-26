@@ -15,7 +15,6 @@ from discord.ext.commands import Bot, Context
 ADMIN_GUILDS = [
     571004411137097731,
     173840048343482368,
-    953432146587058216,
 ]
 
 
@@ -28,9 +27,13 @@ class Admin(commands.Cog):
         self.bot: Bot = bot
 
     @commands.is_owner()
-    @commands.command(hidden=True)
-    async def perish(self, ctx):
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def perish(self, intr: Interaction):
         """Shut down the bot."""
+        await intr.send("o7")
         await self.shutdown()
 
     async def shutdown(self):
@@ -98,44 +101,68 @@ class Admin(commands.Cog):
             return True
 
     @commands.is_owner()
-    @commands.command()
-    async def reload(self, ctx, ext: str):
+    @commands.hybrid_command()
+    @app_commands.describe(ext="The cog/extension to reload")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def reload(self, intr: Interaction, ext: str):
+        """Reload an extension"""
         await self.bot.reload_extension(ext)
-        await ctx.send('Reloadception complete.')
+        await intr.send('Reloadception complete.')
 
     @commands.is_owner()
-    @commands.command()
-    async def reloadall(self, ctx):
-        await self._reload_all_cogs(ctx)
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def reloadall(self, intr: Interaction):
+        """Reload all extensions"""
+        await self._reload_all_cogs(intr)
 
-    async def _reload_all_cogs(self, ctx):
-        await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
+    async def _reload_all_cogs(self, intr: Interaction):
+        await intr.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
         for ext in self.bot.extensions.copy():
             await self.bot.reload_extension(ext)
 
     @commands.is_owner()
-    @commands.command(hidden=True)
-    async def load(self, ctx, ext: str):
+    @commands.hybrid_command()
+    @app_commands.describe(ext="The cog/extension to load")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def load(self, intr: Interaction, ext: str):
+        """Load an extension"""
         await self.bot.load_extension(ext)
-        await ctx.send('Loading 99% complete.')
+        await intr.send('Loading 99% complete.')
 
     @commands.is_owner()
-    @commands.command()
-    async def unload(self, ctx, ext: str):
+    @commands.hybrid_command()
+    @app_commands.describe(ext="The cog/extension to unload")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def unload(self, intr: Interaction, ext: str):
+        """Unload an extension"""
         await self.bot.unload_extension(ext)
-        await ctx.send('Unloaded, pew pew.')
+        await intr.send('Unloaded, pew pew.')
 
     @commands.is_owner()
-    @commands.command()
-    async def diag(self, ctx, lightweight: Optional[bool]):
-        await self.send_guild_diag(ctx)
-        await self.send_message_diag(ctx)
-        await self.send_vc_diag(ctx)
-        await self.send_latency_diag(ctx)
+    @commands.hybrid_command()
+    @app_commands.describe(lightweight="Skips emoji processing if true")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def diag(self, intr: Interaction, lightweight: Optional[bool]):
+        """Get some diagnostic information"""
+        await self.send_guild_diag(intr)
+        await self.send_message_diag(intr)
+        await self.send_vc_diag(intr)
+        await self.send_latency_diag(intr)
         if not lightweight:
-            await self.send_emoji_diag(ctx)
+            await self.send_emoji_diag(intr)
 
-    async def send_guild_diag(self, ctx):
+    async def send_guild_diag(self, intr: Interaction):
         out = ''
         out += f'Logged into **{len(self.bot.guilds)}** guilds:\n'
         for guild in list(self.bot.guilds):
@@ -143,54 +170,70 @@ class Admin(commands.Cog):
                 out += '    ...'
                 break
             out += f'    {guild.name} : {str(guild.id)[:5]}\n'
-        await ctx.send(out[:2000])
+        await intr.send(out[:2000])
 
-    async def send_message_diag(self, ctx):
-        await ctx.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
+    async def send_message_diag(self, intr: Interaction):
+        await intr.send(f'There are currently {len(self.bot.cached_messages)} cached messages.')
 
-    async def send_vc_diag(self, ctx):
-        await ctx.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
+    async def send_vc_diag(self, intr: Interaction):
+        await intr.send(f'There are currently {len(self.bot.voice_clients)} cached voice clients.')
 
-    async def send_latency_diag(self, ctx):
+    async def send_latency_diag(self, intr: Interaction):
         latency = self.bot.latency * 1000
-        await ctx.send(f'Current websocket latency: {latency:.5} ms')
+        await intr.send(f'Current websocket latency: {latency:.5} ms')
 
-    async def send_emoji_diag(self, ctx):
+    async def send_emoji_diag(self, intr: Interaction):
         out = f'JermaBot has access to {len(self.bot.emojis)} emojis including '
         e = random.sample(self.bot.emojis, 3)
         out += f'{e[0]}, {e[1]}, and {e[2]}.'
-        await ctx.send(out)
+        await intr.send(out)
 
     @commands.is_owner()
-    @commands.command()
-    async def usercount(self, ctx):
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def usercount(self, intr: Interaction):
+        """Get the number of users JermaBot is connected to"""
         count = 0
         for guild in self.bot.guilds:
             count += guild.member_count
-        await ctx.send(count)
+        await intr.send(count)
 
     @commands.is_owner()
-    @commands.command()
-    async def sync_guild_commands(self, ctx):
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def sync_guild_commands(self, intr: Interaction):
+        """Sync application commands specific to this guild"""
         print('Syncing guild commands')
-        await self.bot.tree.sync(guild=ctx.guild)
-        await ctx.send('Done.')
-        print('Done syncing commands')
+        cmds = await self.bot.tree.sync(guild=intr.guild)
+        print(f'Done syncing commands.\n{cmds}')
+        await intr.send(f'Done...\n```{cmds}```')
 
     @commands.is_owner()
-    @commands.command()
-    async def sync_here(self, ctx):
-        self.bot.tree.copy_global_to(guild=ctx.guild)
-        cmds = await self.bot.tree.sync(guild=ctx.guild)
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def sync_here(self, intr: Interaction):
+        """Copy global commands to this guild & sync this guild"""
+        self.bot.tree.copy_global_to(guild=intr.guild)
+        cmds = await self.bot.tree.sync(guild=intr.guild)
         print('synced:', cmds)
-        await ctx.send(f"Synced tree here.")
+        await intr.send(f"Synced tree here.\n```{cmds}```")
 
     @commands.is_owner()
-    @commands.command()
-    async def sync_global(self, ctx):
+    @commands.hybrid_command()
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def sync_global(self, intr: Interaction):
+        """Sync global application commands"""
         cmds = await self.bot.tree.sync()
         print('synced:', cmds)
-        await ctx.send(f"Synced tree globally.\n{cmds}")
+        await intr.send(f"Synced tree globally.\n```{cmds}```")
 
     @commands.is_owner()
     @commands.command(hidden=True, name='eval')
