@@ -223,9 +223,9 @@ class GuildSounds(commands.Cog):
         """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
         if r:
-            t = time.localtime(r)
+            r = int(r)
             await ctx.me.edit(nick=snoozed_nickname)
-            await ctx.send(f'Snoozed until {t.tm_hour % 12}:{t.tm_min:02} {t.tm_zone}. See you then, champ!')
+            await ctx.send(f'Join sounds will come back <t:{r}:R> at <t:{r}:t>. See you then, champ!')
         else:
             await ctx.me.edit(nick=regular_nickname)
             await ctx.send(f'**I HAVE AWOKEN**')
