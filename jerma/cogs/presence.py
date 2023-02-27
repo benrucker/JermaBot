@@ -33,7 +33,7 @@ async def setup(bot):
 class Presence(commands.Cog):
 
     def __init__(self, bot: JermaBot):
-        self.bot = bot
+        self.bot: JermaBot = bot
         self.presences = cycle(PRESENCES)
         self.task_change_presence.start()
 

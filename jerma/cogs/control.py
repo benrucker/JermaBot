@@ -27,7 +27,7 @@ class Control(commands.Cog):
     """Cog for controlling the movement of a bot through voice channels."""
 
     def __init__(self, bot: JermaBot):
-        self.bot = bot
+        self.bot: JermaBot = bot
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, JoinFailedError):

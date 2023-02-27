@@ -48,7 +48,7 @@ class TTS(commands.Cog):
     """Cog for text-to-speech functionality."""
 
     def __init__(self, bot: JermaBot, tts_engine: TTSEngine, jtts_engine: TTSEngine):
-        self.bot = bot
+        self.bot: JermaBot = bot
         self.tts = tts_engine
         self.jtts = jtts_engine
 

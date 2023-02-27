@@ -59,7 +59,7 @@ class GuildSounds(commands.Cog):
     """Cog for maintaining guild-specific sound functionality."""
 
     def __init__(self, bot: JermaBot):
-        self.bot = bot
+        self.bot: JermaBot = bot
 
     async def cog_command_error(self, ctx: Context, error):
         if isinstance(error, GuildSoundsError):

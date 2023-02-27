@@ -33,7 +33,7 @@ class Fun(commands.Cog):
     """Cog for various silly bot functions."""
 
     def __init__(self, bot: JermaBot):
-        self.bot = bot
+        self.bot: JermaBot = bot
 
     @commands.command()
     async def jermalofi(self, ctx: Context):

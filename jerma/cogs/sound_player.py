@@ -3,19 +3,22 @@ import time
 
 import discord
 from colorama import Fore as t
+from discord import VoiceClient
 from discord.ext import commands
 from discord.ext.commands import Context
 
+from jermabot import JermaBot
 
-async def setup(bot):
+
+async def setup(bot: JermaBot):
     await bot.add_cog(SoundPlayer(bot))
 
 
 class SoundPlayer(commands.Cog):
     """Cog for playing sounds through voice channels."""
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: JermaBot):
+        self.bot: JermaBot = bot
 
     def play_sound_file(self, sound, vc):
         source = self.source_factory(sound)
@@ -30,7 +33,7 @@ class SoundPlayer(commands.Cog):
         vc = ctx.voice_client
         self.stop_audio(vc)
 
-    def stop_audio(self, vc):
+    def stop_audio(self, vc: VoiceClient):
         if vc.is_playing():
             vc.stop()
             silence = os.path.join('resources', 'soundclips', 'silence.wav')
@@ -78,7 +81,7 @@ class SoundPlayer(commands.Cog):
             self.source = source_factory(self.param)
             self.guild_id = guild_id
             self.source.volume = bot.get_guildinfo(guild_id).volume
-            self.bot = bot
+            self.bot: JermaBot = bot
 
         def read(self):
             self.source.volume = self.bot.get_guildinfo(self.guild_id).volume
@@ -86,6 +89,8 @@ class SoundPlayer(commands.Cog):
             if not ret:
                 self.source.cleanup()
                 self.source = self.factory(self.param)
-                self.source.volume = self.bot.get_guildinfo(self.guild_id).volume
+                self.source.volume = self.bot.get_guildinfo(
+                    self.guild_id
+                ).volume
                 ret = self.source.read()
             return ret

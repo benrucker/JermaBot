@@ -43,7 +43,7 @@ class JermaBot(commands.Bot):
     def get_guildinfos(self) -> dict[int, GuildInfo]:
         """Return a GuildInfo object for the given guild id."""
         return self.guild_infos
-        
+
     def get_guildinfo(self, gid: int) -> GuildInfo:
         """Return a GuildInfo object for the given guild id."""
         return self.guild_infos[gid]
