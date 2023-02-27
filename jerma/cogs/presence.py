@@ -1,10 +1,13 @@
 from itertools import cycle, repeat
+from random import shuffle
+
 import discord
 from discord.enums import ActivityType
 from discord.ext import commands, tasks
-from random import shuffle
 
-GUILD_AD = (ActivityType.playing, 'new server! https://discord.gg/RmHAkp7Dss')
+from jermabot import JermaBot
+
+GUILD_AD = (ActivityType.playing, 'join the community! https://discord.gg/RmHAkp7Dss')
 PRESENCES = [
     (ActivityType.listening, 'my heart.'),
     (ActivityType.listening, 'rats lofi'),
@@ -29,7 +32,7 @@ async def setup(bot):
 
 class Presence(commands.Cog):
 
-    def __init__(self, bot):
+    def __init__(self, bot: JermaBot):
         self.bot = bot
         self.presences = cycle(PRESENCES)
         self.task_change_presence.start()

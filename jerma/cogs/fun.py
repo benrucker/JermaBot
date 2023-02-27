@@ -1,14 +1,17 @@
-from discord.ext import commands
-import os
 import asyncio
-import discord
-import time
-import random
-import fuzzywuzzy as fuzz
-from fuzzywuzzy import process
-from typing import Optional
+import os
 import pickle
+import random
+import time
+from typing import Optional
 
+import discord
+from discord import VoiceClient
+from discord.ext import commands
+from discord.ext.commands import Context
+from fuzzywuzzy import process
+
+from jermabot import JermaBot
 
 # will move these up to a broader scope later
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course',
@@ -21,7 +24,7 @@ async def setup(bot):
 
 
 def is_whid():
-    def predicate(ctx):
+    def predicate(ctx: Context):
         return ctx.guild.id == 173840048343482368
     return commands.check(predicate)
 
@@ -29,32 +32,32 @@ def is_whid():
 class Fun(commands.Cog):
     """Cog for various silly bot functions."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: JermaBot):
         self.bot = bot
 
     @commands.command()
-    async def jermalofi(self, ctx):
+    async def jermalofi(self, ctx: Context):
         """Chill with a sick jam."""
         print('jermalofi')
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
+        vc: VoiceClient | None = (
+            await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
+        )
         id = ctx.guild.id
-        vc.play(self.bot.get_cog('SoundPlayer')
+        vc.play(
+            self.bot.get_cog('SoundPlayer')
                 .LoopingSource(
-                    os.path.join('resources', 'soundclips',
-                                 'birthdayloop.wav'),
+                    os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
                     self.bot.get_cog('SoundPlayer').source_factory,
                     id,
-                    self.bot)
+                    self.bot
                 )
+        )
 
     @commands.command(hidden=True)
     @is_whid()
-    async def jermasnapeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee(self, ctx):
+    async def jermasnapeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee(self, ctx: Context):
         """Snap the user's voice channel."""
         print('jermasnap')
-        # if 374095810868019200 not in ctx.author.roles:
-        #     print('not a role thing')
-        #     return
 
         vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
         soul_stone = self.get_soul_stone_channel(ctx)
@@ -86,7 +89,7 @@ class Fun(commands.Cog):
             await asyncio.sleep(1)
             self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
-    def get_soul_stone_channel(self, ctx):
+    def get_soul_stone_channel(self, ctx: Context):
         for channel in ctx.guild.voice_channels:
             if channel.id == 343939767068655616:
                 return channel
@@ -94,10 +97,10 @@ class Fun(commands.Cog):
 
     @commands.command(aliases=['q'])
     @is_whid()
-    async def quarantine(self, ctx, *args):
+    async def quarantine(self, ctx: Context, *args):
         """Save'm."""
         if not args:
-            raise discord.InvalidArgument
+            raise ValueError("Missing target in quarantine command")
 
         name = ' '.join(args[0:])
 
@@ -124,10 +127,10 @@ class Fun(commands.Cog):
 
     @commands.command()
     @is_whid()
-    async def fsmash(self, ctx, *args):
+    async def fsmash(self, ctx: Context, *args):
         """Killem."""
         if not args:
-            raise discord.InvalidArgument
+            raise ValueError("Missing target in fmash command")
 
         name = ' '.join(args[0:])
 
@@ -153,10 +156,10 @@ class Fun(commands.Cog):
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
     @commands.command()
-    async def downsmash(self, ctx, *args):
+    async def downsmash(self, ctx: Context, *args):
         """Killem even more."""
         if not args:
-            raise discord.InvalidArgument()  # malformed statement?
+            raise ValueError("Missing target in fmash command")
 
         name = ' '.join(args[0:])
 
@@ -200,14 +203,14 @@ class Fun(commands.Cog):
     def get_smash_sound(self):
         return self.get_sound('smash_kill')
 
-    def get_sound(self, sound_name):
+    def get_sound(self, sound_name: str):
         sound = os.path.join('resources', 'soundclips', f'{sound_name}.wav')
         with open(os.path.join('resources', 'soundclips', f'{sound_name}.txt'), 'r', encoding='utf-8') as file:
             delay, length = file.readline().split(' ')
         return [sound, float(delay), float(length)]
 
     @commands.command()
-    async def e(self, ctx, emoji_name: str):
+    async def e(self, ctx: Context, emoji_name: str):
         """Add the specified emoji to the most recent message sent."""
         msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
 
@@ -217,7 +220,7 @@ class Fun(commands.Cog):
         await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
 
     @commands.command()
-    async def drake(self, ctx, *args):
+    async def drake(self, ctx: Context, *args):
         """Add a drake clapping reaction to the last message sent."""
         if not args:
             msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
@@ -237,7 +240,7 @@ class Fun(commands.Cog):
         await msg_to_react.remove_reaction(str(emoji), self.bot.user)
 
     @commands.command()
-    async def movie(self, ctx, *, title: Optional[str]):
+    async def movie(self, ctx: Context, *, title: Optional[str]):
         """Add a movie to the movie list."""
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
@@ -260,7 +263,7 @@ class Fun(commands.Cog):
         await ctx.send('Movie added. `$removie` to delete it or `$movies` to see the list.')
 
     @commands.command()
-    async def movies(self, ctx):
+    async def movies(self, ctx: Context):
         """Look at the movie list."""
         movies = self.load_movies(ctx.guild.id)
         if len(movies) == 0:
@@ -269,7 +272,7 @@ class Fun(commands.Cog):
             await ctx.send('\n'.join(sorted(self.load_movies(ctx.guild.id), key=str.lower)))
 
     @commands.command()
-    async def removie(self, ctx, *, title):
+    async def removie(self, ctx: Context, *, title: str):
         """Removie a movie from the movie list."""
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)

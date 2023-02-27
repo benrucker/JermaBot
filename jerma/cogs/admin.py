@@ -1,16 +1,17 @@
-from contextlib import redirect_stdout
 import io
 import random
 import subprocess
 import sys
 import textwrap
 import traceback
+from contextlib import redirect_stdout
 from typing import Optional
 
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Bot, Context
+from discord.ext.commands import Context
 
+from jermabot import JermaBot
 
 ADMIN_GUILDS = [
     571004411137097731,
@@ -23,8 +24,8 @@ async def setup(bot):
 
 
 class Admin(commands.Cog):
-    def __init__(self, bot: Bot):
-        self.bot: Bot = bot
+    def __init__(self, bot: JermaBot):
+        self.bot: JermaBot = bot
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -37,7 +38,7 @@ class Admin(commands.Cog):
         await self.shutdown()
 
     async def shutdown(self):
-        for g in self.bot.get_guildinfo().values():
+        for g in self.bot.get_guildinfos().values():
             if g.is_snoozed():
                 await self.bot.get_guild(g.id).me.edit(nick=None)
         extensions = self.bot.extensions.copy()

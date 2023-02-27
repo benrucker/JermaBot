@@ -1,10 +1,11 @@
 import os
-from discord import app_commands, Interaction
-from discord.ext import commands
+
 import discord
+from discord import Interaction, app_commands
+from discord.ext import commands
 
 from jermabot import JermaBot
-from guild_info import GuildInfo
+
 
 async def setup(bot):
     await bot.add_cog(SGuildSounds(bot))
@@ -65,8 +66,8 @@ class SGuildSounds(commands.Cog):
             full = full[index + 1:]
         return not part
 
-    def get_sound(self, sound, guild: discord.Guild):
-        ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
+    def get_sound(self, sound: str, guild: discord.Guild):
+        ginfo = self.bot.get_guildinfo(guild.id)
         sounds = ginfo.sounds
         sound_folder = ginfo.sound_folder
         try:

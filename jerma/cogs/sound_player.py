@@ -1,8 +1,10 @@
-from colorama import Fore as t
-import discord
-from discord.ext import commands
 import os
 import time
+
+import discord
+from colorama import Fore as t
+from discord.ext import commands
+from discord.ext.commands import Context
 
 
 async def setup(bot):
@@ -23,7 +25,7 @@ class SoundPlayer(commands.Cog):
         print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {t.CYAN}{vc.guild} #{vc.channel}')
 
     @commands.command()
-    async def stop(self, ctx):
+    async def stop(self, ctx: Context):
         """Stop any currently playing audio."""
         vc = ctx.voice_client
         self.stop_audio(vc)
@@ -37,7 +39,7 @@ class SoundPlayer(commands.Cog):
                 continue
 
     @commands.command()
-    async def volume(self, ctx, *args):
+    async def volume(self, ctx: Context, *args):
         """Change the volume of played sounds."""
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
         old_vol = ginfo.volume

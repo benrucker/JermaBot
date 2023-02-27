@@ -1,35 +1,33 @@
 import os
-import pickle
-import sys
 import time
-import traceback
 from glob import glob
-from typing import Dict
 
-FOUR_HOURS = 4*60*60
+from discord import Guild
+
+FOUR_HOURS_IN_SECONDS = 4*60*60
 
 
 class GuildInfo():
     """This class holds information about the state of the bot in a given guild."""
 
-    def __init__(self, guild):
+    def __init__(self, guild: Guild):
         self.name = guild.name
         self.id = guild.id
         self.is_snapping = False
-        self.snooze_resume = None
+        self.snooze_resume: None | float = None
         self.volume = .6
         self.folder = os.path.join('guilds', str(self.id))
         self.sound_folder = os.path.join(self.folder, 'sounds')
-        self.sounds: Dict[str, str] = self.make_sounds_dict()
+        self.sounds = self.make_sounds_dict()
 
     def __repr__(self):
         return 'GuildInfo Object: ' + self.name + ':' + self.id
 
-    def toggle_snooze(self, duration=4):
+    def toggle_snooze(self, duration=FOUR_HOURS_IN_SECONDS) -> float | None:
         if self.is_snoozed():
             self.snooze_resume = None
         else:
-            self.snooze_resume = time.time() + FOUR_HOURS
+            self.snooze_resume = time.time() + duration
             return self.snooze_resume
 
     def is_snoozed(self):
@@ -40,7 +38,7 @@ class GuildInfo():
             return False
         return True
 
-    def make_sounds_dict(self) -> Dict[str, str]:
+    def make_sounds_dict(self) -> dict[str, str]:
         sounds = {}
         for filepath in glob(os.path.join(self.sound_folder, '*')):
             filename = os.path.basename(filepath)

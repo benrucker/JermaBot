@@ -1,19 +1,16 @@
-import asyncio
 import os
 import random
 import time
-from glob import glob
-
-import discord
-from discord import app_commands
-from colorama import Fore as t
-from colorama import Style
-from discord.embeds import Embed
-from discord.ext import commands
-from discord.ext.commands import Bot, Context
 
 from cogs.control import Control, JoinFailedError
+from colorama import Fore as t
+from colorama import Style
+from discord import Guild, app_commands
+from discord.embeds import Embed
+from discord.ext import commands
+from discord.ext.commands import Context
 from guild_info import GuildInfo
+
 from jermabot import JermaBot
 
 # will move these up to a broader scope later
@@ -34,7 +31,7 @@ ADMIN_GUILDS = [
 ]
 
 
-async def manage_sounds_check(ctx):
+async def manage_sounds_check(ctx: Context):
     p = ctx.channel.permissions_for(ctx.author)
     return p.kick_members or \
         p.ban_members or \
@@ -48,7 +45,7 @@ async def manage_sounds_check(ctx):
         p.mute_members
 
 
-async def setup(bot):
+async def setup(bot: JermaBot):
     await bot.add_cog(GuildSounds(bot))
 
 
@@ -63,8 +60,6 @@ class GuildSounds(commands.Cog):
 
     def __init__(self, bot: JermaBot):
         self.bot = bot
-        #self.path_to_guilds = path_to_guilds
-        # self.sounds_dict  # keep this static until add,rm,or rename
 
     async def cog_command_error(self, ctx: Context, error):
         if isinstance(error, GuildSoundsError):
@@ -76,7 +71,7 @@ class GuildSounds(commands.Cog):
             raise error
 
     @commands.command()
-    async def play(self, ctx, *args):
+    async def play(self, ctx: Context, *args):
         """Play a sound."""
         if not args:
             raise GuildSoundsError('No sound specified in play command.',
@@ -95,7 +90,7 @@ class GuildSounds(commands.Cog):
         self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
         print('dispatched sound_file_play')
 
-    def get_sound(self, sound, guild: discord.Guild):
+    def get_sound(self, sound: str, guild: Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
         sounds = ginfo.sounds
         sound_folder = ginfo.sound_folder
@@ -118,7 +113,7 @@ class GuildSounds(commands.Cog):
         self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
         await ctx.send(f"Playing **{sound_name}**")
 
-    def get_random_sound(self, guild: discord.Guild):
+    def get_random_sound(self, guild: Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
         print(ginfo.sounds)
         sound_name, sound_filename = random.choice(list(ginfo.sounds.items()))
@@ -136,7 +131,7 @@ class GuildSounds(commands.Cog):
 
     @commands.command(aliases=['add'])
     @commands.check(manage_sounds_check)
-    async def addsound(self, ctx, *sound_name):
+    async def addsound(self, ctx: Context, *sound_name):
         """Add a sound to the sounds list. Requires elevated server perms."""
 
         # wait for sound file
@@ -180,7 +175,7 @@ class GuildSounds(commands.Cog):
 
     @commands.command(aliases=['removesound'])
     @commands.check(manage_sounds_check)
-    async def remove(self, ctx, *args):
+    async def remove(self, ctx: Context, *args):
         """Remove a sound clip."""
         if not args:
             raise GuildSoundsError('No sound specified in remove command.',
@@ -198,7 +193,7 @@ class GuildSounds(commands.Cog):
 
     @commands.command(aliases=['renamesound'])
     @commands.check(manage_sounds_check)
-    async def rename(self, ctx, *args):
+    async def rename(self, ctx: Context, *args):
         """Rename a sound clip."""
         if not args:
             raise GuildSoundsError('No sound specified in rename command.',
@@ -224,7 +219,7 @@ class GuildSounds(commands.Cog):
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
 
     @commands.hybrid_command(aliases=['sleep'])
-    async def snooze(self, ctx):
+    async def snooze(self, ctx: Context):
         """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
         if r:
@@ -240,7 +235,7 @@ class GuildSounds(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def reload_sounds(self, ctx):
+    async def reload_sounds(self, ctx: Context):
         """Reload the in-memory sound paths cache"""
         for guild in self.bot.guilds:
             self.bot.get_guildinfo(guild.id).reload_sounds()
@@ -260,7 +255,7 @@ class GuildSounds(commands.Cog):
         await sound.save(path)
         self.bot.get_guildinfo(guild.id).add_sound(filename)
 
-    def delete_sound(self, filepath, guild: discord.Guild):
+    def delete_sound(self, filepath, guild: Guild):
         if 'sounds' not in filepath:
             sound_folder = self.get_guild_sound_path(guild)
             filepath = os.path.join(sound_folder, filepath)
@@ -272,14 +267,12 @@ class GuildSounds(commands.Cog):
     def rename_file(self, old_filepath, new_filepath):
         os.rename(old_filepath, new_filepath)
 
-    def get_guild_sound_path(self, guild):
-        if type(guild) is discord.Guild:
-            ginfo = self.bot.get_guildinfo(guild.id)
-        else:
-            ginfo = self.bot.get_guildinfo(guild)
+    def get_guild_sound_path(self, guild: Guild | int):
+        guild_id = guild.id if type(guild) is Guild else guild
+        ginfo = self.bot.get_guildinfo(guild_id)
         return ginfo.sound_folder
 
-    def make_list_embed(self, guild_info):
+    def make_list_embed(self, guild_info: GuildInfo):
         _lim = 1024
         sounds = '\n'.join(sorted(guild_info.sounds))
         overflow = None

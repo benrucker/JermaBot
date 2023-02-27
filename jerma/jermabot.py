@@ -1,16 +1,14 @@
 import os
-from typing import Optional
 
-import discord
+from discord import Guild
 from discord.ext import commands
-
 from guild_info import GuildInfo
 
 
 class JermaBot(commands.Bot):
     """Base JermaBot class."""
 
-    def __init__(self, path, **kwargs):
+    def __init__(self, path: str, **kwargs):
         """
         Construct JermaBot.
 
@@ -34,7 +32,7 @@ class JermaBot(commands.Bot):
 
     async def on_ready(self):
         """Initialize some important data and indicate startup success."""
-        if len(self.get_guildinfo()) == 0:
+        if len(self.get_guildinfos()) == 0:
             self.initialize_guild_infos()
 
         print(f'Logged into {len(self.guilds)} guilds:')
@@ -42,14 +40,15 @@ class JermaBot(commands.Bot):
             print(f'\t{guild.name}:{guild.id}')
         print("Let's fucking go, bois.")
 
-    def get_guildinfo(self, gid: None | int) -> GuildInfo | dict[int, GuildInfo]:
+    def get_guildinfos(self) -> dict[int, GuildInfo]:
         """Return a GuildInfo object for the given guild id."""
-        if not gid:
-            return self.guild_infos
-        else:
-            return self.guild_infos[gid]
+        return self.guild_infos
+        
+    def get_guildinfo(self, gid: int) -> GuildInfo:
+        """Return a GuildInfo object for the given guild id."""
+        return self.guild_infos[gid]
 
-    def make_guildinfo(self, guild: discord.Guild):
+    def make_guildinfo(self, guild: Guild):
         """Set a guildinfo object to a certain id."""
         self.guild_infos[guild.id] = GuildInfo(guild)
 

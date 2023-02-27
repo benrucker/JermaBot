@@ -1,7 +1,7 @@
 import os
-import time
-from typing import Optional
 import subprocess
+import time
+
 from pydub.audio_segment import AudioSegment
 
 MYCROFT    = 1
@@ -10,28 +10,28 @@ ESPEAK     = 3
 OPEN_JTALK = 4
 
 
-class TTSEngineInterface:
+class TTSEngine:
     """This is an abstract interface defining tts engine classes."""
 
     def get_environment_path(self):
         """Return the command line call to the tts executable."""
         raise NotImplementedError
 
-    def text_to_wav(self, text, filename):
+    def text_to_wav(self, text: str, filename: str):
         """Read out the text and save it to a wav file."""
         raise NotImplementedError
 
-    def text_to_wav_slow(self, text):
+    def text_to_wav_slow(self, text: str):
         raise NotImplementedError
 
-    def text_to_wav_normal(self, text):
+    def text_to_wav_normal(self, text: str):
         raise NotImplementedError
 
-    def text_to_wav_fast(self, text):
+    def text_to_wav_fast(self, text: str):
         raise NotImplementedError
 
 
-class TTSMycroft(TTSEngineInterface):
+class TTSMycroft(TTSEngine):
     """Mycroft engine."""
 
     def __init__(self, path, voice):
@@ -74,7 +74,7 @@ class TTSMycroft(TTSEngineInterface):
             return filepath
 
 
-class TTSOpenJtalk(TTSEngineInterface):
+class TTSOpenJtalk(TTSEngine):
 
     def __init__(self, path, voice, dic):
         self.path = path
@@ -119,7 +119,7 @@ class TTSOpenJtalk(TTSEngineInterface):
         sound.export(file)
 
 
-class TTSVoice(TTSEngineInterface):
+class TTSVoice(TTSEngine):
     """Voice.exe engine."""
 
     def __init__(self, path):
@@ -129,7 +129,7 @@ class TTSVoice(TTSEngineInterface):
         return self.path
 
 
-class TTSEspeak(TTSEngineInterface):
+class TTSEspeak(TTSEngine):
     """Espeak engine."""
 
     def __init__(self):
@@ -145,19 +145,17 @@ class TTSEspeak(TTSEngineInterface):
 
 def construct(engine: int, path=None, voice=None, **kwargs):
     """Construct and return a TTSEngine object."""
-    out: Optional[TTSEngineInterface] = None
     if engine == MYCROFT:
         if not path:
             raise RuntimeError('No path specified for mycroft tts engine')
-        out = TTSMycroft(path=path, voice=voice)
+        return TTSMycroft(path=path, voice=voice)
     elif engine == VOICE:
         if not path:
             raise RuntimeError('No path specified for voice.exe tts engine')
-        out = TTSVoice(path=path)
+        return TTSVoice(path=path)
     elif engine == ESPEAK:
-        out = TTSEspeak()
+        return TTSEspeak()
     elif engine == OPEN_JTALK:
-        out = TTSOpenJtalk(path='open_jtalk', voice=voice, **kwargs)
+        return TTSOpenJtalk(path='open_jtalk', voice=voice, **kwargs)
     else:
         raise RuntimeError('Invalid tts engine specified.')
-    return out

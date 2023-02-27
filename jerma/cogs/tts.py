@@ -3,14 +3,18 @@ import re
 from typing import Optional
 
 import discord
+from cogs.control import Control
 from discord.ext import commands
+from discord.ext.commands import Context
 from pydub.audio_segment import AudioSegment
 
-from cogs.control import Control
-from .utils import textconverter, ttsengine
+from jermabot import JermaBot
+
+from .utils import textconverter
+from .utils.ttsengine import TTSEngine
 
 
-async def setup(bot):
+async def setup(bot: JermaBot):
     await bot.add_cog(TTS(bot, bot.tts_engine, bot.jtts_engine))
 
 
@@ -25,7 +29,7 @@ class JTTSNotEnabled(commands.CheckFailure):
 
 
 def tts_enabled():
-    def pred(ctx):
+    def pred(ctx: Context):
         if not ctx.cog.tts:
             raise TTSNotEnabled()
         return True
@@ -33,7 +37,7 @@ def tts_enabled():
 
 
 def jtts_enabled():
-    def pred(ctx):
+    def pred(ctx: Context):
         if not ctx.cog.jtts:
             raise JTTSNotEnabled()
         return True
@@ -43,14 +47,12 @@ def jtts_enabled():
 class TTS(commands.Cog):
     """Cog for text-to-speech functionality."""
 
-    def __init__(self, bot: commands.Bot,
-                 tts_engine: ttsengine.TTSEngineInterface,
-                 jtts_engine: ttsengine.TTSEngineInterface):
+    def __init__(self, bot: JermaBot, tts_engine: TTSEngine, jtts_engine: TTSEngine):
         self.bot = bot
         self.tts = tts_engine
         self.jtts = jtts_engine
 
-    async def cog_command_error(self, ctx, error):
+    async def cog_command_error(self, ctx: Context, error):
         print('caught command error in tts')
         if isinstance(error, (TTSNotEnabled, JTTSNotEnabled)):
             print('its a boy!')
@@ -58,7 +60,7 @@ class TTS(commands.Cog):
 
     @commands.command()
     @tts_enabled()
-    async def speak(self, ctx, *words):
+    async def speak(self, ctx: Context, *words):
         """Play your input text through text-to-speech."""
         if not words:
             raise discord.InvalidArgument()
@@ -69,7 +71,7 @@ class TTS(commands.Cog):
 
     @commands.command()
     @tts_enabled()
-    async def adderall(self, ctx, *words):
+    async def adderall(self, ctx: Context, *words):
         """Text-to-speech but f a s t."""
         if not words:
             raise discord.InvalidArgument()
@@ -80,7 +82,7 @@ class TTS(commands.Cog):
 
     @commands.command()
     @tts_enabled()
-    async def speakdrunk(self, ctx, *words):
+    async def speakdrunk(self, ctx: Context, *words):
         """Text-to-speech but more drunk."""
         if not words:
             raise discord.InvalidArgument()
@@ -92,7 +94,7 @@ class TTS(commands.Cog):
 
     @commands.command()
     @tts_enabled()
-    async def speakfile(self, ctx, *words):
+    async def speakfile(self, ctx: Context, *words):
         """Send the input text as a sound file from text-to-speech."""
         if not words:
             raise discord.InvalidArgument()
@@ -101,7 +103,7 @@ class TTS(commands.Cog):
 
     @commands.command()
     @tts_enabled()
-    async def birthday(self, ctx, *name):
+    async def birthday(self, ctx: Context, *name):
         """Wish someone a happy birthday!"""
         if not name:
             raise discord.InvalidArgument()
@@ -113,7 +115,7 @@ class TTS(commands.Cog):
 
     @commands.command(aliases=['sa'])
     @jtts_enabled()
-    async def speakanime(self, ctx, *words):
+    async def speakanime(self, ctx: Context, *words):
         """Text-to-speech but more Japanese."""
         if not words:
             raise discord.InvalidArgument()
@@ -125,7 +127,7 @@ class TTS(commands.Cog):
     # TODO make this respect per-guild preferences
     @commands.command()
     @jtts_enabled()
-    async def inflection(self, ctx, voice: Optional[str]):
+    async def inflection(self, ctx: Context, voice: Optional[str]):
         """Change the inflection of Japanese speech."""
         voices = ['angry', 'bashful', 'happy', 'normal', 'sad']
         if not voice or voice not in voices:
@@ -138,7 +140,7 @@ class TTS(commands.Cog):
         self.jtts.voice = newpath
         await ctx.send(f'Mr. Stark, I\'m feeling {voice}.')
 
-    async def connect(self, ctx):
+    async def connect(self, ctx: Context):
         control: Control = self.bot.get_cog('Control')
         return await control.connect_to_user(ctx.author.voice, ctx.guild)
 
@@ -155,7 +157,7 @@ class TTS(commands.Cog):
         to_remove = re.compile(r'[\'"]')
         return to_remove.sub('', text)
 
-    def make_tts_sound_file(self, to_speak, speed='normal', engine=None):
+    def make_tts_sound_file(self, to_speak: str, speed='normal', engine: TTSEngine = None):
         if not engine:
             engine = self.tts
         filepath = self.text_to_wav(to_speak, speed=speed, engine=engine)
@@ -164,7 +166,7 @@ class TTS(commands.Cog):
     def play_sound_file(self, sound_file, vc):
         self.bot.get_cog('SoundPlayer').play_sound_file(sound_file, vc)
 
-    def text_to_wav(self, text, speed='normal', engine=None):
+    def text_to_wav(self, text: str, speed='normal', engine=None):
         if not engine:
             engine = self.tts
         if speed == 'slow':
@@ -173,10 +175,11 @@ class TTS(commands.Cog):
             return engine.text_to_wav_fast(text)
         return engine.text_to_wav_normal(text)
 
-    def birthday_sound(self, name_sound, ctx):
+    def birthday_sound(self, name_sound, ctx: Context):
         """Construct birthday sound."""
-        song = AudioSegment.from_file(os.path.join(
-            'resources', 'soundclips', 'blank_birthday.wav'))
+        song: AudioSegment = AudioSegment.from_file(os.path.join(
+            'resources', 'soundclips', 'blank_birthday.wav'
+        ))
         name_sound = AudioSegment.from_file(name_sound)
         name_sound = self.remove_leading_silence(name_sound)
 
@@ -200,5 +203,5 @@ class TTS(commands.Cog):
 
         return sound[trim_ms:]
 
-    def generate_id_path(self, label, ctx):
+    def generate_id_path(self, label, ctx: Context):
         return os.path.join(self.bot.path, 'resources', 'soundclips', 'temp', label + str(ctx.guild.id) + '.wav')
