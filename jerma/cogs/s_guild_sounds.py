@@ -74,9 +74,3 @@ class SGuildSounds(commands.Cog):
             return os.path.join(sound_folder, sound_filename)
         except KeyError:
             return None
-
-    @app_commands.command()
-    @app_commands.describe(say='The phrase to say.')
-    async def say(self, intr: Interaction, say: str):
-        """Play a sound."""
-        await intr.response.send_message(say)
