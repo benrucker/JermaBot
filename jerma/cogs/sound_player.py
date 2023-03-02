@@ -3,7 +3,7 @@ import time
 
 import discord
 from colorama import Fore as t
-from discord import VoiceClient
+from discord import app_commands, VoiceClient
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -27,11 +27,14 @@ class SoundPlayer(commands.Cog):
         vc.play(source)
         print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {t.CYAN}{vc.guild} #{vc.channel}')
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def stop(self, ctx: Context):
         """Stop any currently playing audio."""
         vc = ctx.voice_client
         self.stop_audio(vc)
+        if ctx.interaction:
+            await ctx.send("The sound has been stopped in its tracks 🤠", ephemeral=True)
 
     def stop_audio(self, vc: VoiceClient):
         if vc.is_playing():
@@ -41,24 +44,32 @@ class SoundPlayer(commands.Cog):
             while vc.is_playing():
                 continue
 
-    @commands.command()
-    async def volume(self, ctx: Context, *args):
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
+    async def volume(self, ctx: Context, volume: int):
         """Change the volume of played sounds."""
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
         old_vol = ginfo.volume
-        if not args:
+
+        if not volume:
             await ctx.send(f'Volume is currently at {int(old_vol*100)}, bro.')
             return
-        vol = int(args[0])
-        fvol = vol / 100
+        
+        fvol = volume / 100
         ginfo.volume = fvol
         if ctx.voice_client and ctx.voice_client.source:
             ctx.voice_client.source.volume = fvol
 
-        react = ctx.message.add_reaction
         speakers = ['🔈', '🔉', '🔊']
-        await react('🔇' if vol == 0 else speakers[min(int(fvol * len(speakers)), 2)])
-        await react('⬆' if fvol > old_vol else '⬇')
+        speaker = '🔇' if volume == 0 else speakers[min(int(fvol * len(speakers)), 2)]
+        arrow = '⬆' if fvol > old_vol else '⬇'
+        if ctx.interaction:
+            await ctx.send(speaker + arrow)
+        else:
+            react = ctx.message.add_reaction
+            await react(speaker)
+            await react(arrow)
+
 
     @commands.Cog.listener()
     async def on_guild_update(self, before, after):
