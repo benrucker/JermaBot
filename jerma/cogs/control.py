@@ -4,7 +4,7 @@ import os
 import random
 
 from colorama import Fore as t
-from discord import Guild, VoiceChannel, VoiceClient, VoiceState
+from discord import app_commands, Guild, VoiceChannel, VoiceClient, VoiceState
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -33,10 +33,11 @@ class Control(commands.Cog):
         if isinstance(error, JoinFailedError):
             await ctx.send(error)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def join(self, ctx: Context):
         """Join the user's voice channel."""
-        _ = await self.connect_to_user(ctx.author.voice, ctx.guild)
+        await self.connect_to_user(ctx.author.voice, ctx.guild)
 
     async def connect_to_user(self, user_voice: VoiceState, guild: Guild):
         if not user_voice or not user_voice.channel:
@@ -87,9 +88,10 @@ class Control(commands.Cog):
             if vc.guild == guild:
                 return vc
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def leave(self, ctx: Context):
-        """Leave the voice channel, if any."""
+        """Leave the voice channel."""
         if ctx.voice_client and ctx.voice_client.is_connected():
             await self.play_leave_sound(ctx)
             await ctx.guild.voice_client.disconnect()

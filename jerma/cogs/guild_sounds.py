@@ -101,6 +101,7 @@ class GuildSounds(commands.Cog):
             return None
 
     @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def random(self, ctx: Context):
         """Play a random sound!"""
         sound, sound_name = self.get_random_sound(ctx.guild)
@@ -120,6 +121,7 @@ class GuildSounds(commands.Cog):
         return os.path.join(ginfo.sound_folder, sound_filename), sound_name
 
     @commands.hybrid_command(name='list', aliases=['sounds'])
+    @app_commands.default_permissions(use_application_commands=True)
     async def _list(self, ctx: Context):
         """Send the user a list of sounds that can be played."""
         ginfo: GuildInfo = self.bot.get_guildinfo(ctx.guild.id)
@@ -219,6 +221,7 @@ class GuildSounds(commands.Cog):
             await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
 
     @commands.hybrid_command(aliases=['sleep'])
+    @app_commands.default_permissions(use_application_commands=True)
     async def snooze(self, ctx: Context):
         """Disable join sounds for 4 hours or until you call snooze again."""
         r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()

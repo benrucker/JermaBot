@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 import discord
-from discord import VoiceClient
+from discord import app_commands, VoiceClient
 from discord.ext import commands
 from discord.ext.commands import Context
 from fuzzywuzzy import process
@@ -35,7 +35,8 @@ class Fun(commands.Cog):
     def __init__(self, bot: JermaBot):
         self.bot: JermaBot = bot
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def jermalofi(self, ctx: Context):
         """Chill with a sick jam."""
         print('jermalofi')
@@ -56,7 +57,7 @@ class Fun(commands.Cog):
     @commands.command(hidden=True)
     @is_whid()
     async def jermasnapeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee(self, ctx: Context):
-        """Snap the user's voice channel."""
+        """(Deprecated) Snap the user's voice channel."""
         print('jermasnap')
 
         vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
@@ -98,7 +99,7 @@ class Fun(commands.Cog):
     @commands.command(aliases=['q'])
     @is_whid()
     async def quarantine(self, ctx: Context, *args):
-        """Save'm."""
+        """(Deprecated) Save'm."""
         if not args:
             raise ValueError("Missing target in quarantine command")
 
@@ -128,7 +129,7 @@ class Fun(commands.Cog):
     @commands.command()
     @is_whid()
     async def fsmash(self, ctx: Context, *args):
-        """Killem."""
+        """(Deprecated) Killem."""
         if not args:
             raise ValueError("Missing target in fmash command")
 
@@ -155,13 +156,12 @@ class Fun(commands.Cog):
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
 
-    @commands.command()
-    async def downsmash(self, ctx: Context, *args):
+    @commands.hybrid_command()
+    @app_commands.default_permissions(move_members=True, mute_members=True)
+    async def downsmash(self, ctx: Context, *, name):
         """Killem even more."""
-        if not args:
+        if not name:
             raise ValueError("Missing target in fmash command")
-
-        name = ' '.join(args[0:])
 
         vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
 
@@ -211,7 +211,7 @@ class Fun(commands.Cog):
 
     @commands.command()
     async def e(self, ctx: Context, emoji_name: str):
-        """Add the specified emoji to the most recent message sent."""
+        """(Deprecated) Add the specified emoji to the most recent message sent."""
         msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
 
         emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
@@ -221,7 +221,7 @@ class Fun(commands.Cog):
 
     @commands.command()
     async def drake(self, ctx: Context, *args):
-        """Add a drake clapping reaction to the last message sent."""
+        """(Deprecated) Add a drake clapping reaction to the last message sent."""
         if not args:
             msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
         else:
@@ -239,8 +239,10 @@ class Fun(commands.Cog):
         await asyncio.sleep(5)
         await msg_to_react.remove_reaction(str(emoji), self.bot.user)
 
-    @commands.command()
-    async def movie(self, ctx: Context, *, title: Optional[str]):
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
+    @app_commands.describe(title="The title of the movie")
+    async def movie(self, ctx: Context, *, title: str):
         """Add a movie to the movie list."""
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
@@ -260,9 +262,10 @@ class Fun(commands.Cog):
         movies.append(title)
         # save movie list
         self.save_movies(ctx.guild.id, movies)
-        await ctx.send('Movie added. `$removie` to delete it or `$movies` to see the list.')
+        await ctx.send('Movie added. `/removie` to delete it or `/movies` to see the list.')
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
     async def movies(self, ctx: Context):
         """Look at the movie list."""
         movies = self.load_movies(ctx.guild.id)
@@ -271,7 +274,9 @@ class Fun(commands.Cog):
         else:
             await ctx.send('\n'.join(sorted(self.load_movies(ctx.guild.id), key=str.lower)))
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.default_permissions(use_application_commands=True)
+    @app_commands.describe(title="The title of the movie")
     async def removie(self, ctx: Context, *, title: str):
         """Removie a movie from the movie list."""
         movies = self.load_movies(ctx.guild.id)
