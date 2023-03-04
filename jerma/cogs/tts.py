@@ -3,6 +3,7 @@ import re
 from typing import Optional
 
 import discord
+from discord import app_commands
 from cogs.control import Control
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -58,74 +59,81 @@ class TTS(commands.Cog):
             print('its a boy!')
             await ctx.send(error)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(text="The sentence(s) for JermaBot to speak")
     @tts_enabled()
-    async def speak(self, ctx: Context, *words):
+    async def speak(self, ctx: Context, *, text: str):
         """Play your input text through text-to-speech."""
-        if not words:
+        if not text:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)
-        to_speak = self.join_words_to_tts_text(words)
+        to_speak = self.convert_text_to_tts_text(text)
         sound_file = self.make_tts_sound_file(to_speak)
         self.play_sound_file(sound_file, vc)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(text="The sentence(s) for JermaBot to speak")
     @tts_enabled()
-    async def adderall(self, ctx: Context, *words):
+    async def adderall(self, ctx: Context, *, text: str):
         """Text-to-speech but f a s t."""
-        if not words:
+        if not text:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)
-        to_speak = self.join_words_to_tts_text(words)
+        to_speak = self.convert_text_to_tts_text(text)
         sound_file = self.make_tts_sound_file(to_speak, speed='fast')
         self.play_sound_file(sound_file, vc)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(text="The sentence(s) for JermaBot to speak")
     @tts_enabled()
-    async def speakdrunk(self, ctx: Context, *words):
+    async def speakdrunk(self, ctx: Context, *, text: str):
         """Text-to-speech but more drunk."""
-        if not words:
+        if not text:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)
-        to_speak = self.join_words_to_tts_text(words)
+        to_speak = self.convert_text_to_tts_text(text)
         to_speak = to_speak.strip(' ')  # remove spaces to drunkify
         sound_file = self.make_tts_sound_file(to_speak, speed='slow')
         self.play_sound_file(sound_file, vc)
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(text="The sentence(s) for JermaBot to speak")
     @tts_enabled()
-    async def speakfile(self, ctx: Context, *words):
+    async def speakfile(self, ctx: Context, *, text: str):
         """Send the input text as a sound file from text-to-speech."""
-        if not words:
+        if not text:
             raise discord.InvalidArgument()
-        to_speak = self.join_words_to_tts_text(words)
+        to_speak = self.convert_text_to_tts_text(text)
         await ctx.send(file=discord.File(self.text_to_wav(to_speak)))
 
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(name="The person to wish happy birthday to!")
     @tts_enabled()
-    async def birthday(self, ctx: Context, *name):
+    async def birthday(self, ctx: Context, *, name: str):
         """Wish someone a happy birthday!"""
         if not name:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)
-        to_speak = self.join_words_to_tts_text(name)
+        to_speak = self.convert_text_to_tts_text(name)
         name_sound = self.text_to_wav(to_speak)
         birthday_with_name = self.birthday_sound(name_sound, ctx)
         self.play_sound_file(birthday_with_name, vc)
 
     @commands.command(aliases=['sa'])
+    @app_commands.describe(text="The sentence(s) for JermaBot to speak")
     @jtts_enabled()
-    async def speakanime(self, ctx: Context, *words):
+    async def speakanime(self, ctx: Context, *, text: str):
         """Text-to-speech but more Japanese."""
-        if not words:
+        if not text:
             raise discord.InvalidArgument()
         vc = await self.connect(ctx)
-        kana_to_speak = self.join_words_to_jtts_text(words)
+        kana_to_speak = self.join_text_to_jtts_text(text)
         sound_file = self.make_tts_sound_file(kana_to_speak, engine=self.jtts)
         self.play_sound_file(sound_file, vc)
 
     # TODO make this respect per-guild preferences
-    @commands.command()
+    @commands.hybrid_command()
+    @app_commands.describe(voice="The inflection for JermaBot to have when speaking Japanese")
     @jtts_enabled()
     async def inflection(self, ctx: Context, voice: Optional[str]):
         """Change the inflection of Japanese speech."""
@@ -144,18 +152,18 @@ class TTS(commands.Cog):
         control: Control = self.bot.get_cog('Control')
         return await control.connect_to_user(ctx.author.voice, ctx.guild)
 
-    def join_words_to_tts_text(self, words: list):
-        return self.strip_quotes(' '.join(words))
+    def convert_text_to_tts_text(self, text: str):
+        return self.strip_quotes(text)
 
-    def join_words_to_jtts_text(self, words: list):
-        words_in = self.strip_quotes(' '.join(words))
-        words_and_punct = textconverter.split_to_words_and_punctuation(
-            words_in)
-        return ' '.join(textconverter.mixed_lang_to_katakana(words_and_punct))
+    def join_text_to_jtts_text(self, text: str):
+        text_stripped = self.strip_quotes(text)
+        text_and_punct = textconverter.split_to_words_and_punctuation(
+            text_stripped
+        )
+        return ' '.join(textconverter.mixed_lang_to_katakana(text_and_punct))
 
     def strip_quotes(self, text: str):
-        to_remove = re.compile(r'[\'"]')
-        return to_remove.sub('', text)
+        return text.replace('"', '').replace("'", '')
 
     def make_tts_sound_file(self, to_speak: str, speed='normal', engine: TTSEngine = None):
         if not engine:
