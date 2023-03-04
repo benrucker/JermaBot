@@ -250,8 +250,9 @@ class Admin(commands.Cog):
         """Sync application commands specific to this guild"""
         print('Syncing guild commands')
         cmds = await self.bot.tree.sync(guild=ctx.guild)
-        print(f'Done syncing commands.\n{cmds}')
-        await ctx.send(f'Done...\n```{cmds}```')
+        command_names = '\n'.join([cmd.name for cmd in cmds])
+        print(f'Done syncing commands.\n{command_names}')
+        await ctx.send(f'Done...\n```{command_names}```')
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -263,8 +264,9 @@ class Admin(commands.Cog):
         await ctx.defer()
         self.bot.tree.copy_global_to(guild=ctx.guild)
         cmds = await self.bot.tree.sync(guild=ctx.guild)
-        print('synced:', cmds)
-        await ctx.send(f"Synced tree here.\n```{cmds}```")
+        command_names = '\n'.join([cmd.name for cmd in cmds])
+        print('synced:', command_names)
+        await ctx.send(f"Synced tree here.\n```{command_names}```")
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -275,8 +277,9 @@ class Admin(commands.Cog):
         """Sync global application commands"""
         await ctx.defer()
         cmds = await self.bot.tree.sync()
-        print('synced:', cmds)
-        await ctx.send(f"Synced tree globally.\n```{cmds}```")
+        command_names = '\n'.join([cmd.name for cmd in cmds])
+        print('synced:', command_names)
+        await ctx.send(f"Synced tree globally.\n```{command_names}```")
 
     @commands.is_owner()
     @commands.command(hidden=True, name='eval')
