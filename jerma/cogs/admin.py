@@ -5,12 +5,12 @@ import sys
 import textwrap
 import traceback
 from contextlib import redirect_stdout
+from subprocess import CompletedProcess
 from typing import Optional
 
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
-
 from jermabot import JermaBot
 
 ADMIN_GUILDS = [
@@ -65,23 +65,16 @@ class Admin(commands.Cog):
             await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
         return updated
 
-    def _git_pull(self):
-        """Run git pull and return the result."""
-        if (sys.platform.startswith('win')):
-            result = subprocess.run(
-                ['git', 'pull'],
-                shell=True,
-                text=True,
-                capture_output=True
-            )
-        else:
-            result = subprocess.run(
-                ['git pull'],
-                shell=True,
-                text=True,
-                capture_output=True
-            )
-        return result
+    @commands.is_owner()
+    @commands.hybrid_command()
+    @app_commands.describe(branch="The branch to reset to")
+    @app_commands.guilds(*ADMIN_GUILDS)
+    @app_commands.guild_only()
+    @app_commands.default_permissions(administrator=True)
+    async def force_reset_to_origin(self, ctx: Context, branch: str | None = "develop"):
+        """Fetch and force reset to origin/develop"""
+        fetched = self._git_fetch()
+        reset = self._handle_reset(ctx, branch)
 
     async def _handle_pull(self, ctx) -> bool:
         """Run git pull and return true if an update succeeded."""
@@ -95,11 +88,58 @@ class Admin(commands.Cog):
         print(result.stdout)
         if result.returncode != 0:
             await ctx.send('Uhh, gamer? Something didn\'t go right.')
+            await ctx.send(f'```{result.stdout}```', ephemeral=True)
+            await ctx.send(f'```{result.stderr}```', ephemeral=True)
             return False
         elif 'Already up to date' in result.stdout:
             return False
         else:
             return True
+
+    async def _handle_reset(self, ctx: Context, branch: str) -> bool:
+        try:
+            result = self._git_reset_hard_origin_branch(branch)
+        except Exception as e:
+            print(e.with_traceback)
+            await ctx.send("Something went like super wrong")
+            return False
+        print(result.returncode)
+        print(result.stdout)
+        if result.returncode != 0:
+            await ctx.send("Reset failed, dude.")
+            await ctx.send(f'```{result.stdout}```', ephemeral=True)
+            await ctx.send(f'```{result.stderr}```', ephemeral=True)
+            return False
+        else:
+            await ctx.send(result.stdout)
+            return True
+
+    def _git_pull(self) -> CompletedProcess[str]:
+        return self._execute_command("git pull")
+
+    def _git_fetch(self) -> CompletedProcess[str]:
+        return self._execute_command("git fetch")
+
+    def _git_reset_hard_origin_branch(self, branch) -> CompletedProcess[str]:
+        return self._execute_command(f'git reset --hard origin/{branch}')
+
+    def _execute_command(command: list) -> CompletedProcess[str]:
+        """Run git pull and return the result."""
+        if (sys.platform.startswith('win')):
+            result = subprocess.run(
+                command,
+                shell=True,
+                text=True,
+                capture_output=True
+            )
+        else:
+            result = subprocess.run(
+                ' '.join(command),
+                shell=True,
+                text=True,
+                capture_output=True
+            )
+        return result
 
     @commands.is_owner()
     @commands.hybrid_command()
