@@ -74,15 +74,19 @@ class Admin(commands.Cog):
     async def force_reset_to_origin(self, ctx: Context, branch: str | None = "develop"):
         """Fetch and force reset to origin/develop"""
         fetched = self._git_fetch()
-        reset = self._handle_reset(ctx, branch)
+        reset = await self._handle_reset(ctx, branch)
+        if reset:
+            await ctx.send("A clean slate!")
+        else:
+            await ctx.send("Still dirty af")
 
-    async def _handle_pull(self, ctx) -> bool:
+    async def _handle_pull(self, ctx: Context) -> bool:
         """Run git pull and return true if an update succeeded."""
         try:
             result = self._git_pull()
         except Exception as e:
             print(e.with_traceback)
-            await ctx.send('Something ain\'t right here, pal.')
+            await ctx.send('Something ain\'t right here, pal.', ephemeral=True)
             return False
         print(result.returncode)
         print(result.stdout)
@@ -101,17 +105,17 @@ class Admin(commands.Cog):
             result = self._git_reset_hard_origin_branch(branch)
         except Exception as e:
             print(e.with_traceback)
-            await ctx.send("Something went like super wrong")
+            await ctx.send("Something went like super wrong", ephemeral=True)
             return False
         print(result.returncode)
         print(result.stdout)
         if result.returncode != 0:
-            await ctx.send("Reset failed, dude.")
+            await ctx.send("Reset failed, dude.", ephemeral=True)
             await ctx.send(f'```{result.stdout}```', ephemeral=True)
             await ctx.send(f'```{result.stderr}```', ephemeral=True)
             return False
         else:
-            await ctx.send(result.stdout)
+            await ctx.send(result.stdout, ephemeral=True)
             return True
 
     def _git_pull(self) -> CompletedProcess[str]:
@@ -123,18 +127,18 @@ class Admin(commands.Cog):
     def _git_reset_hard_origin_branch(self, branch) -> CompletedProcess[str]:
         return self._execute_command(f'git reset --hard origin/{branch}')
 
-    def _execute_command(command: list) -> CompletedProcess[str]:
+    def _execute_command(self, command: str) -> CompletedProcess[str]:
         """Run git pull and return the result."""
         if (sys.platform.startswith('win')):
             result = subprocess.run(
-                command,
+                command.split(' '),
                 shell=True,
                 text=True,
                 capture_output=True
             )
         else:
             result = subprocess.run(
-                ' '.join(command),
+                command,
                 shell=True,
                 text=True,
                 capture_output=True
