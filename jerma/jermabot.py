@@ -27,7 +27,6 @@ class JermaBot(commands.Bot):
         await self.load_extension('cogs.fun')
         await self.load_extension('cogs.presence')
         await self.load_extension('cogs.guild_sounds')
-        await self.load_extension("cogs.s_guild_sounds")
         return await super().setup_hook()
 
     async def on_ready(self):

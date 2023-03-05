@@ -1,17 +1,19 @@
 import os
 import random
 import time
+from typing import Optional
 
 from cogs.control import Control, JoinFailedError
 from colorama import Fore as t
 from colorama import Style
-from discord import Guild, app_commands
+from discord import Guild, Interaction, Message, Permissions, app_commands
 from discord.embeds import Embed
 from discord.ext import commands
 from discord.ext.commands import Context
 from guild_info import GuildInfo
 
 from jermabot import JermaBot
+from .utils.autocomplete import autocomplete
 
 # will move these up to a broader scope later
 YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course', 'ye', 'y', 'ya', 'yah']
@@ -32,7 +34,7 @@ ADMIN_GUILDS = [
 
 
 async def manage_sounds_check(ctx: Context):
-    p = ctx.channel.permissions_for(ctx.author)
+    p: Permissions = ctx.channel.permissions_for(ctx.author)
     return p.kick_members or \
         p.ban_members or \
         p.administrator or \
@@ -41,7 +43,6 @@ async def manage_sounds_check(ctx: Context):
         p.manage_nicknames or \
         p.manage_roles or \
         p.deafen_members or \
-        p.mute_members or \
         p.mute_members
 
 
@@ -70,25 +71,33 @@ class GuildSounds(commands.Cog):
         else:
             raise error
 
-    @commands.command()
-    async def play(self, ctx: Context, *args):
+    @commands.hybrid_command()
+    @app_commands.describe(sound="The sound to play")
+    async def play(self, ctx: Context, *, sound: str):
         """Play a sound."""
-        if not args:
+        if not sound:
             raise GuildSoundsError('No sound specified in play command.',
                                    'Gamer, you gotta tell me which sound to play.')
 
-        sound = ' '.join(args)
-        current_sound = self.get_sound(sound, ctx.guild)
-        if not current_sound:
+        sound_name = self.get_sound(sound.lower(), ctx.guild)
+        if not sound_name:
             raise GuildSoundsError('Sound ' + sound + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
         control: Control = self.bot.get_cog('Control')
-        print('connecting to user...')
         vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
-        print('should be connected')
-        self.bot.get_cog('SoundPlayer').play_sound_file(current_sound, vc)
-        print('dispatched sound_file_play')
+        self.bot.get_cog('SoundPlayer').play_sound_file(sound_name, vc)
+
+        if ctx.interaction:
+            await ctx.send(f"Playing **{sound_name}**")
+
+    @play.autocomplete('sound')
+    async def play_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
+        return self.sound_autocomplete(intr, query)
+
+    def sound_autocomplete(self, intr: Interaction, query: str):
+        sounds = self.bot.get_guildinfo(intr.guild.id).sounds.keys()
+        return autocomplete(query.lower(), sounds)
 
     def get_sound(self, sound: str, guild: Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
@@ -131,28 +140,37 @@ class GuildSounds(commands.Cog):
         else:
             await ctx.message.add_reaction("✉")
 
-    @commands.command(aliases=['add'])
+    @commands.hybrid_command(aliases=['add'])
     @commands.check(manage_sounds_check)
-    async def addsound(self, ctx: Context, *sound_name):
+    @app_commands.default_permissions(manage_roles=True)
+    @app_commands.describe(sound_name="If present, the new sound will have this name")
+    async def addsound(self, ctx: Context, *, sound_name: Optional[str]):
         """Add a sound to the sounds list. Requires elevated server perms."""
 
-        # wait for sound file
-        await ctx.send('Alright gamer, send the new sound.')
+        attachment = ctx.message.attachments[0] if len(
+            ctx.message.attachments
+        ) else None
 
-        def check(message):
-            return message.author == ctx.author and self.has_sound_file(message)
+        if not attachment:
+            # wait for sound file
+            await ctx.send('Alright gamer, send the new sound.')
 
-        message = await self.bot.wait_for('message', timeout=20, check=check)
+            def check(message: Message):
+                return message.author == ctx.author and self.has_sound_file(message)
+
+            message: Message = await self.bot.wait_for('message', timeout=20, check=check)
+            attachment = message.attachments[0]
+
         # determine name of sound
-        sound_name = ' '.join(sound_name).lower()
+        sound_name = sound_name.lower()
         if sound_name:
             if sound_name.endswith(('.mp3', '.wav')):
                 filename = sound_name
             else:
                 filename = sound_name + '.' + \
-                    message.attachments[0].filename.split('.')[-1]
+                    attachment.filename.split('.')[-1]
         else:
-            filename = message.attachments[0].filename
+            filename = attachment.filename
         filename = filename.lower()
 
         # remove old sound if there
@@ -164,7 +182,7 @@ class GuildSounds(commands.Cog):
             def check2(message):
                 return message.author is ctx.author
 
-            replace_msg = await self.bot.wait_for('message', timeout=20, check=check2)
+            replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=check2)
             if replace_msg.content.lower().strip() in YES:
                 await ctx.send('Expunging the old sound...')
                 self.delete_sound(os.path.split(existing)[1], ctx.guild)
@@ -172,36 +190,55 @@ class GuildSounds(commands.Cog):
                 await ctx.send('Yeah, I like the old one better too.')
                 return
 
-        await self.add_sound_to_guild(message.attachments[0], ctx.guild, filename=filename)
+        await self.add_sound_to_guild(attachment, ctx.guild, filename=filename)
         await ctx.send('Sound added, gamer.')
 
-    @commands.command(aliases=['removesound'])
+    @commands.hybrid_command(aliases=['removesound'])
+    @app_commands.describe(sound="The sound to remove")
+    @app_commands.default_permissions(manage_roles=True)
     @commands.check(manage_sounds_check)
-    async def remove(self, ctx: Context, *args):
+    async def remove(self, ctx: Context, *, sound: str):
         """Remove a sound clip."""
-        if not args:
+        if not sound:
             raise GuildSoundsError('No sound specified in remove command.',
                                    'Gamer, you gotta tell me which sound to remove.')
 
-        sound_name = ' '.join(args).lower()
-        sound = self.get_sound(sound_name, ctx.guild)
+        found_sound = self.get_sound(sound.lower(), ctx.guild)
 
-        if not sound:
-            raise GuildSoundsError('Sound ' + sound + ' not found.',
+        if not found_sound:
+            raise GuildSoundsError('Sound ' + found_sound + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
-        self.delete_sound(sound, ctx.guild)
+        self.delete_sound(found_sound, ctx.guild)
         await ctx.send('The sound has been eliminated, gamer.')
+
+    @remove.autocomplete('sound')
+    async def remove_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
+        return self.sound_autocomplete(intr, query)
 
     @commands.command(aliases=['renamesound'])
     @commands.check(manage_sounds_check)
-    async def rename(self, ctx: Context, *args):
+    async def rename(self, ctx: Context, *, args: str):
         """Rename a sound clip."""
         if not args:
             raise GuildSoundsError('No sound specified in rename command.',
                                    'Yo gamer, do it like this: `$rename old name, new name`')
 
-        old, new = ' '.join(args).lower().split(', ')
+        old, new = args.lower().split(', ')
+        await self.rename_sound(ctx, old, new)
+
+    @app_commands.command(name='rename')
+    @app_commands.default_permissions(manage_roles=True)
+    @app_commands.describe(sound="The sound to rename", new_name="The new name of the sound")
+    async def rename_slash(self, ctx: Context, sound: str, new_name: str):
+        """Rename a sound clip."""
+        await self.rename_sound(ctx, sound, new_name)
+
+    @remove.autocomplete('sound')
+    async def rename_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
+        return self.sound_autocomplete(intr, query)
+
+    async def rename_sound(self, ctx: Context, old: str, new: str):
         print(f'renaming {old} to {new} in {ctx.guild.name}')
         guild_info = self.bot.get_guildinfo(ctx.guild.id)
         folder = guild_info.sound_folder
@@ -418,6 +455,7 @@ class GuildSounds(commands.Cog):
     async def on_guild_join(self, guild):
         """Initialize guild sounds directory for new guild."""
         os.makedirs(os.path.join(
-            'guilds', f'{guild.id}', 'sounds'), exist_ok=True)
+            'guilds', f'{guild.id}', 'sounds'
+        ), exist_ok=True)
         self.bot.make_guildinfo(guild)
         print(f'Added to {guild.name}:{guild.id}!')
