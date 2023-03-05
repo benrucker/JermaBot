@@ -234,7 +234,7 @@ class GuildSounds(commands.Cog):
         """Rename a sound clip."""
         await self.rename_sound(ctx, sound, new_name)
 
-    @remove.autocomplete('sound')
+    @rename_slash.autocomplete('sound')
     async def rename_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
         return self.sound_autocomplete(intr, query)
 
@@ -243,8 +243,8 @@ class GuildSounds(commands.Cog):
         guild_info = self.bot.get_guildinfo(ctx.guild.id)
         folder = guild_info.sound_folder
         old_filename = self.get_sound(old, ctx.guild)
-        extension = os.path.splitext(old_filename)[1]
         if old_filename:
+            extension = os.path.splitext(old_filename)[1]
             new_filename = os.path.join(folder, new + extension)
             try:
                 self.rename_file(old_filename, new_filename)
