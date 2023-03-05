@@ -49,15 +49,12 @@ class Admin(commands.Cog):
 
     @commands.is_owner()
     @commands.hybrid_command()
-    @app_commands.describe(reload="Reloads all cogs if true.")
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def update(self, ctx: Context, reload: bool | None):
+    async def update(self, ctx: Context):
         """Update the bot."""
         updated = await self._handle_pull(ctx)
-        if reload:
-            await self._reload_all_cogs(ctx)
 
         if updated:
             await ctx.send('Patch applied, sister.')
