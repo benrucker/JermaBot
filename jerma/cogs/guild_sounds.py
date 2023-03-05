@@ -230,15 +230,19 @@ class GuildSounds(commands.Cog):
     @app_commands.command(name='rename')
     @app_commands.default_permissions(manage_roles=True)
     @app_commands.describe(sound="The sound to rename", new_name="The new name of the sound")
-    async def rename_slash(self, ctx: Context, sound: str, new_name: str):
+    async def rename_slash(self, intr: Interaction, sound: str, new_name: str):
         """Rename a sound clip."""
-        await self.rename_sound(ctx, sound, new_name)
+        await self.rename_sound(intr, sound, new_name)
 
     @rename_slash.autocomplete('sound')
     async def rename_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
         return self.sound_autocomplete(intr, query)
 
-    async def rename_sound(self, ctx: Context, old: str, new: str):
+    async def rename_sound(self, ctx: Context | Interaction, old: str, new: str):
+        send_method = (
+            ctx.response.send_message if type(ctx) is Interaction else ctx.send
+        )
+
         print(f'renaming {old} to {new} in {ctx.guild.name}')
         guild_info = self.bot.get_guildinfo(ctx.guild.id)
         folder = guild_info.sound_folder
@@ -250,12 +254,12 @@ class GuildSounds(commands.Cog):
                 self.rename_file(old_filename, new_filename)
                 guild_info.remove_sound(old)
                 guild_info.add_sound(new + extension)
-                await ctx.send('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
+                await send_method('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
                 raise GuildSoundsError(f'Error {type(e)} while renaming sound:\n{e}',
                                        'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
         else:
-            await ctx.send(f'I couldn\'t find a sound with the name {old}, aight?')
+            await send_method(f'I couldn\'t find a sound with the name {old}, aight?')
 
     @commands.hybrid_command(aliases=['sleep'])
     @app_commands.default_permissions(use_application_commands=True)
