@@ -13,15 +13,10 @@ def has_no_english(text: str) -> bool:
 def eng_to_katakana(eng_text: str) -> Optional[str]:
     if has_no_english(eng_text): return eng_text
     print('Converting:', eng_text)
-    # ipa_text = ipa.convert(eng_text)
-    # ipa_text = epitran.transliterate(eng_text)
-    # print(ipa_text)
     env = os.environ.copy()
     env['KANA_TYPE'] = 'katakana'
-    # cmd = f'python lexconvert.py --phones kana-approx {ipa_text}'
     path = os.path.join('cogs','utils','lexconvert.py')
     cmd = f'python {path} --phones kana-approx {eng_text}'
-    # cmd = f'cd'
     result = subprocess.run(cmd,
                             shell=True, capture_output=True)
     if result.returncode != 0:
@@ -48,15 +43,3 @@ def mixed_lang_to_katakana(text: List[str]) -> List[str]:
 def split_to_words_and_punctuation(text: str):
     """Split sentences, retain punctuation as own entry."""
     return re.split(r'(\W+)', text)
-
-if __name__ == '__main__':
-    # arg = 'penis, titties!  anime tiddies. 私ワリンゴです。'.split(' ')
-    arg = re.split(r'(\W+)', 'penis, titties! anime tiddies. 私ワリンゴです。')
-    print(arg)
-    # eng_to_katakana('penis titties anime tiddies. 私ワリンゴです。')
-
-    kana = mixed_lang_to_katakana(arg)
-    print(kana)
-    kana_joined = ''.join(kana)
-    print(kana_joined)
-
