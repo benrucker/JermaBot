@@ -162,7 +162,7 @@ class GuildSounds(commands.Cog):
             attachment = message.attachments[0]
 
         # determine name of sound
-        sound_name = sound_name.lower()
+        sound_name = sound_name.lower() if sound_name else None
         if sound_name:
             if sound_name.endswith(('.mp3', '.wav')):
                 filename = sound_name
