@@ -4,9 +4,10 @@ import time
 from typing import Optional
 
 from cogs.control import Control, JoinFailedError
+from cogs.sound_player import SoundPlayer
 from colorama import Fore as t
 from colorama import Style
-from discord import Guild, Interaction, Message, Permissions, app_commands
+from discord import Guild, Interaction, Member, Message, Permissions, VoiceClient, VoiceState, app_commands
 from discord.embeds import Embed
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -78,15 +79,16 @@ class GuildSounds(commands.Cog):
         if not sound:
             raise GuildSoundsError('No sound specified in play command.',
                                    'Gamer, you gotta tell me which sound to play.')
-
-        sound_name = self.get_sound(sound.lower(), ctx.guild)
-        if not sound_name:
+        sound_name = sound.lower()
+        sound_filepath = self.get_sound_filepath(sound_name, ctx.guild)
+        if not sound_filepath:
             raise GuildSoundsError('Sound ' + sound + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
         control: Control = self.bot.get_cog('Control')
+        player: SoundPlayer = self.bot.get_cog('SoundPlayer')
         vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
-        self.bot.get_cog('SoundPlayer').play_sound_file(sound_name, vc)
+        player.play_sound_file(sound_filepath, vc)
 
         if ctx.interaction:
             await ctx.send(f"Playing **{sound_name}**")
@@ -99,12 +101,12 @@ class GuildSounds(commands.Cog):
         sounds = self.bot.get_guildinfo(intr.guild.id).sounds.keys()
         return autocomplete(query.lower(), sounds)
 
-    def get_sound(self, sound: str, guild: Guild):
+    def get_sound_filepath(self, sound_name: str, guild: Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
         sounds = ginfo.sounds
         sound_folder = ginfo.sound_folder
         try:
-            sound_filename = sounds[sound.lower()]
+            sound_filename = sounds[sound_name.lower()]
             return os.path.join(sound_folder, sound_filename)
         except KeyError:
             return None
@@ -118,14 +120,15 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('Guild has no sounds.',
                                    'Sorry gamer, but you need to add some sounds for me to play!')
 
-        control = self.bot.get_cog('Control')
+        control: Control = self.bot.get_cog('Control')
+        player: SoundPlayer = self.bot.get_cog('SoundPlayer')
         vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
-        self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
+        player.play_sound_file(sound, vc)
+        
         await ctx.send(f"Playing **{sound_name}**")
 
     def get_random_sound(self, guild: Guild):
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
-        print(ginfo.sounds)
         sound_name, sound_filename = random.choice(list(ginfo.sounds.items()))
         return os.path.join(ginfo.sound_folder, sound_filename), sound_name
 
@@ -175,7 +178,7 @@ class GuildSounds(commands.Cog):
 
         # remove old sound if there
         name = filename.rsplit('.', 1)[0].lower()
-        existing = self.get_sound(name, ctx.guild)
+        existing = self.get_sound_filepath(name, ctx.guild)
         if existing:
             await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
 
@@ -203,13 +206,14 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('No sound specified in remove command.',
                                    'Gamer, you gotta tell me which sound to remove.')
 
-        found_sound = self.get_sound(sound.lower(), ctx.guild)
+        sound_name = sound.lower()
+        sound_filepath = self.get_sound_filepath(sound_name, ctx.guild)
 
-        if not found_sound:
-            raise GuildSoundsError('Sound ' + found_sound + ' not found.',
+        if not sound_filepath:
+            raise GuildSoundsError('Sound ' + sound_name + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
-        self.delete_sound(found_sound, ctx.guild)
+        self.delete_sound(sound_filepath, ctx.guild)
         await ctx.send('The sound has been eliminated, gamer.')
 
     @remove.autocomplete('sound')
@@ -246,12 +250,12 @@ class GuildSounds(commands.Cog):
         print(f'renaming {old} to {new} in {ctx.guild.name}')
         guild_info = self.bot.get_guildinfo(ctx.guild.id)
         folder = guild_info.sound_folder
-        old_filename = self.get_sound(old, ctx.guild)
-        if old_filename:
-            extension = os.path.splitext(old_filename)[1]
-            new_filename = os.path.join(folder, new + extension)
+        old_filepath = self.get_sound_filepath(old, ctx.guild)
+        if old_filepath:
+            extension = os.path.splitext(old_filepath)[1]
+            new_filepath = os.path.join(folder, new + extension)
             try:
-                self.rename_file(old_filename, new_filename)
+                self.rename_file(old_filepath, new_filepath)
                 guild_info.remove_sound(old)
                 guild_info.add_sound(new + extension)
                 await send_method('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
@@ -336,7 +340,7 @@ class GuildSounds(commands.Cog):
         return sound_embed
 
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member, before, after):
+    async def on_voice_state_update(self, member: Member, before: VoiceState, after: VoiceState):
         """
         Manage functionality when someone changes voice state.
 
@@ -352,8 +356,8 @@ class GuildSounds(commands.Cog):
             f'[{time.ctime()}] {y}Voice state update: {member.name} in {c}{member.guild}')
         print(f'{self.voice_state_diff_str(before, after)}')
 
-        old_vc = self.bot.get_cog(
-            'Control').get_existing_voice_client(member.guild)
+        control: Control = self.bot.get_cog('Control')
+        old_vc = control.get_existing_voice_client(member.guild)
         g = self.bot.get_guildinfo(member.guild.id)
 
         if g.is_snapping or g.is_snoozed():
@@ -392,43 +396,45 @@ class GuildSounds(commands.Cog):
                 out += f'\t{attr} from {b}{a1}\t{n}to {b}{a2}\n'
         return out[:-1]
 
-    def user_joined_channel(self, before, after):
+    def user_joined_channel(self, before: VoiceState, after: VoiceState):
         joined_voice = not before.channel and after.channel
         moved_chan = (
             (before.channel and after.channel) and before.channel != after.channel
         )
         return joined_voice or moved_chan
 
-    async def play_join_sound(self, member, vc):
+    async def play_join_sound(self, member: Member, vc: VoiceClient):
         print(f'{y}Checking if {member.voice.channel} has a user limit...')
         print(member.voice.channel.user_limit)
         if member.voice.channel.user_limit:
             return
 
         print(f'{y}Playing join sound if exists...')
-        join_sound = self.get_sound(member.name, member.guild)
+        join_sound = self.get_sound_filepath(member.name, member.guild)
         if join_sound:
             print(f'{y}Found join sound')
-            vc = await self.bot.get_cog('Control').connect_to_channel(vc, member.voice.channel)
+            control: Control = self.bot.get_cog('Control')
+            player: SoundPlayer = self.bot.get_cog('SoundPlayer')
+            vc = await control.connect_to_channel(vc, member.voice.channel)
             print(f'{y}{vc}')
             if not vc:
                 return
-            self.bot.get_cog('SoundPlayer').play_sound_file(join_sound, vc)
+            player.play_sound_file(join_sound, vc)
         else:
             print('No join sound for user')
 
-    def old_voice_channel_has_no_people(self, vc):
+    def old_voice_channel_has_no_people(self, vc: VoiceClient):
         return len([x for x in vc.channel.members if not x.bot]) == 0
 
-    async def disconnect_from_voice(self, vc):
+    async def disconnect_from_voice(self, vc: VoiceClient):
         print(
             f'[{time.ctime()}] {y}Disconnecting from {c}{vc.guild} #{vc.channel} {y}because it is empty.')
         await vc.disconnect()
 
-    def was_user_server_muted(self, before, after):
+    def was_user_server_muted(self, before: VoiceState, after: VoiceState):
         return (not before.mute) and after.mute
 
-    def user_left_channel(self, before, after):
+    def user_left_channel(self, before: VoiceState, after: VoiceState):
         was_in_vc = before != None
         not_in_vc = (
             not after or
@@ -437,17 +443,18 @@ class GuildSounds(commands.Cog):
         )
         return was_in_vc and not_in_vc
 
-    def play_muted(self, vc):
+    def play_muted(self, vc: VoiceClient):
         sound = self.get_muted_sound()
         if sound:
-            self.bot.get_cog('SoundPlayer').play_sound_file(sound, vc)
+            player: SoundPlayer = self.bot.get_cog('SoundPlayer')
+            player.play_sound_file(sound, vc)
 
-    def play_leave_sound(self, member, vc):
+    def play_leave_sound(self, member: Member, vc: VoiceClient):
         if member.id == 196742230659170304:
             leave_sound = self.get_yoni_leave_sound()
             if leave_sound:
-                self.bot.get_cog('SoundPlayer').play_sound_file(
-                    leave_sound, vc)
+                player: SoundPlayer = self.bot.get_cog('SoundPlayer')
+                player.play_sound_file(leave_sound, vc)
 
     def get_muted_sound(self):
         return os.path.join('resources', 'soundclips', 'muted.mp3')
@@ -456,7 +463,7 @@ class GuildSounds(commands.Cog):
         return os.path.join('resources', 'soundclips', 'workhereisdone.wav')
 
     @commands.Cog.listener()
-    async def on_guild_join(self, guild):
+    async def on_guild_join(self, guild: Guild):
         """Initialize guild sounds directory for new guild."""
         os.makedirs(os.path.join(
             'guilds', f'{guild.id}', 'sounds'

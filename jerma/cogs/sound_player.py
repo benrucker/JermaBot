@@ -20,12 +20,12 @@ class SoundPlayer(commands.Cog):
     def __init__(self, bot: JermaBot):
         self.bot: JermaBot = bot
 
-    def play_sound_file(self, sound, vc):
-        source = self.source_factory(sound)
+    def play_sound_file(self, sound_filepath: str, vc: VoiceClient):
+        source = self.source_factory(sound_filepath)
         source.volume = self.bot.get_guildinfo(vc.channel.guild.id).volume
         self.stop_audio(vc)
         vc.play(source)
-        print(f'[{time.ctime()}] Playing {os.path.split(sound)[1]} | at volume: {source.volume} | in: {t.CYAN}{vc.guild} #{vc.channel}')
+        print(f'[{time.ctime()}] Playing {os.path.split(sound_filepath)[1]} | at volume: {source.volume} | in: {t.CYAN}{vc.guild} #{vc.channel}')
 
     @commands.hybrid_command()
     @app_commands.default_permissions(use_application_commands=True)
