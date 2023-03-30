@@ -6,7 +6,7 @@ import time
 from typing import Optional
 
 import discord
-from discord import app_commands, VoiceClient
+from discord import Message, app_commands, VoiceClient
 from discord.ext import commands
 from discord.ext.commands import Context
 from fuzzywuzzy import process
@@ -47,11 +47,12 @@ class Fun(commands.Cog):
         vc.play(
             self.bot.get_cog('SoundPlayer')
                 .LoopingSource(
-                    os.path.join('resources', 'soundclips', 'birthdayloop.wav'),
+                    os.path.join('resources', 'soundclips',
+                                 'birthdayloop.wav'),
                     self.bot.get_cog('SoundPlayer').source_factory,
                     id,
                     self.bot
-                )
+            )
         )
 
     @commands.command(hidden=True)
@@ -247,20 +248,18 @@ class Fun(commands.Cog):
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
         if highest and highest[1] > 90:
-            await ctx.send(f'I hate to say this but... **{highest[0]}** is already on the list. ' +
-                           f'Ya still wanna add **{title}**? **(f{random.choice(YES)}/{random.choice(NO)})**')
+            await ctx.send(f'So, uh, **{highest[0]}** is already on the list. ' +
+                           f'Ya still wanna add **{title}**? **({random.choice(YES)}/{random.choice(NO)})**')
 
-            def check(message):
-                return message.author is ctx.author and message.content.lower().strip() in YES + NO
+            def check(message: Message):
+                return message.author == ctx.author and message.content.lower().strip() in YES + NO
 
-            replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
+            replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=check)
             if replace_msg.content.lower().strip() in NO:
                 await ctx.send('You got it, boss.')
                 return
 
-        # write to movie list
         movies.append(title)
-        # save movie list
         self.save_movies(ctx.guild.id, movies)
         await ctx.send('Movie added. `/removie` to delete it or `/movies` to see the list.')
 
@@ -288,10 +287,10 @@ class Fun(commands.Cog):
 
         await ctx.send(f'Just\'a confirm, ya wanna remove **{highest[0]}**? **({random.choice(YES)}/{random.choice(NO)})**')
 
-        def check(message):
-            return message.author is ctx.author and message.content.lower().strip() in YES + NO
+        def check(message: Message):
+            return message.author == ctx.author and message.content.lower().strip() in YES + NO
 
-        replace_msg = await self.bot.wait_for('message', timeout=20, check=check)
+        replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=check)
         if replace_msg.content.lower().strip() in NO:
             await ctx.send('Make up your mind next time, boss.')
             return
