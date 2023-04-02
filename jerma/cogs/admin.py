@@ -63,7 +63,6 @@ class Admin(commands.Cog):
             await ctx.send('Patch applied, sister.')
         else:
             await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
-        return updated
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -75,9 +74,7 @@ class Admin(commands.Cog):
         """Fetch and force reset to origin/develop"""
         fetched = self._git_fetch()
         reset = await self._handle_reset(ctx, branch)
-        if reset:
-            await ctx.send("A clean slate!")
-        else:
+        if not reset:
             await ctx.send("Still dirty af")
 
     def _handle_fetch_and_log(self):
