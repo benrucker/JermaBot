@@ -44,7 +44,7 @@ class Admin(commands.Cog):
         extensions = self.bot.extensions.copy()
         for ext in extensions:
             print(f'Unloading {ext}')
-            self.bot.unload_extension(ext)
+            await self.bot.unload_extension(ext)
         await self.bot.close()
 
     @commands.is_owner()
