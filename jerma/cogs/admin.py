@@ -54,9 +54,12 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def update(self, ctx: Context):
         """Update the bot."""
+        log = await self._handle_fetch_and_log()
         updated = await self._handle_pull(ctx)
 
-        if updated:
+        if updated and log:
+            await ctx.send(log)
+        elif updated:
             await ctx.send('Patch applied, sister.')
         else:
             await ctx.send("Patch notes:\n - Lowered height by 2 inches to allow for more clown car jokes")
@@ -76,6 +79,15 @@ class Admin(commands.Cog):
             await ctx.send("A clean slate!")
         else:
             await ctx.send("Still dirty af")
+
+    def _handle_fetch_and_log(self):
+        try:
+            self._git_fetch()
+            diff = self._git_log()
+            if diff.stdout != '':
+                return diff.stdout
+        finally:
+            return None
 
     async def _handle_pull(self, ctx: Context) -> bool:
         """Run git pull and return true if an update succeeded."""
@@ -117,6 +129,9 @@ class Admin(commands.Cog):
 
     def _git_pull(self) -> CompletedProcess[str]:
         return self._execute_command("git pull")
+
+    def _git_log(self) -> CompletedProcess[str]:
+        return self._execute_command("git log HEAD..origin --pretty=oneline")
 
     def _git_fetch(self) -> CompletedProcess[str]:
         return self._execute_command("git fetch")
