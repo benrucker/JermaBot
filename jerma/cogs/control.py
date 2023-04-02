@@ -51,7 +51,8 @@ class Control(commands.Cog):
             user_channel = user_voice.channel
             return await self.connect_to_channel(vc, user_channel)
         except Exception as e:
-            print('connection error: ' + e)
+            print('connection error: ')
+            print(e)
             raise JoinFailedError()
 
     async def connect_to_channel(self, vc: VoiceClient | None, dest: VoiceChannel):
