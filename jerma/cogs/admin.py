@@ -77,7 +77,7 @@ class Admin(commands.Cog):
         if not reset:
             await ctx.send("Still dirty af")
 
-    def _handle_fetch_and_log(self):
+    async def _handle_fetch_and_log(self):
         try:
             self._git_fetch()
             diff = self._git_log()
