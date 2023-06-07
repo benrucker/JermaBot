@@ -182,8 +182,8 @@ class GuildSounds(commands.Cog):
         if existing:
             await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
 
-            def check2(message):
-                return message.author is ctx.author
+            def check2(message: Message):
+                return message.author.id == ctx.author.id
 
             replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=check2)
             if replace_msg.content.lower().strip() in YES:
