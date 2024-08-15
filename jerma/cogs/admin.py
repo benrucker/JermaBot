@@ -11,12 +11,20 @@ from typing import Optional
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
+
 from jermabot import JermaBot
+from .utils.constants import TRUSTED_ADMINS
 
 ADMIN_GUILDS = [
     571004411137097731,
     173840048343482368,
 ]
+
+
+def is_admin():
+    def predicate(ctx: Context):
+        return ctx.author.id in TRUSTED_ADMINS
+    return commands.check(predicate)
 
 
 async def setup(bot):
@@ -27,7 +35,7 @@ class Admin(commands.Cog):
     def __init__(self, bot: JermaBot):
         self.bot: JermaBot = bot
 
-    @commands.is_owner()
+    @is_admin()
     @commands.hybrid_command()
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
