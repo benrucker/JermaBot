@@ -9,10 +9,10 @@ JermaBot is a Discord bot inspired by Jerma985. It is a 24/7 general-purpose bot
 
 ## Feature Highlights
 
-* **Text-To-Speech** - For those who cannot talk in voice, JermaBot offers TTS. Just use the `speak` command.
-* **Sound File Management** - Add a sound file to JermaBot using `addsound` and you can play it back in a voice channel at any time with `play`.
-* **Join Sounds** - A grand entrance is a good entrance, so if a sound's name matches your username, JermaBot will play it automatically when you join a voice channel.
-* **Fun** - A plethora of random commands are at your disposal, such as `downsmash`, `jermalofi`, and `drake`.
+- **Text-To-Speech** - For those who cannot talk in voice, JermaBot offers TTS. Just use the `speak` command.
+- **Sound File Management** - Add a sound file to JermaBot using `addsound` and you can play it back in a voice channel at any time with `play`.
+- **Join Sounds** - A grand entrance is a good entrance, so if a sound's name matches your username, JermaBot will play it automatically when you join a voice channel.
+- **Fun** - A plethora of random commands are at your disposal, such as `downsmash`, `jermalofi`, and `drake`.
 
 # Setup
 
@@ -31,19 +31,19 @@ Note: **some commands you might see in the code are guild-specfic**. Send `$help
 ### Setup:
 
 1. Install FFMPEG
-    * `ffmpeg` needs to be on your system path.
+   - `ffmpeg` needs to be on your system path.
 2. Set up TTS (Required only for `speak`)
-    * If you want to use `speak`, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
-    * The official JermaBot instance uses [Mycroft Mimic](https://mimic.mycroft.ai/) as the TTS engine.
-      1. Follow the mimic install directions
-      2. Substitute `https://sourceforge.net/projects/pcre/files/pcre2/10.23/pcre2-10.23.zip` for the `ftp` link in `mimic1/dependency.sh`
-      3. Add the path to `mimic` to the launch flags
+   - If you want to use `speak`, you will need [voice.exe](https://www.elifulkerson.com/projects/commandline-text-to-speech.php) if you're on Windows, or `libespeak1` if you're on Linux.
+   - The official JermaBot instance uses [Mycroft Mimic](https://mimic.mycroft.ai/) as the TTS engine.
+     1. Follow the mimic install directions
+     2. Substitute `https://sourceforge.net/projects/pcre/files/pcre2/10.23/pcre2-10.23.zip` for the `ftp` link in `mimic1/dependency.sh`
+     3. Add the path to `mimic` to the launch flags
 3. Set up Japanese TTS (Required only for `speakanime`)
-    1. Install `espeak` from [here](http://espeak.sourceforge.net/), if you're on Windows, or run `sudo apt install espeak` on Linux.
-    2. Make sure that `espeak` is on your system path.
-    3. Install `open_jtalk` with `sudo apt install open-jtalk`.
-    4. Download the voice "Mei" from [here](https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.8/MMDAgent_Example-1.8.zip).
-    5. Put the "Mei" voice files somewhere safe, you will need to add that path to JermaBot's startup parameters.
+   1. Install `espeak` from [here](http://espeak.sourceforge.net/), if you're on Windows, or run `sudo apt install espeak` on Linux.
+   2. Make sure that `espeak` is on your system path.
+   3. Install `open_jtalk` with `sudo apt install open-jtalk`.
+   4. Download the voice "Mei" from [here](https://sourceforge.net/projects/mmdagent/files/MMDAgent_Example/MMDAgent_Example-1.8/MMDAgent_Example-1.8.zip).
+   5. Put the "Mei" voice files somewhere safe, you will need to add that path to JermaBot's startup parameters.
 4. Clone the repo by pasting this in the command line:
 
 ```
@@ -70,11 +70,12 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-7. Store your bot's token in a file called `secret.txt` in the folder `discord-jerma/`.
+7. Store your bot's token in a file called `secret.txt` in the folder `jerma/`.
 
 ### Running JermaBot:
 
 Run the bot through the command line like this:
+
 ```
 cd jerma
 python jerma.py [-s SECRET_FILENAME]
@@ -83,11 +84,11 @@ python jerma.py [-s SECRET_FILENAME]
                 [-jd JTALK_PATH]
                 [-jv JAPANESE_VOICE]
 ```
-* `-s` allows you to specify a specific text file that your bot token is stored in. If not included, Jerma will look for your token in a file called `secret.txt` in the base dirctory. This flag is optional.
-* `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
-    * e.g. `-mycroft tts/mimic.exe`
-* `-mv PATH_TO_VOICE` allows you to specify which voice you want to use with mycroft mimic. This flag is optional.
 
+- `-s` allows you to specify a specific text file that your bot token is stored in. If not included, Jerma will look for your token in a file called `secret.txt` in the base dirctory. This flag is optional.
+- `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
+  - e.g. `-mycroft tts/mimic.exe`
+- `-mv PATH_TO_VOICE` allows you to specify which voice you want to use with mycroft mimic. This flag is optional.
 
 On Linux, use `python3` instead of `python`.
 
