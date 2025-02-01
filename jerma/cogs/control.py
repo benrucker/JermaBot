@@ -60,26 +60,11 @@ class Control(commands.Cog):
             print('I don\'t have permission to join that channel.')
             return None
 
-        if vc and vc.is_connected():
-            if vc.channel != dest:
-                print('Disconnecting and reconnecting from guild')
-                await vc.disconnect()
-                await asyncio.sleep(0.1)
-                print('reconnecting...')
-                vc = await dest.connect(reconnect=RECONNECT)
-            else:
-                print('Already in channel')
-                return vc
-        elif vc and not vc.is_connected():
-            print('Had voice client but was not connected to voice')
-            print('reconnecting...')
-            await vc.disconnect(force=True)
-            await asyncio.sleep(0.2)
+        if vc is None:
             vc = await dest.connect(reconnect=RECONNECT)
-        else:
-            print('Joining', dest)
-            vc = await dest.connect(reconnect=RECONNECT)
-        await asyncio.sleep(0.2)
+        elif vc.is_connected():
+            await vc.move_to(dest)
+
         return vc
 
     def get_existing_voice_client(self, guild: Guild):
