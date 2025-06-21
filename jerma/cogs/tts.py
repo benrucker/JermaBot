@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 from pydub.audio_segment import AudioSegment
 
-from jerma.cogs.sound_player import SoundPlayer
+from cogs.sound_player import SoundPlayer
 from jermabot import JermaBot
 
 from .utils import textconverter

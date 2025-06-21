@@ -12,8 +12,8 @@ from discord.ext import commands
 from discord.ext.commands import Context
 from fuzzywuzzy import process
 
-from jerma.cogs.control import Control, JoinFailedError
-from jerma.cogs.sound_player import SoundPlayer
+from cogs.control import Control, JoinFailedError
+from cogs.sound_player import SoundPlayer
 from jermabot import JermaBot
 
 # will move these up to a broader scope later
