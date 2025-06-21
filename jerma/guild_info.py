@@ -21,7 +21,7 @@ class GuildInfo():
         self.sounds = self.make_sounds_dict()
 
     def __repr__(self):
-        return 'GuildInfo Object: ' + self.name + ':' + self.id
+        return 'GuildInfo Object: ' + self.name + ':' + str(self.id)
 
     def toggle_snooze(self, duration=FOUR_HOURS_IN_SECONDS) -> float | None:
         if self.is_snoozed():

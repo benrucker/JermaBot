@@ -35,7 +35,12 @@ ADMIN_GUILDS = [
 
 
 async def manage_sounds_check(ctx: Context):
-    p: Permissions = ctx.channel.permissions_for(ctx.author)
+    if ctx.guild is None:
+        raise commands.NoPrivateMessage('This command cannot be used in DMs.')
+    member = ctx.guild.get_member(ctx.author.id)
+    if member is None:
+        raise commands.NoPrivateMessage('You are not a member of this guild.')
+    p = ctx.channel.permissions_for(member)
     return p.kick_members or \
         p.ban_members or \
         p.administrator or \
@@ -68,7 +73,7 @@ class GuildSounds(commands.Cog):
             print(error.error)
             await ctx.send(error.msg)
         elif isinstance(error, JoinFailedError):
-            await ctx.send(error)
+            await ctx.send(str(error))
         else:
             raise error
 
@@ -85,9 +90,25 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('Sound ' + sound + ' not found.',
                                    'Hey gamer, that sound doesn\'t exist.')
 
+        if ctx.guild is None:
+            print(f'{t.RED}Play was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            print(f'{t.RED}Play was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")
+        if not member.voice:
+            print(f'{t.RED}Play was called by a member that is not in a voice channel')
+            raise JoinFailedError()
+
         control: Control = self.bot.get_cog('Control')
         player: SoundPlayer = self.bot.get_cog('SoundPlayer')
-        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
+
+        vc = await control.connect_to_user(member.voice, ctx.guild)
+        if vc is None:
+            print(f'{t.RED}Failed to connect to voice channel for {member.name}')
+            raise RuntimeError()
+
         player.play_sound_file(sound_filepath, vc)
 
         if ctx.interaction:
@@ -95,13 +116,20 @@ class GuildSounds(commands.Cog):
 
     @play.autocomplete('sound')
     async def play_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
-        return self.sound_autocomplete(intr, query)
+        if intr.guild_id is None:
+            print(f'{t.RED}Play autocomplete was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
 
-    def sound_autocomplete(self, intr: Interaction, query: str):
-        sounds = self.bot.get_guildinfo(intr.guild.id).sounds.keys()
-        return autocomplete(query.lower(), sounds)
+        return self.sound_autocomplete(intr.guild_id, query)
 
-    def get_sound_filepath(self, sound_name: str, guild: Guild):
+    def sound_autocomplete(self, guild_id: int, query: str):
+        sounds = self.bot.get_guildinfo(guild_id).sounds.keys()
+        return autocomplete(query.lower(), list(sounds))
+
+    def get_sound_filepath(self, sound_name: str, guild: Guild | None):
+        if not guild:
+            return None
+
         ginfo: GuildInfo = self.bot.get_guildinfo(guild.id)
         sounds = ginfo.sounds
         sound_folder = ginfo.sound_folder
@@ -115,6 +143,15 @@ class GuildSounds(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def random(self, ctx: Context):
         """Play a random sound!"""
+        if ctx.guild is None:
+            raise GuildSoundsError("Random was called in a non-guild context", "You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            raise GuildSoundsError("Random was called by a member that is not in the guild", "Seems like you're not in this guild.")
+        if not member.voice:
+            print(f'{t.RED}Random was called by a member that is not in a voice channel')
+            raise JoinFailedError()
+
         sound, sound_name = self.get_random_sound(ctx.guild)
         if not sound:
             raise GuildSoundsError('Guild has no sounds.',
@@ -122,7 +159,7 @@ class GuildSounds(commands.Cog):
 
         control: Control = self.bot.get_cog('Control')
         player: SoundPlayer = self.bot.get_cog('SoundPlayer')
-        vc = await control.connect_to_user(ctx.author.voice, ctx.guild)
+        vc = await control.connect_to_user(member.voice, ctx.guild)
         player.play_sound_file(sound, vc)
         
         await ctx.send(f"Playing **{sound_name}**")
@@ -136,6 +173,10 @@ class GuildSounds(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def _list(self, ctx: Context):
         """Send the user a list of sounds that can be played."""
+        if ctx.guild is None:
+            raise GuildSoundsError("$list was called in a non-guild context",
+                                   "You can't use this command outside of a guild.")
+
         ginfo: GuildInfo = self.bot.get_guildinfo(ctx.guild.id)
         await ctx.author.send(embed=self.make_list_embed(ginfo))
         if ctx.interaction:
@@ -149,6 +190,9 @@ class GuildSounds(commands.Cog):
     @app_commands.describe(sound_name="If present, the new sound will have this name")
     async def addsound(self, ctx: Context, *, sound_name: Optional[str]):
         """Add a sound to the sounds list. Requires elevated server perms."""
+        if ctx.guild is None:
+            raise GuildSoundsError('addsound was called in a non-guild context.',
+                                   'You can\'t use this command outside of a guild.')
 
         attachment = ctx.message.attachments[0] if len(
             ctx.message.attachments
@@ -202,6 +246,10 @@ class GuildSounds(commands.Cog):
     @commands.check(manage_sounds_check)
     async def remove(self, ctx: Context, *, sound: str):
         """Remove a sound clip."""
+        if ctx.guild is None:
+            raise GuildSoundsError('removesound was called in a non-guild context.',
+                                   'You can\'t use this command outside of a guild.')
+
         if not sound:
             raise GuildSoundsError('No sound specified in remove command.',
                                    'Gamer, you gotta tell me which sound to remove.')
@@ -218,7 +266,11 @@ class GuildSounds(commands.Cog):
 
     @remove.autocomplete('sound')
     async def remove_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
-        return self.sound_autocomplete(intr, query)
+        if intr.guild_id is None:
+            print(f'{t.RED}Remove autocomplete was called in a non-guild context')
+            return []
+
+        return self.sound_autocomplete(intr.guild_id, query)
 
     @commands.command(aliases=['renamesound'])
     @commands.check(manage_sounds_check)
@@ -240,11 +292,19 @@ class GuildSounds(commands.Cog):
 
     @rename_slash.autocomplete('sound')
     async def rename_sound_autocomplete(self, intr: Interaction, query: str) -> list[app_commands.Choice[str]]:
-        return self.sound_autocomplete(intr, query)
+        if intr.guild_id is None:
+            print(f'{t.RED}Rename autocomplete was called in a non-guild context')
+            return []
+
+        return self.sound_autocomplete(intr.guild_id, query)
 
     async def rename_sound(self, ctx: Context | Interaction, old: str, new: str):
+        if ctx.guild is None:
+            raise GuildSoundsError('rename was called in a non-guild context.',
+                                   'You can\'t use this command outside of a guild.')
+
         send_method = (
-            ctx.response.send_message if type(ctx) is Interaction else ctx.send
+            ctx.response.send_message if isinstance(ctx, Interaction) else ctx.send
         )
 
         print(f'renaming {old} to {new} in {ctx.guild.name}')
@@ -269,13 +329,22 @@ class GuildSounds(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def snooze(self, ctx: Context):
         """Disable join sounds for 4 hours or until you call snooze again."""
-        r = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
-        if r:
-            r = int(r)
-            await ctx.me.edit(nick=snoozed_nickname)
-            await ctx.send(f'Join sounds will come back <t:{r}:R> at <t:{r}:t>. See you then, champ!')
+        if ctx.guild is None:
+            raise GuildSoundsError('snooze was called in a non-guild context.',
+                                   'You can\'t use this command outside of a guild.')
+
+        bot_member = ctx.guild.get_member(ctx.me.id)
+        if not bot_member:
+            raise GuildSoundsError('Bot is not a member of this guild.',
+                                   'I\'m not a member of your server, dude.')
+
+        maybe_snooze_end_time = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
+        if maybe_snooze_end_time:
+            duration = int(maybe_snooze_end_time)
+            await bot_member.edit(nick=snoozed_nickname)
+            await ctx.send(f'Join sounds will come back <t:{duration}:R> at <t:{duration}:t>. See you then, champ!')
         else:
-            await ctx.me.edit(nick=regular_nickname)
+            await bot_member.edit(nick=regular_nickname)
             await ctx.send(f'**I HAVE AWOKEN**')
 
     @commands.hybrid_command()
@@ -316,7 +385,7 @@ class GuildSounds(commands.Cog):
         os.rename(old_filepath, new_filepath)
 
     def get_guild_sound_path(self, guild: Guild | int):
-        guild_id = guild.id if type(guild) is Guild else guild
+        guild_id = guild.id if isinstance(guild, Guild) else guild
         ginfo = self.bot.get_guildinfo(guild_id)
         return ginfo.sound_folder
 
@@ -368,14 +437,14 @@ class GuildSounds(commands.Cog):
             await member.guild.me.edit(nick=regular_nickname)
 
         # cleanup connection if kicked
-        if member.id == self.bot.user.id:
+        if self.bot.user and member.id == self.bot.user.id:
             print(f'{y}Voice update was self')
             if old_vc and not after.channel:
                 print('Attempting to disconnect from old voice client')
                 await old_vc.disconnect()
             return
 
-        if self.user_joined_channel(before, after) and not member.voice.afk:
+        if self.user_joined_channel(before, after) and member.voice and not member.voice.afk:
             await self.play_join_sound(member, old_vc)
         elif old_vc and self.old_voice_channel_has_no_people(old_vc):
             await self.disconnect_from_voice(old_vc)
@@ -403,7 +472,11 @@ class GuildSounds(commands.Cog):
         )
         return joined_voice or moved_chan
 
-    async def play_join_sound(self, member: Member, vc: VoiceClient):
+    async def play_join_sound(self, member: Member, vc: VoiceClient | None):
+        if not member.voice or not member.voice.channel:
+            print(f'{y}Member {member.name} is not in a voice channel.')
+            return
+
         print(f'{y}Checking if {member.voice.channel} has a user limit...')
         print(member.voice.channel.user_limit)
         if member.voice.channel.user_limit:

@@ -48,8 +48,10 @@ class Admin(commands.Cog):
     async def shutdown(self):
         for g in self.bot.get_guildinfos().values():
             if g.is_snoozed():
-                await self.bot.get_guild(g.id).me.edit(nick=None)
-        extensions = self.bot.extensions.copy()
+                guild = self.bot.get_guild(g.id)
+                if guild and guild.me:
+                    await guild.me.edit(nick=None)
+        extensions = dict(self.bot.extensions).copy()
         for ext in extensions:
             print(f'Unloading {ext}')
             await self.bot.unload_extension(ext)
@@ -78,7 +80,7 @@ class Admin(commands.Cog):
     @app_commands.guilds(*ADMIN_GUILDS)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
-    async def force_reset_to_origin(self, ctx: Context, branch: str | None = "develop"):
+    async def force_reset_to_origin(self, ctx: Context, branch: str = "develop"):
         """Fetch and force reset to origin/develop"""
         fetched = self._git_fetch()
         reset = await self._handle_reset(ctx, branch)
@@ -184,7 +186,7 @@ class Admin(commands.Cog):
 
     async def _reload_all_cogs(self, ctx: Context):
         await ctx.send('Reloading ' + ', '.join([(str(x)) for x in self.bot.extensions]))
-        for ext in self.bot.extensions.copy():
+        for ext in dict(self.bot.extensions).copy():
             await self.bot.reload_extension(ext)
 
     @commands.is_owner()
@@ -259,8 +261,8 @@ class Admin(commands.Cog):
         """Get the number of users JermaBot is connected to"""
         count = 0
         for guild in self.bot.guilds:
-            count += guild.member_count
-        await ctx.send(count)
+            count += guild.member_count if guild.member_count is not None else 0
+        await ctx.send(str(count))
 
     @commands.is_owner()
     @commands.hybrid_command()
@@ -282,6 +284,10 @@ class Admin(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def sync_here(self, ctx: Context):
         """Copy global commands to this guild & sync this guild"""
+        if (ctx.guild is None):
+            await ctx.send("This command can only be used in a guild.")
+            return
+            
         await ctx.defer()
         self.bot.tree.copy_global_to(guild=ctx.guild)
         cmds = await self.bot.tree.sync(guild=ctx.guild)
@@ -359,12 +365,12 @@ class Admin(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    @app_commands.command()
+    @commands.command()
     @app_commands.describe(content="stuff to spit back out, kinda sneakily")
     @app_commands.guilds(571004411137097731, 173840048343482368)
     @app_commands.guild_only()
     @app_commands.default_permissions(administrator=True)
     async def spit(self, ctx: Context, content: str):
         """Spit fire"""
-        await ctx.response.send_message('spitting', ephemeral=True)
-        await ctx.channel.send(content)
+        await ctx.send('spitting', ephemeral=True)
+        await ctx.send(content)

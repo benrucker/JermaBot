@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 from discord import Guild
 from discord.ext import commands
@@ -7,6 +8,8 @@ from guild_info import GuildInfo
 
 class JermaBot(commands.Bot):
     """Base JermaBot class."""
+    tts_engine: Any
+    jtts_engine: Any
 
     def __init__(self, path: str, **kwargs):
         """
@@ -18,6 +21,9 @@ class JermaBot(commands.Bot):
         self.path = path
         self.guild_infos: dict[int, GuildInfo] = dict()
         super().__init__(**kwargs)
+
+    def get_cog(self, name: str) -> Any:
+        return super().get_cog(name)
 
     async def setup_hook(self) -> None:
         await self.load_extension('cogs.admin')

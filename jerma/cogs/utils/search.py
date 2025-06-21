@@ -16,10 +16,10 @@ def search(query: str, possibilities: Sequence[str]) -> Sequence[str]:
 
 
 def letters_appear_in_order(part: str, full: str):
-    part: list = list(part)
-    while full and part:
-        index = full.find(part.pop(0))
+    parts: list = list(part)
+    while full and parts:
+        index = full.find(parts.pop(0))
         if index == -1:
             return False
         full = full[index + 1:]
-    return not part
+    return not parts

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # May be run with either Python 2 or Python 3
+# type: ignore
+
 
 """lexconvert v0.32 - convert phonemes between different speech synthesizers etc
 (c) 2007-20 Silas S. Brown.  License: GPL"""

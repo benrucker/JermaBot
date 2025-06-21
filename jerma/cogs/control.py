@@ -4,7 +4,7 @@ import os
 import random
 
 from colorama import Fore as t
-from discord import app_commands, Guild, VoiceChannel, VoiceClient, VoiceState
+from discord import StageChannel, VoiceProtocol, app_commands, Guild, VoiceChannel, VoiceClient, VoiceState
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -31,13 +31,30 @@ class Control(commands.Cog):
 
     async def cog_command_error(self, ctx, error):
         if isinstance(error, JoinFailedError):
-            await ctx.send(error)
+            await ctx.send(str(error))
+        else:
+            print(f'{t.RED}An unexpected error occurred in Control cog:')
+            print(error)
+            await ctx.send('An unexpected error occurred: ' + str(error))
 
     @commands.hybrid_command()
     @app_commands.default_permissions(use_application_commands=True)
     async def join(self, ctx: Context):
         """Join the user's voice channel."""
-        await self.connect_to_user(ctx.author.voice, ctx.guild)
+        if (ctx.guild is None):
+            print(f'{t.RED}Join was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+
+        member = ctx.guild.get_member(ctx.author.id)
+        if (member is None):
+            print(f'{t.RED}Join was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")  
+
+        if (member.voice is None):
+            print(f'{t.RED}Join was called by a member that is not in a voice channel')
+            raise JoinFailedError()
+
+        await self.connect_to_user(member.voice, ctx.guild)
 
     async def connect_to_user(self, user_voice: VoiceState, guild: Guild):
         if not user_voice or not user_voice.channel:
@@ -47,25 +64,25 @@ class Control(commands.Cog):
             print(user_voice)
 
         try:
-            vc = guild.voice_client
+            existing_voice_protocol = guild.voice_client
             user_channel = user_voice.channel
-            return await self.connect_to_channel(vc, user_channel)
+            return await self.connect_to_channel(existing_voice_protocol, user_channel)
         except Exception as e:
             print('connection error: ')
             print(e)
-            raise JoinFailedError()
+            raise e
 
-    async def connect_to_channel(self, vc: VoiceClient | None, dest: VoiceChannel):
+    async def connect_to_channel(self, guild_voice_client: VoiceProtocol | VoiceClient | None, dest: VoiceChannel | StageChannel):
         if not dest.permissions_for(dest.guild.me).connect:
             print('I don\'t have permission to join that channel.')
-            return None
+            raise RuntimeError("I don't have permission to join that channel.")
 
-        if vc is None:
-            vc = await dest.connect(reconnect=RECONNECT)
-        elif vc.is_connected():
-            await vc.move_to(dest)
+        if guild_voice_client is None or not isinstance(guild_voice_client, VoiceClient):
+            guild_voice_client = await dest.connect(reconnect=RECONNECT)
+        elif guild_voice_client.is_connected():
+            await guild_voice_client.move_to(dest)
 
-        return vc
+        return guild_voice_client
 
     def get_existing_voice_client(self, guild: Guild):
         for vc in self.bot.voice_clients:
@@ -78,9 +95,13 @@ class Control(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def leave(self, ctx: Context):
         """Leave the voice channel."""
-        if ctx.voice_client and ctx.voice_client.is_connected():
+        if isinstance(ctx.voice_client, VoiceClient):
+            if ctx.voice_client.is_connected():
+                await self.play_leave_sound(ctx)
+                await ctx.voice_client.disconnect()
+        elif ctx.voice_client:
             await self.play_leave_sound(ctx)
-            await ctx.guild.voice_client.disconnect()
+            await ctx.voice_client.disconnect(force=False)
         else:
             print(f'{t.RED}Leave conditional failed')
             print(f'ctx.voice_client =', ctx.voice_client)
@@ -92,7 +113,7 @@ class Control(commands.Cog):
         sounds = glob.glob(os.path.join(self.bot.path, loc, '*'))
         soundname = random.choice(sounds)
         sound = os.path.join(loc, soundname)
-        self.bot.get_cog('SoundPlayer').play_sound_file(
+        self.bot.get_cog('SoundPlayer').play_sound_file( # type: ignore
             sound, ctx.voice_client
         )
         await asyncio.sleep(1)

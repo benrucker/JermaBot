@@ -8,7 +8,7 @@ from typing import List, Optional
 jpattern = re.compile(r'([\p{IsHan}\p{IsBopo}\p{IsHira}\p{IsKatakana}]+)', re.UNICODE)
 
 def has_no_english(text: str) -> bool:
-    return len(text) == 0 or re.match(r'\W', text)
+    return len(text) == 0 or re.match(r'\W', text) is not None
 
 def eng_to_katakana(eng_text: str) -> Optional[str]:
     if has_no_english(eng_text): return eng_text

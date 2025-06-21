@@ -17,7 +17,7 @@ class TTSEngine:
         """Return the command line call to the tts executable."""
         raise NotImplementedError
 
-    def text_to_wav(self, text: str, filename: str):
+    def text_to_wav(self, text: str, speed: float = 1):
         """Read out the text and save it to a wav file."""
         raise NotImplementedError
 
@@ -58,7 +58,7 @@ class TTSMycroft(TTSEngine):
         sound = AudioSegment.from_file(file, format="wav") + self.vol_raise_amount
         sound.export(file)
 
-    def text_to_wav(self, text, speed):
+    def text_to_wav(self, text, speed = 1):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
         cmd = (f'{self.path} -t "{text}" ' +
                f'-voice {self.voice} ' +
@@ -89,7 +89,7 @@ class TTSOpenJtalk(TTSEngine):
         """Return the command line call to the tts executable."""
         return self.path
 
-    def text_to_wav(self, text):
+    def text_to_wav(self, text, speed = 1):
         """Read out the text and save it to a wav file."""
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
         text = text.replace('"', '')

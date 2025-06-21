@@ -37,7 +37,7 @@ class Presence(commands.Cog):
         self.presences = cycle(PRESENCES)
         self.task_change_presence.start()
 
-    def cog_unload(self):
+    async def cog_unload(self):
         self.task_change_presence.cancel()
 
     @tasks.loop(minutes=60)

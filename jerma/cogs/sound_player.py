@@ -3,7 +3,7 @@ import time
 
 import discord
 from colorama import Fore as t
-from discord import app_commands, VoiceClient
+from discord import VoiceProtocol, app_commands, VoiceClient
 from discord.ext import commands
 from discord.ext.commands import Context
 
@@ -20,7 +20,11 @@ class SoundPlayer(commands.Cog):
     def __init__(self, bot: JermaBot):
         self.bot: JermaBot = bot
 
-    def play_sound_file(self, sound_filepath: str, vc: VoiceClient):
+    def play_sound_file(self, sound_filepath: str, vc: VoiceProtocol | VoiceClient):
+        if not isinstance(vc, VoiceClient):
+            print(f'{t.RED}Custom voice protocols are not currently supported.')
+            return
+
         source = self.source_factory(sound_filepath)
         source.volume = self.bot.get_guildinfo(vc.channel.guild.id).volume
         self.stop_audio(vc)
@@ -32,11 +36,19 @@ class SoundPlayer(commands.Cog):
     async def stop(self, ctx: Context):
         """Stop any currently playing audio."""
         vc = ctx.voice_client
+        if not isinstance(vc, VoiceClient):
+            print(f'{t.RED}Custom voice protocols are not currently supported.')
+            return
+
         self.stop_audio(vc)
         if ctx.interaction:
             await ctx.send("The sound has been stopped in its tracks 🤠", ephemeral=True)
 
-    def stop_audio(self, vc: VoiceClient):
+    def stop_audio(self, vc: VoiceProtocol | VoiceClient):
+        if not isinstance(vc, VoiceClient):
+            print(f'{t.RED}Custom voice protocols are not currently supported.')
+            return
+
         if vc.is_playing():
             vc.stop()
             silence = os.path.join('resources', 'soundclips', 'silence.wav')
@@ -48,6 +60,10 @@ class SoundPlayer(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def volume(self, ctx: Context, volume: int):
         """Change the volume of played sounds."""
+        if ctx.guild is None:
+            print(f'{t.RED}Volume command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+
         ginfo = self.bot.get_guildinfo(ctx.guild.id)
         old_vol = ginfo.volume
 
@@ -57,7 +73,7 @@ class SoundPlayer(commands.Cog):
         
         fvol = volume / 100
         ginfo.volume = fvol
-        if ctx.voice_client and ctx.voice_client.source:
+        if ctx.voice_client and isinstance(ctx.voice_client, VoiceClient) and isinstance(ctx.voice_client.source, discord.PCMVolumeTransformer):
             ctx.voice_client.source.volume = fvol
 
         speakers = ['🔈', '🔉', '🔊']

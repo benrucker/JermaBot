@@ -4,6 +4,7 @@ import pickle
 import random
 import time
 from typing import Optional
+from colorama import Fore as t
 
 import discord
 from discord import Message, app_commands, VoiceClient
@@ -11,6 +12,8 @@ from discord.ext import commands
 from discord.ext.commands import Context
 from fuzzywuzzy import process
 
+from jerma.cogs.control import Control, JoinFailedError
+from jerma.cogs.sound_player import SoundPlayer
 from jermabot import JermaBot
 
 # will move these up to a broader scope later
@@ -25,7 +28,7 @@ async def setup(bot):
 
 def is_whid():
     def predicate(ctx: Context):
-        return ctx.guild.id == 173840048343482368
+        return ctx.guild is not None and ctx.guild.id == 173840048343482368
     return commands.check(predicate)
 
 
@@ -40,62 +43,31 @@ class Fun(commands.Cog):
     async def jermalofi(self, ctx: Context):
         """Chill with a sick jam."""
         print('jermalofi')
-        vc: VoiceClient | None = (
-            await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
-        )
-        id = ctx.guild.id
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            print(f'{t.RED}Command was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")
+        if not member.voice:
+            print(f'{t.RED}Command was called by a member that is not in a voice channel')
+            raise JoinFailedError()
+
+        control: Control = self.bot.get_cog('Control')
+        vc = await control.connect_to_user(member.voice, ctx.guild)
+
+        sound_player: SoundPlayer = self.bot.get_cog('SoundPlayer')
         vc.play(
-            self.bot.get_cog('SoundPlayer')
+            sound_player
                 .LoopingSource(
                     os.path.join('resources', 'soundclips',
                                  'birthdayloop.wav'),
-                    self.bot.get_cog('SoundPlayer').source_factory,
-                    id,
+                    sound_player.source_factory,
+                    ctx.guild.id,
                     self.bot
             )
         )
-
-    @commands.command(hidden=True)
-    @is_whid()
-    async def jermasnapeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee(self, ctx: Context):
-        """(Deprecated) Snap the user's voice channel."""
-        print('jermasnap')
-
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
-        soul_stone = self.get_soul_stone_channel(ctx)
-
-        users = ctx.author.voice.channel.members
-        users.remove(ctx.me)
-        snapees = random.sample(users, k=len(users) // 2)
-
-        self.bot.get_guildinfo(ctx.guild.id).is_snapping = True
-
-        sound, delay, length = self.get_snap_sound()
-        vc.play(discord.FFmpegPCMAudio(sound))
-        time.sleep(delay)
-
-        for snapee in snapees:
-            await snapee.move_to(soul_stone)
-
-        time.sleep(length - delay)
-        do_moonlight = random.random() < 0.25
-        if do_moonlight:
-            await ctx.guild.voice_client.move_to(soul_stone)
-            vc.play(discord.FFmpegPCMAudio(
-                os.path.join('soundclips', 'moonlight.wav')))
-            await asyncio.sleep(1)
-            self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
-        else:
-            vc.play(discord.FFmpegPCMAudio(os.path.join(
-                'resources', 'soundclips', 'snaps', 'up in smoke.mp3')))
-            await asyncio.sleep(1)
-            self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
-
-    def get_soul_stone_channel(self, ctx: Context):
-        for channel in ctx.guild.voice_channels:
-            if channel.id == 343939767068655616:
-                return channel
-        raise Exception('channel not found')
 
     @commands.command(aliases=['q'])
     @is_whid()
@@ -103,13 +75,24 @@ class Fun(commands.Cog):
         """(Deprecated) Save'm."""
         if not args:
             raise ValueError("Missing target in quarantine command")
+        
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            print(f'{t.RED}Command was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")
+        if not member.voice or not member.voice.channel:
+            print(f'{t.RED}Command was called by a member that is not in a voice channel')
+            raise JoinFailedError()
 
         name = ' '.join(args[0:])
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
+        vc = await self.bot.get_cog('Control').connect_to_user(member.voice, ctx.guild)
         dest_channel = self.get_soul_stone_channel(ctx)
 
-        users = ctx.author.voice.channel.members
+        users = member.voice.channel.members
         user = None
         for u in users:
             if name.lower() in [u.name.lower(), u.display_name.lower()]:
@@ -134,12 +117,23 @@ class Fun(commands.Cog):
         if not args:
             raise ValueError("Missing target in fmash command")
 
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            print(f'{t.RED}Command was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")
+        if not member.voice or not member.voice.channel:
+            print(f'{t.RED}Command was called by a member that is not in a voice channel')
+            raise JoinFailedError()
+
         name = ' '.join(args[0:])
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
+        vc = await self.bot.get_cog('Control').connect_to_user(member.voice, ctx.guild)
         dest_channel = self.get_soul_stone_channel(ctx)
 
-        users = ctx.author.voice.channel.members
+        users = member.voice.channel.members
         user = None
         for u in users:
             if name.lower() in [u.name.lower(), u.display_name.lower()]:
@@ -164,9 +158,20 @@ class Fun(commands.Cog):
         if not name:
             raise ValueError("Missing target in fmash command")
 
-        vc = await self.bot.get_cog('Control').connect_to_user(ctx.author.voice, ctx.guild)
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+        member = ctx.guild.get_member(ctx.author.id)
+        if member is None:
+            print(f'{t.RED}Command was called by a member that is not in the guild')
+            raise RuntimeError("Seems like you're not in this guild.")
+        if not member.voice or not member.voice.channel:
+            print(f'{t.RED}Command was called by a member that is not in a voice channel')
+            raise JoinFailedError()
 
-        users = ctx.author.voice.channel.members
+        vc = await self.bot.get_cog('Control').connect_to_user(member.voice, ctx.guild)
+
+        users = member.voice.channel.members
         user = None
         for u in users:
             if name.lower() in [u.name.lower(), u.display_name.lower()]:
@@ -183,6 +188,16 @@ class Fun(commands.Cog):
         await user.move_to(None)
         time.sleep(length - delay)
         self.bot.get_guildinfo(ctx.guild.id).is_snapping = False
+
+    def get_soul_stone_channel(self, ctx: Context):
+        if not ctx.guild:
+            raise Exception('No guild')
+
+        for channel in ctx.guild.voice_channels:
+            if channel.id == 343939767068655616:
+                return channel
+
+        raise Exception('channel not found')
 
     def get_snap_sound(self):
         sounds = []
@@ -210,41 +225,15 @@ class Fun(commands.Cog):
             delay, length = file.readline().split(' ')
         return [sound, float(delay), float(length)]
 
-    @commands.command()
-    async def e(self, ctx: Context, emoji_name: str):
-        """(Deprecated) Add the specified emoji to the most recent message sent."""
-        msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
-
-        emoji = discord.utils.get(ctx.guild.emojis, name=emoji_name)
-        if not emoji:
-            emoji = discord.utils.get(self.bot.emojis, name=emoji_name)
-        await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
-
-    @commands.command()
-    async def drake(self, ctx: Context, *args):
-        """(Deprecated) Add a drake clapping reaction to the last message sent."""
-        if not args:
-            msg = (await ctx.channel.history(limit=1, before=ctx.message).flatten())[0]
-        else:
-            try:
-                msg = await ctx.channel.fetch_message(args[0])
-            except Exception as e:
-                print(e)
-                return
-        emoji = self.bot.get_emoji(679179726740258826)
-        await self._add_emoji_and_delete_msg(emoji, msg, ctx.message)
-
-    async def _add_emoji_and_delete_msg(self, emoji, msg_to_react, msg_to_delete):
-        await msg_to_delete.delete(delay=1)
-        await msg_to_react.add_reaction(str(emoji))
-        await asyncio.sleep(5)
-        await msg_to_react.remove_reaction(str(emoji), self.bot.user)
-
     @commands.hybrid_command()
     @app_commands.default_permissions(use_application_commands=True)
     @app_commands.describe(title="The title of the movie")
     async def movie(self, ctx: Context, *, title: str):
         """Add a movie to the movie list."""
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
         if highest and highest[1] > 90:
@@ -267,6 +256,10 @@ class Fun(commands.Cog):
     @app_commands.default_permissions(use_application_commands=True)
     async def movies(self, ctx: Context):
         """Look at the movie list."""
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+
         movies = self.load_movies(ctx.guild.id)
         if len(movies) == 0:
             await ctx.send('Your movie queue is empty. Hear that? EMPTY!')
@@ -278,6 +271,10 @@ class Fun(commands.Cog):
     @app_commands.describe(title="The title of the movie")
     async def removie(self, ctx: Context, *, title: str):
         """Removie a movie from the movie list."""
+        if ctx.guild is None:
+            print(f'{t.RED}Command was called in a non-guild context')
+            raise RuntimeError("You can't use this command outside of a guild.")
+
         movies = self.load_movies(ctx.guild.id)
         highest = process.extractOne(title, movies)
 
