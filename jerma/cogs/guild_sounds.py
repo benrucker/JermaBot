@@ -195,19 +195,7 @@ class GuildSounds(commands.Cog):
         """Add a sound to the sounds list. Requires elevated server perms."""
         ctx = assert_guild_context(ctx)
 
-        attachment = ctx.message.attachments[0] if len(
-            ctx.message.attachments
-        ) else None
-
-        if not attachment:
-            # wait for sound file
-            await ctx.send('Alright gamer, send the new sound.')
-
-            def check(message: Message):
-                return message.author == ctx.author and self.does_message_have_audio_attachment(message)
-
-            message: Message = await self.bot.wait_for('message', timeout=20, check=check)
-            attachment = message.attachments[0]
+        attachment = await self.get_sound_file(ctx)
 
         filename = self.create_sound_filename_with_extension(
             attachment, sound_name
@@ -220,6 +208,23 @@ class GuildSounds(commands.Cog):
 
         await self.add_sound_to_guild(attachment, ctx.guild, filename=filename)
         await ctx.send('Sound added, gamer.')
+
+    async def get_sound_file(self, ctx: GuildContext) -> Attachment:
+        attachment = ctx.message.attachments[0] if len(
+            ctx.message.attachments
+        ) else None
+
+        if not attachment:
+            # wait for sound file
+            await ctx.send('Alright gamer, send the new sound.')
+
+            def is_message_from_author_with_sound_file(message: Message):
+                return message.author == ctx.author and self.does_message_have_sound_file(message)
+
+            message: Message = await self.bot.wait_for('message', timeout=20, check=is_message_from_author_with_sound_file)
+            attachment = message.attachments[0]
+
+        return attachment
 
     async def validate_existing_sound_removal(self, ctx: GuildContext, filename: str) -> bool:
         name = self.strip_extension_from_filename(filename)
@@ -377,7 +382,7 @@ class GuildSounds(commands.Cog):
             self.bot.get_guildinfo(guild.id).reload_sounds()
         await ctx.send('Sounds reloaded.')
 
-    def does_message_have_audio_attachment(self, message: Message) -> bool:
+    def does_message_have_sound_file(self, message: Message) -> bool:
         if len(message.attachments) == 0:
             return False
         attachment = message.attachments[0]
