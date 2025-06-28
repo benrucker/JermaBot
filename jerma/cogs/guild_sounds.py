@@ -93,13 +93,15 @@ class GuildSounds(commands.Cog):
 
         if ctx.guild is None:
             print(f'{t.RED}Play was called in a non-guild context')
-            raise RuntimeError("You can't use this command outside of a guild.")
+            raise RuntimeError(
+                "You can't use this command outside of a guild.")
         member = ctx.guild.get_member(ctx.author.id)
         if member is None:
             print(f'{t.RED}Play was called by a member that is not in the guild')
             raise RuntimeError("Seems like you're not in this guild.")
         if not member.voice:
-            print(f'{t.RED}Play was called by a member that is not in a voice channel')
+            print(
+                f'{t.RED}Play was called by a member that is not in a voice channel')
             raise JoinFailedError()
 
         control: Control = self.bot.get_cog('Control')
@@ -119,7 +121,8 @@ class GuildSounds(commands.Cog):
     async def play_sound_autocomplete(self, intr: Interaction, query: str) -> List[app_commands.Choice[str]]:
         if intr.guild_id is None:
             print(f'{t.RED}Play autocomplete was called in a non-guild context')
-            raise RuntimeError("You can't use this command outside of a guild.")
+            raise RuntimeError(
+                "You can't use this command outside of a guild.")
 
         return self.sound_autocomplete(intr.guild_id, query)
 
@@ -145,12 +148,15 @@ class GuildSounds(commands.Cog):
     async def random(self, ctx: Context):
         """Play a random sound!"""
         if ctx.guild is None:
-            raise GuildSoundsError("Random was called in a non-guild context", "You can't use this command outside of a guild.")
+            raise GuildSoundsError("Random was called in a non-guild context",
+                                   "You can't use this command outside of a guild.")
         member = ctx.guild.get_member(ctx.author.id)
         if member is None:
-            raise GuildSoundsError("Random was called by a member that is not in the guild", "Seems like you're not in this guild.")
+            raise GuildSoundsError(
+                "Random was called by a member that is not in the guild", "Seems like you're not in this guild.")
         if not member.voice:
-            print(f'{t.RED}Random was called by a member that is not in a voice channel')
+            print(
+                f'{t.RED}Random was called by a member that is not in a voice channel')
             raise JoinFailedError()
 
         sound, sound_name = self.get_random_sound(ctx.guild)
@@ -162,7 +168,7 @@ class GuildSounds(commands.Cog):
         player: SoundPlayer = self.bot.get_cog('SoundPlayer')
         vc = await control.connect_to_user(member.voice, ctx.guild)
         player.play_sound_file(sound, vc)
-        
+
         await ctx.send(f"Playing **{sound_name}**")
 
     def get_random_sound(self, guild: Guild) -> tuple[str, str]:
@@ -305,7 +311,8 @@ class GuildSounds(commands.Cog):
                                    'You can\'t use this command outside of a guild.')
 
         send_method = (
-            ctx.response.send_message if isinstance(ctx, Interaction) else ctx.send
+            ctx.response.send_message if isinstance(
+                ctx, Interaction) else ctx.send
         )
 
         print(f'renaming {old} to {new} in {ctx.guild.name}')
@@ -339,7 +346,8 @@ class GuildSounds(commands.Cog):
             raise GuildSoundsError('Bot is not a member of this guild.',
                                    'I\'m not a member of your server, dude.')
 
-        maybe_snooze_end_time = self.bot.get_guildinfo(ctx.guild.id).toggle_snooze()
+        maybe_snooze_end_time = self.bot.get_guildinfo(
+            ctx.guild.id).toggle_snooze()
         if maybe_snooze_end_time:
             duration = int(maybe_snooze_end_time)
             await bot_member.edit(nick=snoozed_nickname)
@@ -467,7 +475,7 @@ class GuildSounds(commands.Cog):
         return out[:-1]
 
     def user_joined_channel(self, before: VoiceState, after: VoiceState) -> bool:
-       return after.channel is not None and before.channel != after.channel
+        return after.channel is not None and before.channel != after.channel
 
     async def play_join_sound(self, member: Member, vc: Optional[VoiceClient]) -> None:
         if not member.voice or not member.voice.channel:
