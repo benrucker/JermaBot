@@ -8,13 +8,15 @@ from cogs.control import Control, JoinFailedError
 from cogs.sound_player import SoundPlayer
 from colorama import Fore as t
 from colorama import Style
-from discord import Guild, Interaction, Member, Message, Permissions, VoiceClient, VoiceState, app_commands, Attachment
+from discord import Guild, Interaction, Member, Message, VoiceClient, VoiceState, app_commands, Attachment
 from discord.embeds import Embed
 from discord.ext import commands
 from discord.ext.commands import Context
 from guild_info import GuildInfo
 
 from jermabot import JermaBot
+from .utils.guild_context import GuildContext, assert_guild_context
+from .utils.error_with_ui_message import ErrorWithUiMessage
 from .utils.autocomplete import autocomplete
 
 # will move these up to a broader scope later
@@ -57,12 +59,6 @@ async def setup(bot: JermaBot) -> None:
     await bot.add_cog(GuildSounds(bot))
 
 
-class GuildSoundsError(commands.CommandError):
-    def __init__(self, error: str, msg: str) -> None:
-        self.error = error
-        self.msg = msg
-
-
 class GuildSounds(commands.Cog):
     """Cog for maintaining guild-specific sound functionality."""
 
@@ -70,7 +66,7 @@ class GuildSounds(commands.Cog):
         self.bot: JermaBot = bot
 
     async def cog_command_error(self, ctx: Context, error: Exception) -> None:
-        if isinstance(error, GuildSoundsError):
+        if isinstance(error, ErrorWithUiMessage):
             print(error.error)
             await ctx.send(error.msg)
         elif isinstance(error, JoinFailedError):
@@ -83,13 +79,13 @@ class GuildSounds(commands.Cog):
     async def play(self, ctx: Context, *, sound: str):
         """Play a sound."""
         if not sound:
-            raise GuildSoundsError('No sound specified in play command.',
-                                   'Gamer, you gotta tell me which sound to play.')
+            raise ErrorWithUiMessage('No sound specified in play command.',
+                                     'Gamer, you gotta tell me which sound to play.')
         sound_name = sound.lower()
         sound_filepath = self.get_sound_filepath(sound_name, ctx.guild)
         if not sound_filepath:
-            raise GuildSoundsError('Sound ' + sound + ' not found.',
-                                   'Hey gamer, that sound doesn\'t exist.')
+            raise ErrorWithUiMessage('Sound ' + sound + ' not found.',
+                                     'Hey gamer, that sound doesn\'t exist.')
 
         if ctx.guild is None:
             print(f'{t.RED}Play was called in a non-guild context')
@@ -148,11 +144,11 @@ class GuildSounds(commands.Cog):
     async def random(self, ctx: Context):
         """Play a random sound!"""
         if ctx.guild is None:
-            raise GuildSoundsError("Random was called in a non-guild context",
-                                   "You can't use this command outside of a guild.")
+            raise ErrorWithUiMessage("Random was called in a non-guild context",
+                                     "You can't use this command outside of a guild.")
         member = ctx.guild.get_member(ctx.author.id)
         if member is None:
-            raise GuildSoundsError(
+            raise ErrorWithUiMessage(
                 "Random was called by a member that is not in the guild", "Seems like you're not in this guild.")
         if not member.voice:
             print(
@@ -161,8 +157,8 @@ class GuildSounds(commands.Cog):
 
         sound, sound_name = self.get_random_sound(ctx.guild)
         if not sound:
-            raise GuildSoundsError('Guild has no sounds.',
-                                   'Sorry gamer, but you need to add some sounds for me to play!')
+            raise ErrorWithUiMessage('Guild has no sounds.',
+                                     'Sorry gamer, but you need to add some sounds for me to play!')
 
         control: Control = self.bot.get_cog('Control')
         player: SoundPlayer = self.bot.get_cog('SoundPlayer')
@@ -181,8 +177,8 @@ class GuildSounds(commands.Cog):
     async def _list(self, ctx: Context):
         """Send the user a list of sounds that can be played."""
         if ctx.guild is None:
-            raise GuildSoundsError("$list was called in a non-guild context",
-                                   "You can't use this command outside of a guild.")
+            raise ErrorWithUiMessage("$list was called in a non-guild context",
+                                     "You can't use this command outside of a guild.")
 
         ginfo: GuildInfo = self.bot.get_guildinfo(ctx.guild.id)
         await ctx.author.send(embed=self.make_list_embed(ginfo))
@@ -197,9 +193,7 @@ class GuildSounds(commands.Cog):
     @app_commands.describe(sound_name="If present, the new sound will have this name")
     async def addsound(self, ctx: Context, *, sound_name: Optional[str]):
         """Add a sound to the sounds list. Requires elevated server perms."""
-        if ctx.guild is None:
-            raise GuildSoundsError('addsound was called in a non-guild context.',
-                                   'You can\'t use this command outside of a guild.')
+        ctx = assert_guild_context(ctx)
 
         attachment = ctx.message.attachments[0] if len(
             ctx.message.attachments
@@ -215,37 +209,53 @@ class GuildSounds(commands.Cog):
             message: Message = await self.bot.wait_for('message', timeout=20, check=check)
             attachment = message.attachments[0]
 
-        # determine name of sound
-        sound_name = sound_name.lower() if sound_name else None
-        if sound_name:
-            if sound_name.endswith(('.mp3', '.wav')):
-                filename = sound_name
-            else:
-                filename = sound_name + '.' + \
-                    attachment.filename.split('.')[-1]
-        else:
-            filename = attachment.filename
-        filename = filename.lower()
+        filename = self.create_sound_filename_with_extension(
+            attachment, sound_name
+        )
 
         # remove old sound if there
-        name = filename.rsplit('.', 1)[0].lower()
+        should_continue = await self.validate_existing_sound_removal(ctx, filename)
+        if not should_continue:
+            return
+
+        await self.add_sound_to_guild(attachment, ctx.guild, filename=filename)
+        await ctx.send('Sound added, gamer.')
+
+    async def validate_existing_sound_removal(self, ctx: GuildContext, filename: str) -> bool:
+        name = self.strip_extension_from_filename(filename)
         existing = self.get_sound_filepath(name, ctx.guild)
         if existing:
             await ctx.send(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it? (yeah/nah)')
 
-            def check2(message: Message):
+            def is_message_from_author(message: Message):
                 return message.author.id == ctx.author.id
 
-            replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=check2)
+            replace_msg: Message = await self.bot.wait_for('message', timeout=20, check=is_message_from_author)
             if replace_msg.content.lower().strip() in YES:
                 await ctx.send('Expunging the old sound...')
                 self.delete_sound(os.path.split(existing)[1], ctx.guild)
             else:
                 await ctx.send('Yeah, I like the old one better too.')
-                return
+                return False
 
-        await self.add_sound_to_guild(attachment, ctx.guild, filename=filename)
-        await ctx.send('Sound added, gamer.')
+        return True
+
+    def strip_extension_from_filename(self, filename):
+        return filename.rsplit('.', 1)[0].lower()
+
+    def create_sound_filename_with_extension(self, attachment: Attachment, target_filename: str | None):
+        target_filename = target_filename.lower() if target_filename else None
+        if target_filename:
+            if target_filename.endswith(('.mp3', '.wav')):
+                # Filename is already well-formatted, use it as is
+                filename = target_filename
+            else:
+                # Add the correct file extension based on the attachment
+                filename = target_filename + '.' + \
+                    attachment.filename.split('.')[-1]
+        else:
+            filename = attachment.filename
+        return filename.lower()
 
     @commands.hybrid_command(aliases=['removesound'])
     @app_commands.describe(sound="The sound to remove")
@@ -254,19 +264,19 @@ class GuildSounds(commands.Cog):
     async def remove(self, ctx: Context, *, sound: str):
         """Remove a sound clip."""
         if ctx.guild is None:
-            raise GuildSoundsError('removesound was called in a non-guild context.',
-                                   'You can\'t use this command outside of a guild.')
+            raise ErrorWithUiMessage('removesound was called in a non-guild context.',
+                                     'You can\'t use this command outside of a guild.')
 
         if not sound:
-            raise GuildSoundsError('No sound specified in remove command.',
-                                   'Gamer, you gotta tell me which sound to remove.')
+            raise ErrorWithUiMessage('No sound specified in remove command.',
+                                     'Gamer, you gotta tell me which sound to remove.')
 
         sound_name = sound.lower()
         sound_filepath = self.get_sound_filepath(sound_name, ctx.guild)
 
         if not sound_filepath:
-            raise GuildSoundsError('Sound ' + sound_name + ' not found.',
-                                   'Hey gamer, that sound doesn\'t exist.')
+            raise ErrorWithUiMessage('Sound ' + sound_name + ' not found.',
+                                     'Hey gamer, that sound doesn\'t exist.')
 
         self.delete_sound(sound_filepath, ctx.guild)
         await ctx.send('The sound has been eliminated, gamer.')
@@ -284,8 +294,8 @@ class GuildSounds(commands.Cog):
     async def rename(self, ctx: Context, *, args: str):
         """Rename a sound clip."""
         if not args:
-            raise GuildSoundsError('No sound specified in rename command.',
-                                   'Yo gamer, do it like this: `$rename old name, new name`')
+            raise ErrorWithUiMessage('No sound specified in rename command.',
+                                     'Yo gamer, do it like this: `$rename old name, new name`')
 
         old, new = args.lower().split(', ')
         await self.rename_sound(ctx, old, new)
@@ -307,8 +317,8 @@ class GuildSounds(commands.Cog):
 
     async def rename_sound(self, ctx: Union[Context, Interaction], old: str, new: str) -> None:
         if ctx.guild is None:
-            raise GuildSoundsError('rename was called in a non-guild context.',
-                                   'You can\'t use this command outside of a guild.')
+            raise ErrorWithUiMessage('rename was called in a non-guild context.',
+                                     'You can\'t use this command outside of a guild.')
 
         send_method = (
             ctx.response.send_message if isinstance(
@@ -328,8 +338,8 @@ class GuildSounds(commands.Cog):
                 guild_info.add_sound(new + extension)
                 await send_method('Knuckles: cracked. Headset: on. **Sound: renamed.**\nYup, it\'s Rats Movie time.')
             except Exception as e:
-                raise GuildSoundsError(f'Error {type(e)} while renaming sound:\n{e}',
-                                       'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
+                raise ErrorWithUiMessage(f'Error {type(e)} while renaming sound:\n{e}',
+                                         'Something went wrong, zoomer. Make sure no other sound has the new name, okay?')
         else:
             await send_method(f'I couldn\'t find a sound with the name {old}, aight?')
 
@@ -338,13 +348,13 @@ class GuildSounds(commands.Cog):
     async def snooze(self, ctx: Context):
         """Disable join sounds for 4 hours or until you call snooze again."""
         if ctx.guild is None:
-            raise GuildSoundsError('snooze was called in a non-guild context.',
-                                   'You can\'t use this command outside of a guild.')
+            raise ErrorWithUiMessage('snooze was called in a non-guild context.',
+                                     'You can\'t use this command outside of a guild.')
 
         bot_member = ctx.guild.get_member(ctx.me.id)
         if not bot_member:
-            raise GuildSoundsError('Bot is not a member of this guild.',
-                                   'I\'m not a member of your server, dude.')
+            raise ErrorWithUiMessage('Bot is not a member of this guild.',
+                                     'I\'m not a member of your server, dude.')
 
         maybe_snooze_end_time = self.bot.get_guildinfo(
             ctx.guild.id).toggle_snooze()
