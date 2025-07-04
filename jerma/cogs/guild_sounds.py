@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from typing import Optional, Union, List
 
+import discord
+
 from cogs.control import Control, JoinFailedError
 from cogs.sound_player import SoundPlayer
 from colorama import Fore as t
@@ -239,8 +241,16 @@ class GuildSounds(commands.Cog):
             attachment, message.author.name
         )
 
+        should_continue = await self.validate_existing_sound_removal_via_message_components(intr, filename, intr.guild)
+        if not should_continue:
+            return
+
         await self.add_sound_to_guild(attachment, intr.guild, filename=filename)
-        await intr.response.send_message('Sound added, gamer.', ephemeral=True)
+
+        if intr.response.is_done():
+            await intr.edit_original_response(content='Sound added, gamer.')        
+        else:
+            await intr.response.send_message('Sound added, gamer.', ephemeral=True)
 
     async def get_or_ask_for_sound_file(self, ctx: GuildContext) -> Attachment:
         attachment = ctx.message.attachments[0] if len(
@@ -276,6 +286,42 @@ class GuildSounds(commands.Cog):
                 return False
 
         return True
+    
+    async def validate_existing_sound_removal_via_message_components(self, intr: Interaction, filename: str, guild: Guild) -> bool:
+        name = self.strip_extension_from_filename(filename)
+        existing = self.get_sound_filepath(name, guild)
+        if existing:
+            confirmation_prompt = self.ConfirmSoundReplaceMessageView()
+            await intr.response.send_message(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it?', view=confirmation_prompt, ephemeral=True)
+
+            await confirmation_prompt.wait()
+
+            if confirmation_prompt.interaction is not None and confirmation_prompt.is_confirmed:
+                await confirmation_prompt.interaction.response.edit_message(content='Expunging the old sound...', view=None)
+                self.delete_sound(os.path.split(existing)[1], guild)
+            else:
+                await intr.edit_original_response(content='Yeah, I like the old one better too.', view=None)
+                return False
+
+        return True
+    
+    class ConfirmSoundReplaceMessageView(discord.ui.View):
+        def __init__(self):
+            super().__init__()
+            self.is_confirmed = None
+            self.interaction = None
+
+        @discord.ui.button(label='Cancel', style=discord.ButtonStyle.grey)
+        async def cancel(self, interaction: discord.Interaction, _button: discord.ui.Button):
+            self.interaction = interaction
+            self.is_confirmed = False
+            self.stop()
+
+        @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+        async def confirm(self, interaction: discord.Interaction, _button: discord.ui.Button):
+            self.interaction = interaction
+            self.is_confirmed = True
+            self.stop()
 
     def strip_extension_from_filename(self, filename):
         return filename.rsplit('.', 1)[0].lower()
@@ -417,9 +463,9 @@ class GuildSounds(commands.Cog):
     def does_message_have_sound_file(self, message: Message) -> bool:
         return self.get_sound_file_from_message(message) is not None
 
-    def get_sound_file_from_message(self, message: Message) -> Attachment:
+    def get_sound_file_from_message(self, message: Message) -> Attachment | None:
         if len(message.attachments) == 0:
-            return False
+            return None
         attachment = message.attachments[0]
         if attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav'):
             return attachment
