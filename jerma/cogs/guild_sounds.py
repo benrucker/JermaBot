@@ -8,7 +8,7 @@ from cogs.control import Control, JoinFailedError
 from cogs.sound_player import SoundPlayer
 from colorama import Fore as t
 from colorama import Style
-from discord import Guild, Interaction, Member, Message, VoiceClient, VoiceState, app_commands, Attachment
+from discord import AppCommandType, Guild, Interaction, Member, Message, VoiceClient, VoiceState, app_commands, Attachment
 from discord.embeds import Embed
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -67,6 +67,7 @@ class GuildSounds(commands.Cog):
         self.ctx_menu = app_commands.ContextMenu(
             name="Make user's join sound",
             callback=self.add_join_sound_via_context_menu,
+            type=AppCommandType.message,
         )
         self.bot.tree.add_command(self.ctx_menu)
 
@@ -220,16 +221,15 @@ class GuildSounds(commands.Cog):
 
     @app_commands.describe()
     @app_commands.default_permissions(manage_roles=True)
-    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    @app_commands.guild_only()
     async def add_join_sound_via_context_menu(self, intr: Interaction, message: Message) -> None:
         """A context menu command to turn a sound file that a user has sent into their join sound."""
         # TODO: Make GuildInteraction class and type guard
         if intr.guild is None:
-            raise ErrorWithUiMessage('add_join_sound was called in a non-guild context.',
+            raise ErrorWithUiMessage('Add join sound context menu command was called in a non-guild context.',
                                      'You can\'t use this command outside of a guild.')
 
-        attachment = message.attachments[0] if len(
-            message.attachments) else None
+        attachment = self.get_sound_file_from_message(message) 
 
         if not attachment:
             await intr.response.send_message("I couldn't find a sound file there 🥴", ephemeral=True)
@@ -238,12 +238,6 @@ class GuildSounds(commands.Cog):
         filename = self.create_sound_filename_with_extension(
             attachment, message.author.name
         )
-
-        # TODO: Make this work for interactions and not just Context
-        # remove old sound if there
-        should_continue = await self.validate_existing_sound_removal(intr, filename)
-        if not should_continue:
-            return
 
         await self.add_sound_to_guild(attachment, intr.guild, filename=filename)
         await intr.response.send_message('Sound added, gamer.', ephemeral=True)
@@ -264,7 +258,7 @@ class GuildSounds(commands.Cog):
 
         return attachment
 
-    async def validate_existing_sound_removal(self, ctx: GuildContext | Interaction, filename: str) -> bool:
+    async def validate_existing_sound_removal(self, ctx: GuildContext, filename: str) -> bool:
         name = self.strip_extension_from_filename(filename)
         existing = self.get_sound_filepath(name, ctx.guild)
         if existing:
@@ -421,10 +415,14 @@ class GuildSounds(commands.Cog):
         await ctx.send('Sounds reloaded.')
 
     def does_message_have_sound_file(self, message: Message) -> bool:
+        return self.get_sound_file_from_message(message) is not None
+
+    def get_sound_file_from_message(self, message: Message) -> Attachment:
         if len(message.attachments) == 0:
             return False
         attachment = message.attachments[0]
-        return attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav')
+        if attachment.filename.endswith('.mp3') or attachment.filename.endswith('.wav'):
+            return attachment
 
     async def add_sound_to_guild(self, sound: Attachment, guild: Guild, filename: Optional[str] = None) -> None:
         sound_folder = self.get_guild_sound_path(guild)
