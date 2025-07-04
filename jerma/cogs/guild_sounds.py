@@ -16,6 +16,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 from guild_info import GuildInfo
 
+from jerma.cogs.utils.guild_interaction import GuildInteraction, assert_guild_interaction
 from jermabot import JermaBot
 from .utils.guild_context import GuildContext, assert_guild_context
 from .utils.error_with_ui_message import ErrorWithUiMessage
@@ -227,11 +228,9 @@ class GuildSounds(commands.Cog):
     async def add_join_sound_via_context_menu(self, intr: Interaction, message: Message) -> None:
         """A context menu command to turn a sound file that a user has sent into their join sound."""
         # TODO: Make GuildInteraction class and type guard
-        if intr.guild is None:
-            raise ErrorWithUiMessage('Add join sound context menu command was called in a non-guild context.',
-                                     'You can\'t use this command outside of a guild.')
+        intr = assert_guild_interaction(intr)
 
-        attachment = self.get_sound_file_from_message(message) 
+        attachment = self.get_sound_file_from_message(message)
 
         if not attachment:
             await intr.response.send_message("I couldn't find a sound file there 🥴", ephemeral=True)
@@ -241,14 +240,14 @@ class GuildSounds(commands.Cog):
             attachment, message.author.name
         )
 
-        should_continue = await self.validate_existing_sound_removal_via_message_components(intr, filename, intr.guild)
+        should_continue = await self.validate_existing_sound_removal_via_message_components(intr, filename)
         if not should_continue:
             return
 
         await self.add_sound_to_guild(attachment, intr.guild, filename=filename)
 
         if intr.response.is_done():
-            await intr.edit_original_response(content='Sound added, gamer.')        
+            await intr.edit_original_response(content='Sound added, gamer.')
         else:
             await intr.response.send_message('Sound added, gamer.', ephemeral=True)
 
@@ -286,25 +285,29 @@ class GuildSounds(commands.Cog):
                 return False
 
         return True
-    
-    async def validate_existing_sound_removal_via_message_components(self, intr: Interaction, filename: str, guild: Guild) -> bool:
+
+    async def validate_existing_sound_removal_via_message_components(self, intr: GuildInteraction, filename: str) -> bool:
         name = self.strip_extension_from_filename(filename)
-        existing = self.get_sound_filepath(name, guild)
+        existing = self.get_sound_filepath(name, intr.guild)
         if existing:
             confirmation_prompt = self.ConfirmSoundReplaceMessageView()
-            await intr.response.send_message(f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it?', view=confirmation_prompt, ephemeral=True)
+            await intr.response.send_message(
+                f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it?',
+                view=confirmation_prompt,
+                ephemeral=True
+            )
 
             await confirmation_prompt.wait()
 
             if confirmation_prompt.interaction is not None and confirmation_prompt.is_confirmed:
                 await confirmation_prompt.interaction.response.edit_message(content='Expunging the old sound...', view=None)
-                self.delete_sound(os.path.split(existing)[1], guild)
+                self.delete_sound(os.path.split(existing)[1], intr.guild)
             else:
                 await intr.edit_original_response(content='Yeah, I like the old one better too.', view=None)
                 return False
 
         return True
-    
+
     class ConfirmSoundReplaceMessageView(discord.ui.View):
         def __init__(self):
             super().__init__()
@@ -599,7 +602,7 @@ class GuildSounds(commands.Cog):
             print('No join sound for user')
 
     def old_voice_channel_has_no_people(self, vc: VoiceClient) -> bool:
-        return len([x for x in vc.channel.members if not x.bot]) == 0
+        return len(vc.channel.members) == 0 or all(x.bot for x in vc.channel.members)
 
     async def disconnect_from_voice(self, vc: VoiceClient) -> None:
         print(
