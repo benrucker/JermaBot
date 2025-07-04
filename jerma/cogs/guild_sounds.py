@@ -65,8 +65,8 @@ class GuildSounds(commands.Cog):
     def __init__(self, bot: JermaBot) -> None:
         self.bot: JermaBot = bot
         self.ctx_menu = app_commands.ContextMenu(
-            name='Add sound',
-            callback=self.add_sound_via_context_menu,
+            name="Make user's join sound",
+            callback=self.add_join_sound_via_context_menu,
         )
         self.bot.tree.add_command(self.ctx_menu)
 
@@ -218,30 +218,35 @@ class GuildSounds(commands.Cog):
         await self.add_sound_to_guild(attachment, ctx.guild, filename=filename)
         await ctx.send('Sound added, gamer.')
 
-    @app_commands.describe(name="Add this sound to your server")
+    @app_commands.describe()
     @app_commands.default_permissions(manage_roles=True)
     @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-    async def add_sound_via_context_menu(self, intr: Interaction, message: Message) -> None:
-        """Add a sound to the sounds list. Requires elevated server perms."""
+    async def add_join_sound_via_context_menu(self, intr: Interaction, message: Message) -> None:
+        """A context menu command to turn a sound file that a user has sent into their join sound."""
         # TODO: Make GuildInteraction class and type guard
         if intr.guild is None:
-            raise ErrorWithUiMessage('addsound was called in a non-guild context.',
+            raise ErrorWithUiMessage('add_join_sound was called in a non-guild context.',
                                      'You can\'t use this command outside of a guild.')
 
-        attachment = message.attachments[0]
+        attachment = message.attachments[0] if len(
+            message.attachments) else None
+
+        if not attachment:
+            await intr.response.send_message("I couldn't find a sound file there 🥴", ephemeral=True)
+            return
 
         filename = self.create_sound_filename_with_extension(
-            attachment
+            attachment, message.author.name
         )
 
         # TODO: Make this work for interactions and not just Context
         # remove old sound if there
-        # should_continue = await self.validate_existing_sound_removal(intr, filename)
-        # if not should_continue:
-        #     return
+        should_continue = await self.validate_existing_sound_removal(intr, filename)
+        if not should_continue:
+            return
 
         await self.add_sound_to_guild(attachment, intr.guild, filename=filename)
-        await intr.response.send_message('Sound added, gamer.')
+        await intr.response.send_message('Sound added, gamer.', ephemeral=True)
 
     async def get_or_ask_for_sound_file(self, ctx: GuildContext) -> Attachment:
         attachment = ctx.message.attachments[0] if len(
@@ -259,7 +264,7 @@ class GuildSounds(commands.Cog):
 
         return attachment
 
-    async def validate_existing_sound_removal(self, ctx: GuildContext, filename: str) -> bool:
+    async def validate_existing_sound_removal(self, ctx: GuildContext | Interaction, filename: str) -> bool:
         name = self.strip_extension_from_filename(filename)
         existing = self.get_sound_filepath(name, ctx.guild)
         if existing:
