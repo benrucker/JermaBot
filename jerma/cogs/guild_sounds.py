@@ -16,7 +16,7 @@ from discord.ext import commands
 from discord.ext.commands import Context
 from guild_info import GuildInfo
 
-from jerma.cogs.utils.guild_interaction import GuildInteraction, assert_guild_interaction
+from cogs.utils.guild_interaction import GuildInteraction, assert_guild_interaction
 from jermabot import JermaBot
 from .utils.guild_context import GuildContext, assert_guild_context
 from .utils.error_with_ui_message import ErrorWithUiMessage
