@@ -249,7 +249,7 @@ class GuildSounds(commands.Cog):
         if intr.response.is_done():
             await intr.edit_original_response(content='Sound added, gamer.')
         else:
-            await intr.response.send_message('Sound added, gamer.', ephemeral=True)
+            await intr.response.send_message('Sound added, gamer.')
 
     async def get_or_ask_for_sound_file(self, ctx: GuildContext) -> Attachment:
         attachment = ctx.message.attachments[0] if len(
@@ -294,7 +294,6 @@ class GuildSounds(commands.Cog):
             await intr.response.send_message(
                 f'There\'s already a sound called _{name}_, bucko. Sure you want to replace it?',
                 view=confirmation_prompt,
-                ephemeral=True
             )
 
             await confirmation_prompt.wait()
