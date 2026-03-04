@@ -1,4 +1,4 @@
-discord.py[voice]>=2.6.0
+discord.py[voice]>=2.7.1
 colorama>=0.0.0
 pydub>=0.0.0
 regex
