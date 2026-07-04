@@ -22,6 +22,19 @@ YES = ['yes', 'yeah', 'yep', 'yeppers', 'of course',
 NO = ['no', 'n', 'nope', 'nay', 'nada', 'nah', 'na']
 
 
+class NoClassUnpickler(pickle.Unpickler):
+    """Unpickles builtin data types only. Refuses all class/callable lookups."""
+
+    def find_class(self, module, name):
+        raise pickle.UnpicklingError(
+            f'refusing to load {module}.{name} from movie file'
+        )
+
+
+def safe_load(f):
+    return NoClassUnpickler(f).load()
+
+
 async def setup(bot):
     await bot.add_cog(Fun(bot))
 
@@ -302,9 +315,9 @@ class Fun(commands.Cog):
             return list()
         try:
             with open(path, 'rb') as f:
-                return pickle.load(f)
-        except:
-            print('caught exception while loading movie list')
+                return safe_load(f)
+        except Exception as e:
+            print(f'{t.RED}caught exception while loading movie list: {e!r}')
             return list()
 
     def save_movies(self, guild_id, movies):
