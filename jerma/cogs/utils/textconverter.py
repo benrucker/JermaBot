@@ -3,6 +3,7 @@
 import os
 import regex as re
 import subprocess
+import sys
 from typing import List, Optional
 
 jpattern = re.compile(r'([\p{IsHan}\p{IsBopo}\p{IsHira}\p{IsKatakana}]+)', re.UNICODE)
@@ -16,9 +17,9 @@ def eng_to_katakana(eng_text: str) -> Optional[str]:
     env = os.environ.copy()
     env['KANA_TYPE'] = 'katakana'
     path = os.path.join('cogs','utils','lexconvert.py')
-    cmd = f'python {path} --phones kana-approx {eng_text}'
+    cmd = [sys.executable, path, '--phones', 'kana-approx', *eng_text.split()]
     result = subprocess.run(cmd,
-                            shell=True, capture_output=True)
+                            capture_output=True, env=env)
     if result.returncode != 0:
         print('Lexconvert returned result code:', result.returncode)
         print(result.stdout.decode('utf-8'))
