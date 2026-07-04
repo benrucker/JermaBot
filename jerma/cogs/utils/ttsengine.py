@@ -60,13 +60,13 @@ class TTSMycroft(TTSEngine):
 
     def text_to_wav(self, text, speed = 1):
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
-        cmd = (f'{self.path} -t "{text}" ' +
-               f'-voice {self.voice} ' +
-               f'--setf duration_stretch={speed} ' +
-               f'-o {filepath}')
+        cmd = [self.path, '-t', text,
+               '-voice', self.voice,
+               '--setf', f'duration_stretch={speed}',
+               '-o', filepath]
         print(cmd)
         result = subprocess.run(cmd,
-                                shell=True, text=True, capture_output=True, check=True)
+                                text=True, capture_output=True, check=True)
         if not result.returncode == 0:
             print('Something went wrong saving mycroft mimic to file.')
         else:
@@ -92,16 +92,14 @@ class TTSOpenJtalk(TTSEngine):
     def text_to_wav(self, text, speed = 1):
         """Read out the text and save it to a wav file."""
         filepath = os.path.join('resources', 'soundclips', 'temp', str(time.time()) + '.wav')
-        text = text.replace('"', '')
-        cmd = (f'echo "{text}" | ' +
-               f'{self.path} ' +
-               f'-x {self.dic} '
-               f'-m {self.voice} ' +
-               #f'--setf duration_stretch={speed} ' +
-               f'-ow {filepath}')
+        cmd = [self.path,
+               '-x', self.dic,
+               '-m', self.voice,
+               #'--setf', f'duration_stretch={speed}',
+               '-ow', filepath]
         print(cmd)
-        result = subprocess.run(cmd,
-                                shell=True, text=True, capture_output=True)
+        result = subprocess.run(cmd, input=text,
+                                text=True, capture_output=True)
         if not result.returncode == 0:
             print('Something went wrong saving open_jtalk mimic to file.')
             print(result.stdout)
