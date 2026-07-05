@@ -148,21 +148,11 @@ class Admin(commands.Cog):
 
     def _execute_command(self, command: str) -> CompletedProcess[str]:
         """Run git pull and return the result."""
-        if (sys.platform.startswith('win')):
-            result = subprocess.run(
-                command.split(' '),
-                shell=True,
-                text=True,
-                capture_output=True
-            )
-        else:
-            result = subprocess.run(
-                command,
-                shell=True,
-                text=True,
-                capture_output=True
-            )
-        return result
+        return subprocess.run(
+            command.split(' '),
+            text=True,
+            capture_output=True
+        )
 
     @commands.is_owner()
     @commands.hybrid_command()
