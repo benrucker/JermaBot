@@ -1,0 +1,17 @@
+[project]
+name = "jermabot"
+version = "1.0.0"
+description = "A Discord bot inspired by Jerma985, with an emphasis on adding sound functionality to your server."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "discord.py[voice]>=2.7.1",
+    "colorama",
+    "pydub",
+    "regex",
+    "fuzzywuzzy",
+]
+
+[tool.uv]
+# JermaBot is run as an app from the jerma/ directory, not installed as a package.
+package = false
