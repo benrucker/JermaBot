@@ -62,7 +62,30 @@ cd JermaBot
 uv sync
 ```
 
-7. Store your bot's token in a file called `secret.txt` in the folder `jerma/`.
+7. Create a file called `.env` in the folder `jerma/` holding your bot's token:
+
+```
+DISCORD_TOKEN=...
+```
+
+The bot loads `.env` on startup, so no environment configuration is needed in your shell profile or systemd unit. Variables already present in the process environment take precedence over the file.
+
+#### (Optional) Coding agent setup
+
+JermaBot includes a minimal agent harness because it seems fun! These instructions set that up, but are not required for the rest of the bot to function.
+
+8. Install the [Claude Code CLI](https://code.claude.com/docs/en/quickstart)
+9. Install the [GitHub CLI](https://github.com/cli/cli#installation) (`gh`)
+10. Add the agent's credentials to `jerma/.env`:
+
+```
+# From `claude setup-token` (skippable on a dev machine already logged in to `claude`)
+CLAUDE_CODE_OAUTH_TOKEN=...
+# A fine-grained personal access token for the target repos, with
+# read/write on Contents and Pull requests:
+# https://github.com/settings/personal-access-tokens/new
+GITHUB_TOKEN=...
+```
 
 ### Running JermaBot:
 
@@ -70,14 +93,12 @@ Run the bot through the command line like this:
 
 ```
 cd jerma
-uv run main.py [-s SECRET_FILENAME]
-               [ (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak),
+uv run main.py [ (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak),
                  (-mv MYCROFT_VOICE)]
                [-jd JTALK_PATH]
                [-jv JAPANESE_VOICE]
 ```
 
-- `-s` allows you to specify a specific text file that your bot token is stored in. If not included, Jerma will look for your token in a file called `secret.txt` in the base dirctory. This flag is optional.
 - `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
   - e.g. `-mycroft tts/mimic.exe`
 - `-mv PATH_TO_VOICE` allows you to specify which voice you want to use with mycroft mimic. This flag is optional.

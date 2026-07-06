@@ -10,6 +10,8 @@ dependencies = [
     "pydub",
     "regex",
     "fuzzywuzzy",
+    "claude-agent-sdk>=0.2.110",
+    "python-dotenv>=1.2.2",
 ]
 
 [tool.uv]

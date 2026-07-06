@@ -5,6 +5,7 @@ import os
 import colorama
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
 
 from cogs.utils import ttsengine
 from jermabot import JermaBot
@@ -25,12 +26,11 @@ if __name__ == '__main__':
     global source_path, bot
     source_path = os.path.dirname(os.path.abspath(__file__))
 
+    load_dotenv(os.path.join(source_path, '.env'))
+
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description='Run JermaBot')
-    parser.add_argument('-s', '--secret_filename',
-                        help='location of bot token text file',
-                        default='secret.txt')
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('-mycroft', '--mycroft_path',
                        help='tell jerma to use mycroft at the given path')
@@ -46,8 +46,10 @@ if __name__ == '__main__':
                         help='path to dictionary to use with Japanese TTS')
     args = parser.parse_args()
 
-    with open(args.secret_filename) as f:
-        secret = f.read().strip()
+    secret = os.environ.get('DISCORD_TOKEN')
+    if not secret:
+        raise SystemExit(
+            'DISCORD_TOKEN is not set; put it in jerma/.env or the environment.')
 
     if args.mycroft_path:
         voice = args.mycroft_voice if args.mycroft_voice else 'ap'
