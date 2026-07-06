@@ -21,7 +21,7 @@ class AgentRepo:
 
 AGENT_REPOS: dict[str, AgentRepo] = {
     'jermabot': AgentRepo('benrucker/JermaBot', 'develop'),
-    'shigure-js': AgentRepo('ecfilder/shigure-js', 'main'),
+    'shigure-js': AgentRepo('ecfidler/shigure-js', 'main'),
     'whid10': AgentRepo('benrucker/whid10', 'main'),
 }
 
