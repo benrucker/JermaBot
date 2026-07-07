@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     HookMatcher,
     ResultMessage,
     TextBlock,
+    ToolUseBlock,
 )
 
 from .agent_config import (
@@ -39,7 +40,7 @@ AGENT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep']
 # in case NotebookEdit ever joins AGENT_TOOLS.
 _PATH_KEYS = ('file_path', 'path', 'notebook_path')
 
-OnText = Callable[[str], Awaitable[None]]
+OnProgress = Callable[[str], Awaitable[None]]
 
 
 @dataclass
@@ -96,7 +97,7 @@ def _build_instructions(repos: dict[str, AgentRepo]) -> str:
         for name, repo in repos.items()
     )
     return (
-        'You are the coding agent for JermaBot, handling a request its owner '
+        'You are JermaBot, handling a request its owner '
         f'sent over {AGENT_REQUEST_SOURCE}. Your working directory contains '
         'checkouts of these repositories:\n'
         f'{repo_lines}\n\n'
@@ -109,7 +110,9 @@ def _build_instructions(repos: dict[str, AgentRepo]) -> str:
         '- If the request is a question rather than a change, answer it '
         'without editing any files.\n'
         '- End with a concise summary of what you changed and why; it '
-        'becomes the pull request description. Plain Markdown, no preamble.'
+        'becomes the pull request description. Plain Markdown, no preamble.\n'
+        '- Some requests are off topic — that is to be expected. Answer them '
+        'appropriately; don\'t request the user to adapt.'
     )
 
 
@@ -137,12 +140,16 @@ def _build_options(workspace_root: Path,
 
 async def run_agent(prompt: str, workspace_root: Path,
                     repos: dict[str, AgentRepo],
-                    on_text: OnText) -> AgentRunResult:
-    """Run one agent session, streaming assistant text to on_text.
+                    on_progress: OnProgress) -> AgentRunResult:
+    """Run one agent session; interim narration streams, the answer returns.
 
-    Text is handed to on_text through a queue so that slow delivery (e.g.
-    Discord rate limits) neither backpressures the SDK message stream nor
-    counts against the session timeout.
+    Text sent alongside tool calls is narration about work in progress and
+    goes to on_progress as it happens; a text-only assistant message ends the
+    turn, so it is the final answer and comes back in AgentRunResult instead.
+
+    Narration is handed to on_progress through a queue so that slow delivery
+    (e.g. Discord rate limits) neither backpressures the SDK message stream
+    nor counts against the session timeout.
     """
     result = AgentRunResult(final_text='', timed_out=False)
     outbox: asyncio.Queue[str | None] = asyncio.Queue()
@@ -150,17 +157,21 @@ async def run_agent(prompt: str, workspace_root: Path,
     async def consume(client: ClaudeSDKClient):
         async for message in client.receive_response():
             if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock) and block.text.strip():
-                        result.final_text = block.text
-                        outbox.put_nowait(block.text)
+                texts = [block.text for block in message.content
+                         if isinstance(block, TextBlock) and block.text.strip()]
+                if any(isinstance(block, ToolUseBlock)
+                       for block in message.content):
+                    for text in texts:
+                        outbox.put_nowait(text)
+                elif texts:
+                    result.final_text = '\n\n'.join(texts)
             elif isinstance(message, ResultMessage):
                 if message.result:
                     result.final_text = message.result
 
     async def deliver():
         while (text := await outbox.get()) is not None:
-            await on_text(text)
+            await on_progress(text)
 
     async with ClaudeSDKClient(options=_build_options(workspace_root, repos)) as client:
         await client.query(prompt)
