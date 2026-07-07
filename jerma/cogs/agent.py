@@ -11,10 +11,12 @@ import discord
 from discord.ext import commands
 
 from jermabot import JermaBot
+from .utils.agent_config import AGENT_TIMEOUT_SECONDS
 from .utils.agent_service import AgentBusyError, AgentTaskService, WorkspaceError
-from .utils.split_message import split_message
+from .utils.split_message import MESSAGE_LIMIT, split_message
 
 BUSY_MESSAGE = "Hold up, gamer, I'm busy."
+CHECKING_EMOJI = discord.PartialEmoji.from_str('<a:jermaDetective:863205690764165160>')
 
 
 async def setup(bot):
@@ -65,35 +67,62 @@ class Agent(commands.Cog):
         return None
 
     async def _handle_prompt(self, message: discord.Message, prompt: str):
-        channel = await self._make_response_thread(message, prompt)
+        """Run the task in a thread: a reaction acknowledges the ping, harness
+        news shares one editable status message in the thread, and the agent's
+        own output and PR links are plain messages there."""
+        try:
+            channel = await self._make_response_thread(message, prompt)
+        except discord.HTTPException:
+            await message.reply(
+                "I can't make a thread here :("
+            )
+            return
 
-        await channel.send('Lemme check rq :jermaDetective:')
+        await self._acknowledge(message)
+
+        status: discord.Message | None = None
+
+        async def set_status(text: str):
+            nonlocal status
+            text = text[:MESSAGE_LIMIT]
+            if status is None:
+                status = await channel.send(text)
+            else:
+                await status.edit(content=text)
 
         try:
             report = await self.service.run(
-                prompt, on_update=lambda text: self._send_message(channel, text))
+                prompt, on_text=lambda text: self._send_message(channel, text))
         except AgentBusyError:
-            await channel.send(BUSY_MESSAGE)
+            await set_status(BUSY_MESSAGE)
             return
         except WorkspaceError as error:
-            await self._send_message(channel, f'Workspace error:\n{error}')
+            await set_status(f'Workspace error:\n{error}')
             return
         except Exception:
             trace = traceback.format_exc()[-1500:]
-            await self._send_message(channel, f'Error:\n```py\n{trace}\n```')
+            await set_status(f'Error:\n```py\n{trace}\n```')
             return
+
+        if report.timed_out:
+            await set_status(
+                f'(Hit the {AGENT_TIMEOUT_SECONDS // 60} minute limit. '
+                'Published whatever it finished.)')
 
         for pull_request in report.pull_requests:
             await channel.send(f'Pull request for **{pull_request.repo_name}**: {pull_request.url}')
 
+    async def _acknowledge(self, message: discord.Message):
+        try:
+            await message.add_reaction(CHECKING_EMOJI)
+        except discord.HTTPException:
+            pass  # the ack is a nicety; never abort the task over it
+
     async def _make_response_thread(self, message: discord.Message, prompt: str):
-        """Thread off the message where possible; otherwise reply in place."""
-        if isinstance(message.channel, discord.TextChannel):
-            try:
-                return await message.create_thread(name=prompt[:80])
-            except discord.HTTPException:
-                pass
-        return message.channel
+        """Thread off the message; threads and DMs already contain the reply."""
+        if isinstance(message.channel, (discord.Thread, discord.DMChannel)):
+            return message.channel
+        return await message.create_thread(name=prompt[:80])
 
     async def _send_message(self, channel, text: str):
         for chunk in split_message(text):
