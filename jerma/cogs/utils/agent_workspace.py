@@ -75,20 +75,6 @@ async def _run_git(repo_dir: Path, *args: str) -> str:
     return await _run(['git', *args], cwd=repo_dir)
 
 
-def split_summary(prompt: str, summary: str) -> tuple[str, str]:
-    """Split the agent's summary into a PR title and body.
-
-    The agent is instructed to lead its summary with a commit-subject-style
-    title line; the rest is the description. When the summary is missing
-    (e.g. a timed-out turn), the prompt's first line stands in.
-    """
-    first, _, rest = summary.strip().partition('\n')
-    title = first.strip('#*` ')  # tolerate heading/bold markup
-    if title:
-        return title, rest.strip()
-    return prompt.strip().splitlines()[0], summary.strip()
-
-
 def slugify(text: str) -> str:
     slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
     return slug[:40].rstrip('-') or 'task'
@@ -178,11 +164,6 @@ class AgentWorkspace:
             for name in self.repos))
         return ConversationCheckout(root, branch, self)
 
-    def reopen_checkout(self, root: Path,
-                        branch: str) -> 'ConversationCheckout':
-        """Rebind a checkout that already exists on disk (state reload)."""
-        return ConversationCheckout(root, branch, self)
-
     async def _add_worktree(self, name: str, path: Path, branch: str):
         repo_dir = self.root / name
         base = self.repos[name].base_branch
@@ -203,49 +184,50 @@ class AgentWorkspace:
         goes. Best-effort: a repo that fails to clean up is reported and
         skipped rather than stopping the rest.
         """
-        for name in self.repos:
-            repo_dir = self.root / name
-            path = checkout.root / name
-            async with self._repo_locks[name]:
-                try:
-                    if path.exists():
-                        await _run_git(repo_dir, 'worktree', 'remove',
-                                       '--force', str(path))
-                    await _run_git(repo_dir, 'branch', '-D', checkout.branch)
-                except WorkspaceError as error:
-                    print(f'AgentWorkspace: cleaning up {path}: {error}')
+        await asyncio.gather(*(self._remove_worktree(name, checkout)
+                               for name in self.repos))
         if checkout.root.exists():
             await asyncio.to_thread(shutil.rmtree, checkout.root,
                                     ignore_errors=True)
 
+    async def _remove_worktree(self, name: str,
+                               checkout: 'ConversationCheckout'):
+        repo_dir = self.root / name
+        path = checkout.root / name
+        async with self._repo_locks[name]:
+            try:
+                if path.exists():
+                    await _run_git(repo_dir, 'worktree', 'remove',
+                                   '--force', str(path))
+                await _run_git(repo_dir, 'branch', '-D', checkout.branch)
+            except WorkspaceError as error:
+                print(f'AgentWorkspace: cleaning up {path}: {error}')
 
+
+@dataclass
 class ConversationCheckout:
     """One conversation's working copies: a worktree per repo, all on the
     conversation's branch. Edits accumulate here across turns — nothing is
     reset — and every turn's changes are pushed to the same branch, so each
     repo accrues at most one pull request per conversation."""
-
-    def __init__(self, root: Path, branch: str, workspace: AgentWorkspace):
-        self.root = root
-        self.branch = branch
-        self._workspace = workspace
+    root: Path
+    branch: str
+    workspace: AgentWorkspace
 
     async def dirty_repos(self) -> list[str]:
         """Names of repos with uncommitted changes (the agent's edits)."""
-        names = list(self._workspace.repos)
+        names = list(self.workspace.repos)
         statuses = await asyncio.gather(
             *(_run_git(self.root / name, 'status', '--porcelain')
               for name in names))
         return [name for name, status in zip(names, statuses)
                 if status.strip()]
 
-    async def publish_turn(self, name: str, prompt: str, summary: str,
-                           pr_url: str | None) -> PullRequestUpdate:
+    async def publish_turn(self, name: str, prompt: str, title: str,
+                           body: str, pr_url: str | None) -> PullRequestUpdate:
         """Commit and push one repo's edits; open the pull request if the
         conversation doesn't have one for this repo yet."""
-        repo = self._workspace.repos[name]
         repo_dir = self.root / name
-        title, body = split_summary(prompt, summary)
 
         await _run_git(repo_dir, 'add', '-A')
         await _run_git(
@@ -255,13 +237,14 @@ class ConversationCheckout:
             'commit', '-m', title[:72],
             '-m', f'Requested via {AGENT_REQUEST_SOURCE}:\n\n{prompt}',
         )
-        await self._workspace.run_git_authed(
+        await self.workspace.run_git_authed(
             repo_dir, 'push', '-u', 'origin', self.branch)
 
         if pr_url is not None:
             return PullRequestUpdate(repo_name=name, url=pr_url,
                                      created=False)
-        url = await self._create_pull_request(repo, repo_dir, title, body)
+        url = await self._create_pull_request(self.workspace.repos[name],
+                                              repo_dir, title, body)
         return PullRequestUpdate(repo_name=name, url=url, created=True)
 
     async def _create_pull_request(self, repo: AgentRepo, repo_dir: Path,
@@ -270,7 +253,7 @@ class ConversationCheckout:
         body += ('\n\n---\nOpened by the JermaBot coding agent at the '
                  f'owner\'s request via {AGENT_REQUEST_SOURCE}.')
         # --body-file - takes the body on stdin, dodging argv size limits.
-        output = await self._workspace.run_authed(
+        output = await self.workspace.run_authed(
             ['gh', 'pr', 'create',
              '--repo', repo.slug,
              '--head', self.branch,

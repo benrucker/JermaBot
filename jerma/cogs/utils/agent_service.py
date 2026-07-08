@@ -21,12 +21,13 @@ from pathlib import Path
 
 from .agent_config import (
     AGENT_CONVERSATION_IDLE_DAYS,
+    AGENT_EVICTION_INTERVAL_SECONDS,
     AGENT_REPOS,
     get_conversations_root,
     get_github_token,
     get_workspace_root,
 )
-from .agent_runner import OnProgress, run_agent
+from .agent_runner import OnProgress, run_agent, split_reply
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
@@ -49,10 +50,29 @@ class TaskReport:
 class Conversation:
     """One channel's ongoing work: its checkout, session, and pull requests."""
     checkout: ConversationCheckout
-    session_id: str | None
-    pr_urls: dict[str, str]  # repo name -> the conversation's PR there
-    last_active: datetime
+    session_id: str | None = None
+    pr_urls: dict[str, str] = field(default_factory=dict)  # repo -> PR url
+    last_active: datetime = field(default_factory=datetime.now)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    def to_state(self) -> dict:
+        """The persisted shape; the lock and checkout root are runtime-only."""
+        return {
+            'branch': self.checkout.branch,
+            'session_id': self.session_id,
+            'pr_urls': self.pr_urls,
+            'last_active': self.last_active.isoformat(),
+        }
+
+    @classmethod
+    def from_state(cls, entry: dict, root: Path,
+                   workspace: AgentWorkspace) -> 'Conversation':
+        return cls(
+            checkout=ConversationCheckout(root, entry['branch'], workspace),
+            session_id=entry['session_id'],
+            pr_urls=entry['pr_urls'],
+            last_active=datetime.fromisoformat(entry['last_active']),
+        )
 
 
 class AgentTaskService:
@@ -67,6 +87,7 @@ class AgentTaskService:
         self.conversations_root = get_conversations_root()
         self.conversations: dict[int, Conversation] = {}
         self._ensure_task: asyncio.Task | None = None
+        self._evict_task: asyncio.Task | None = None
 
     def has_conversation(self, key: int) -> bool:
         return key in self.conversations
@@ -75,10 +96,12 @@ class AgentTaskService:
         """Load conversation state and begin readying repos in the background."""
         self._load_state()
         self._ensure_task = asyncio.create_task(self._startup())
+        self._evict_task = asyncio.create_task(self._evict_loop())
 
     def close(self):
-        if self._ensure_task is not None:
-            self._ensure_task.cancel()
+        for task in (self._ensure_task, self._evict_task):
+            if task is not None:
+                task.cancel()
 
     async def run(self, key: int, prompt: str,
                   on_progress: OnProgress) -> TaskReport:
@@ -101,12 +124,15 @@ class AgentTaskService:
                 conversation.session_id = result.session_id
 
             pull_requests = []
-            for name in await conversation.checkout.dirty_repos():
-                update = await conversation.checkout.publish_turn(
-                    name, prompt, result.final_text,
-                    pr_url=conversation.pr_urls.get(name))
-                conversation.pr_urls[name] = update.url
-                pull_requests.append(update)
+            if names := await conversation.checkout.dirty_repos():
+                title, body = split_reply(prompt, result.final_text)
+                pull_requests = await asyncio.gather(*(
+                    conversation.checkout.publish_turn(
+                        name, prompt, title, body,
+                        pr_url=conversation.pr_urls.get(name))
+                    for name in names))
+            for update in pull_requests:
+                conversation.pr_urls[update.repo_name] = update.url
 
             self._save_state()
             return TaskReport(answer=result.final_text,
@@ -119,14 +145,23 @@ class AgentTaskService:
             return conversation
 
         await self._ready()
-        await self._evict_stale()
         checkout = await self.workspace.create_checkout(
-            self.conversations_root / str(key), prompt)
-        conversation = Conversation(checkout=checkout, session_id=None,
-                                    pr_urls={}, last_active=datetime.now())
+            self._conversation_root(key), prompt)
+        conversation = Conversation(checkout=checkout)
         self.conversations[key] = conversation
         self._save_state()
         return conversation
+
+    async def _evict_loop(self):
+        """Evict idle conversations at boot and daily after. Eviction is
+        housekeeping, deliberately its own background job so cleanup never
+        delays or fails a user's turn."""
+        while True:
+            try:
+                await self._evict_stale()
+            except Exception as error:
+                print(f'Agent service: eviction failed: {error}')
+            await asyncio.sleep(AGENT_EVICTION_INTERVAL_SECONDS)
 
     async def _evict_stale(self):
         """Drop conversations idle past the limit; their PRs live on GitHub."""
@@ -146,9 +181,6 @@ class AgentTaskService:
         if cloned:
             print(f'Agent service: cloned {", ".join(cloned)} '
                   f'into {self.workspace.root}')
-        # Deliberately also evicted here (not just before conversation
-        # creation) so idle checkouts free disk even on a quiet boot.
-        await self._evict_stale()
 
     async def _ready(self):
         """Wait for the startup task, restarting it if it failed."""
@@ -162,33 +194,25 @@ class AgentTaskService:
     def _state_path(self) -> Path:
         return self.conversations_root / STATE_FILE
 
+    def _conversation_root(self, key: int | str) -> Path:
+        return self.conversations_root / str(key)
+
     def _load_state(self):
         path = self._state_path()
         if not path.exists():
             return
         for key, entry in json.loads(path.read_text(encoding='utf-8')).items():
-            root = self.conversations_root / key
+            root = self._conversation_root(key)
             if not root.exists():
                 print(f'Agent service: dropping conversation {key}; '
                       'its checkout is gone')
                 continue
-            self.conversations[int(key)] = Conversation(
-                checkout=self.workspace.reopen_checkout(root, entry['branch']),
-                session_id=entry['session_id'],
-                pr_urls=entry['pr_urls'],
-                last_active=datetime.fromisoformat(entry['last_active']),
-            )
+            self.conversations[int(key)] = Conversation.from_state(
+                entry, root, self.workspace)
 
     def _save_state(self):
         self.conversations_root.mkdir(parents=True, exist_ok=True)
-        state = {
-            str(key): {
-                'branch': conversation.checkout.branch,
-                'session_id': conversation.session_id,
-                'pr_urls': conversation.pr_urls,
-                'last_active': conversation.last_active.isoformat(),
-            }
-            for key, conversation in self.conversations.items()
-        }
+        state = {str(key): conversation.to_state()
+                 for key, conversation in self.conversations.items()}
         self._state_path().write_text(json.dumps(state, indent=2),
                                       encoding='utf-8')

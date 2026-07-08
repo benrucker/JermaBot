@@ -9,6 +9,7 @@ repo, updated turn by turn. This cog handles only the Discord side —
 detection, threads, message chunking, and reporting; conversations execute
 behind AgentTaskService.
 """
+import asyncio
 import traceback
 
 import discord
@@ -18,8 +19,6 @@ from jermabot import JermaBot
 from .utils.agent_config import AGENT_TIMEOUT_SECONDS
 from .utils.agent_service import AgentTaskService, WorkspaceError
 from .utils.split_message import MESSAGE_LIMIT, split_message
-
-CHECKING_EMOJI = '👋'
 
 
 async def setup(bot):
@@ -53,8 +52,8 @@ class Agent(commands.Cog):
             raw = message.content
         else:
             return
-        prompt = raw.strip() or None
-        if prompt is None:
+        prompt = raw.strip()
+        if not prompt:
             return
 
         if not await self.bot.is_owner(message.author):
@@ -82,9 +81,9 @@ class Agent(commands.Cog):
                 and channel.owner_id == self.bot.user.id)
 
     async def _handle_prompt(self, message: discord.Message, prompt: str):
-        """Run one turn: a reaction acknowledges the message, and a thread
-        is created right before the first reply so the whole conversation —
-        including any follow-ups — lives inside it."""
+        """Run one turn: a typing indicator shows the agent working, and a
+        thread is created right before the first reply so the whole
+        conversation — including any follow-ups — lives inside it."""
         # In a thread or DM the conversation is already contained; elsewhere
         # a thread is created when the first message needs a home.
         contained = isinstance(message.channel,
@@ -93,7 +92,10 @@ class Agent(commands.Cog):
             await message.reply("I can't make a thread here :(")
             return
 
-        await self._acknowledge(message)
+        # Typing wherever the next reply will land: the prompt's channel
+        # until a thread exists, the thread once it does.
+        typing = _TypingIndicator()
+        typing.move_to(message.channel)
 
         # The conversation is keyed by the channel its replies live in. A
         # thread created from a message shares that message's id, so the
@@ -107,6 +109,7 @@ class Agent(commands.Cog):
             nonlocal channel
             if channel is None:
                 channel = await message.create_thread(name=prompt[:80])
+                typing.move_to(channel)
             return channel
 
         async def set_status(text: str):
@@ -133,6 +136,8 @@ class Agent(commands.Cog):
             trace = traceback.format_exc()[-1500:]
             await set_status(f'Error:\n```py\n{trace}\n```')
             return
+        finally:
+            typing.stop()
 
         answer = report.answer.strip()
         if answer:
@@ -154,12 +159,6 @@ class Agent(commands.Cog):
                                   f'**{pull_request.repo_name}**: '
                                   f'{pull_request.url}')
 
-    async def _acknowledge(self, message: discord.Message):
-        try:
-            await message.add_reaction(CHECKING_EMOJI)
-        except discord.HTTPException:
-            pass  # the ack is a nicety; never abort the task over it
-
     def _can_create_thread(self, message: discord.Message) -> bool:
         """Whether a response thread could be made, should the task need one."""
         return (isinstance(message.channel, discord.TextChannel)
@@ -169,3 +168,38 @@ class Agent(commands.Cog):
     async def _send_message(self, channel, text: str):
         for chunk in split_message(text):
             await channel.send(chunk)
+
+
+class _TypingIndicator:
+    """A "typing…" indicator that follows the conversation, staying lit for
+    as long as the agent is working in whichever channel move_to last named."""
+
+    def __init__(self):
+        self._task: asyncio.Task | None = None
+        self._stopped = False
+
+    def move_to(self, channel: discord.abc.Messageable):
+        """Show typing in `channel` instead; ignored once stopped, so a
+        thread created for a reply after the run can't relight it."""
+        if self._stopped:
+            return
+        self._cancel()
+        self._task = asyncio.create_task(self._type_in(channel))
+
+    def stop(self):
+        self._stopped = True
+        self._cancel()
+
+    def _cancel(self):
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+
+    @staticmethod
+    async def _type_in(channel: discord.abc.Messageable):
+        try:
+            # typing() refreshes the indicator itself until the context exits.
+            async with channel.typing():
+                await asyncio.Event().wait()
+        except discord.HTTPException:
+            pass  # the indicator is a nicety; never abort the task over it

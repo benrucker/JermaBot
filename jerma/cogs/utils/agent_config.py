@@ -7,8 +7,10 @@ from pathlib import Path
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
 # Conversations idle this long lose their checkouts; branches and pull
-# requests live on GitHub, so only local state goes.
+# requests live on GitHub, so only local state goes. A background sweep
+# runs at the given interval to enforce it.
 AGENT_CONVERSATION_IDLE_DAYS = 7
+AGENT_EVICTION_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -34,17 +36,19 @@ AGENT_COMMIT_EMAIL = 'jermabot@users.noreply.github.com'
 AGENT_REQUEST_SOURCE = 'Discord'
 
 
+def _env_dir(var: str, default: str) -> Path:
+    return Path(os.environ.get(var, default)).expanduser().resolve()
+
+
 def get_workspace_root() -> Path:
     """Directory containing the pre-cloned target repos."""
-    raw = os.environ.get('JERMABOT_AGENT_REPOS_DIR', '~/jermabot-agent/repos')
-    return Path(raw).expanduser().resolve()
+    return _env_dir('JERMABOT_AGENT_REPOS_DIR', '~/jermabot-agent/repos')
 
 
 def get_conversations_root() -> Path:
     """Directory holding per-conversation checkouts and their state file."""
-    raw = os.environ.get('JERMABOT_AGENT_CONVERSATIONS_DIR',
-                         '~/jermabot-agent/conversations')
-    return Path(raw).expanduser().resolve()
+    return _env_dir('JERMABOT_AGENT_CONVERSATIONS_DIR',
+                    '~/jermabot-agent/conversations')
 
 
 def get_github_token() -> str | None:

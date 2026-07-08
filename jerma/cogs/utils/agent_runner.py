@@ -52,6 +52,17 @@ class AgentRunResult:
     session_id: str | None = None
 
 
+def split_reply(prompt: str, reply: str) -> tuple[str, str]:
+    """Split a file-editing turn's reply into a PR/commit title and PR
+    body, per the shape _build_instructions asks for. When the reply is
+    missing (e.g. a timed-out turn), the prompt's first line stands in."""
+    first, _, rest = reply.strip().partition('\n')
+    title = first.strip('#*` ')  # tolerate heading/bold markup
+    if title:
+        return title, rest.strip()
+    return prompt.strip().splitlines()[0], reply.strip()
+
+
 def _deny(reason: str) -> HookJSONOutput:
     return {
         'hookSpecificOutput': {
@@ -178,7 +189,6 @@ async def run_agent(prompt: str, workspace_root: Path,
                 elif texts:
                     result.final_text = '\n\n'.join(texts)
             elif isinstance(message, ResultMessage):
-                result.session_id = message.session_id
                 if message.result:
                     result.final_text = message.result
 
