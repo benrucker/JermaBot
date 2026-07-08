@@ -1,9 +1,13 @@
 """Owner-only coding agent: ping JermaBot with a request, get answers or PRs.
 
 When the owner pings the bot with something that isn't a command, the
-message is forwarded to a coding-agent task. This cog handles only the
-Discord side — detection, threads, message chunking, and reporting; how
-tasks execute lives behind AgentTaskService.
+message starts a coding-agent conversation. Replies live in a thread
+created just before the first one, and further owner messages in that
+thread continue the conversation — no ping needed. Conversations run
+concurrently, each keeping one branch and at most one pull request per
+repo, updated turn by turn. This cog handles only the Discord side —
+detection, threads, message chunking, and reporting; conversations execute
+behind AgentTaskService.
 """
 import traceback
 
@@ -12,10 +16,9 @@ from discord.ext import commands
 
 from jermabot import JermaBot
 from .utils.agent_config import AGENT_TIMEOUT_SECONDS
-from .utils.agent_service import AgentBusyError, AgentTaskService, WorkspaceError
+from .utils.agent_service import AgentTaskService, WorkspaceError
 from .utils.split_message import MESSAGE_LIMIT, split_message
 
-BUSY_MESSAGE = "Hold up, gamer, I'm busy."
 CHECKING_EMOJI = '👋'
 
 
@@ -39,7 +42,18 @@ class Agent(commands.Cog):
         if message.author.bot or self.bot.user is None:
             return
 
-        prompt = self._extract_prompt(message.content)
+        # A conversation in a thread the bot created hears every owner
+        # message; anywhere else — channels, DMs, other people's threads —
+        # it takes a ping to start or continue one.
+        stripped = self._strip_mention(message.content)
+        if stripped is not None:
+            raw = stripped
+        elif (self.service.has_conversation(message.channel.id)
+                and self._is_own_thread(message.channel)):
+            raw = message.content
+        else:
+            return
+        prompt = raw.strip() or None
         if prompt is None:
             return
 
@@ -50,27 +64,27 @@ class Agent(commands.Cog):
         if ctx.valid:
             return
 
-        if self.service.busy:
-            await message.reply(BUSY_MESSAGE)
-            return
-
         await self._handle_prompt(message, prompt)
 
-    def _extract_prompt(self, content: str) -> str | None:
-        """Return the prompt if the message is a direct ping, else None."""
+    def _strip_mention(self, content: str) -> str | None:
+        """The rest of a message that leads with a ping of the bot, else None."""
         assert self.bot.user is not None
 
         for mention in (f'<@{self.bot.user.id}>', f'<@!{self.bot.user.id}>'):
             if content.startswith(mention):
-                return content.removeprefix(mention).strip() or None
+                return content.removeprefix(mention)
 
         return None
 
+    def _is_own_thread(self, channel) -> bool:
+        assert self.bot.user is not None
+        return (isinstance(channel, discord.Thread)
+                and channel.owner_id == self.bot.user.id)
+
     async def _handle_prompt(self, message: discord.Message, prompt: str):
-        """Run the task: a reaction acknowledges the ping, and a thread is
-        created only once there's more than a single reply's worth of
-        conversation to hold. A lone message-sized answer with nothing to
-        publish is just a reply in the channel."""
+        """Run one turn: a reaction acknowledges the message, and a thread
+        is created right before the first reply so the whole conversation —
+        including any follow-ups — lives inside it."""
         # In a thread or DM the conversation is already contained; elsewhere
         # a thread is created when the first message needs a home.
         contained = isinstance(message.channel,
@@ -80,6 +94,11 @@ class Agent(commands.Cog):
             return
 
         await self._acknowledge(message)
+
+        # The conversation is keyed by the channel its replies live in. A
+        # thread created from a message shares that message's id, so the
+        # key is known before the thread exists.
+        key = message.channel.id if contained else message.id
 
         channel = message.channel if contained else None
         status: discord.Message | None = None
@@ -105,10 +124,8 @@ class Agent(commands.Cog):
             await self._send_message(await ensure_channel(), text)
 
         try:
-            report = await self.service.run(prompt, on_progress=send_in_thread)
-        except AgentBusyError:
-            await set_status(BUSY_MESSAGE)
-            return
+            report = await self.service.run(key, prompt,
+                                            on_progress=send_in_thread)
         except WorkspaceError as error:
             await set_status(f'Workspace error:\n{error}')
             return
@@ -119,11 +136,7 @@ class Agent(commands.Cog):
 
         answer = report.answer.strip()
         if answer:
-            if (channel is None and not report.pull_requests
-                    and len(answer) <= MESSAGE_LIMIT):
-                await message.reply(answer)
-            else:
-                await send_in_thread(answer)
+            await send_in_thread(answer)
         elif not report.pull_requests and not report.timed_out:
             await set_status('(The agent finished without saying anything.)')
 
@@ -135,7 +148,11 @@ class Agent(commands.Cog):
         if report.pull_requests:
             target = await ensure_channel()
             for pull_request in report.pull_requests:
-                await target.send(f'Pull request for **{pull_request.repo_name}**: {pull_request.url}')
+                verb = ('Pull request' if pull_request.created
+                        else 'Updated the pull request')
+                await target.send(f'{verb} for '
+                                  f'**{pull_request.repo_name}**: '
+                                  f'{pull_request.url}')
 
     async def _acknowledge(self, message: discord.Message):
         try:

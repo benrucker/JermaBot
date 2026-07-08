@@ -19,6 +19,7 @@ from claude_agent_sdk import (
     HookJSONOutput,
     HookMatcher,
     ResultMessage,
+    SystemMessage,
     TextBlock,
     ToolUseBlock,
 )
@@ -47,6 +48,8 @@ OnProgress = Callable[[str], Awaitable[None]]
 class AgentRunResult:
     final_text: str
     timed_out: bool
+    # Pass back as run_agent(resume=...) to continue this conversation.
+    session_id: str | None = None
 
 
 def _deny(reason: str) -> HookJSONOutput:
@@ -97,29 +100,29 @@ def _build_instructions(repos: dict[str, AgentRepo]) -> str:
         for name, repo in repos.items()
     )
     return (
-        'You are JermaBot, handling a request its owner '
-        f'sent over {AGENT_REQUEST_SOURCE}. Your working directory contains '
-        'checkouts of these repositories:\n'
+        'You are JermaBot, handling requests your owner sends over '
+        f'{AGENT_REQUEST_SOURCE}. Your working directory contains checkouts '
+        'of:\n'
         f'{repo_lines}\n\n'
-        'Rules:\n'
-        '- Work out from the request which repository (or repositories) it '
-        'concerns, and only modify those.\n'
-        '- You have no Bash, network, or version-control access. The harness '
-        'commits your edits and opens pull requests after you finish — never '
-        'try to run git or tests yourself.\n'
-        '- If the request is a question rather than a change, answer it '
-        'without editing any files.\n'
-        '- End with a concise summary of what you changed and why; it '
-        'becomes the pull request description. Plain Markdown, no preamble.\n'
-        '- Some requests are off topic — that is to be expected. Answer them '
-        'appropriately; don\'t request the user to adapt.'
+        '- Touch only the repositories the request concerns; questions get '
+        'answers, not edits.\n'
+        '- You have no Bash, network, or git. After each reply the harness '
+        'commits your edits to this conversation\'s branch and opens or '
+        'updates its pull request. Edits persist across requests.\n'
+        '- If you edited files, start your reply with a commit-style '
+        'imperative title line (under 70 characters) — it becomes the '
+        'commit message and pull request title — then, after a blank line, '
+        'the pull request description. Plain Markdown, no preamble.\n'
+        '- Off-topic requests are expected; just answer them.'
     )
 
 
 def _build_options(workspace_root: Path,
-                   repos: dict[str, AgentRepo]) -> ClaudeAgentOptions:
+                   repos: dict[str, AgentRepo],
+                   resume: str | None) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         cwd=str(workspace_root),
+        resume=resume,
         tools=list(AGENT_TOOLS),
         disallowed_tools=['Bash', 'Task', 'WebFetch', 'WebSearch'],
         permission_mode='acceptEdits',
@@ -140,8 +143,12 @@ def _build_options(workspace_root: Path,
 
 async def run_agent(prompt: str, workspace_root: Path,
                     repos: dict[str, AgentRepo],
-                    on_progress: OnProgress) -> AgentRunResult:
-    """Run one agent session; interim narration streams, the answer returns.
+                    on_progress: OnProgress,
+                    resume: str | None = None) -> AgentRunResult:
+    """Run one agent turn; interim narration streams, the answer returns.
+
+    Pass a previous result's session_id as resume to continue that
+    conversation with its context intact.
 
     Text sent alongside tool calls is narration about work in progress and
     goes to on_progress as it happens; a text-only assistant message ends the
@@ -156,7 +163,12 @@ async def run_agent(prompt: str, workspace_root: Path,
 
     async def consume(client: ClaudeSDKClient):
         async for message in client.receive_response():
-            if isinstance(message, AssistantMessage):
+            if isinstance(message, SystemMessage):
+                # The init message names the session up front, so it's known
+                # even if a timeout cuts the run short of its ResultMessage.
+                if message.subtype == 'init':
+                    result.session_id = message.data.get('session_id')
+            elif isinstance(message, AssistantMessage):
                 texts = [block.text for block in message.content
                          if isinstance(block, TextBlock) and block.text.strip()]
                 if any(isinstance(block, ToolUseBlock)
@@ -166,6 +178,7 @@ async def run_agent(prompt: str, workspace_root: Path,
                 elif texts:
                     result.final_text = '\n\n'.join(texts)
             elif isinstance(message, ResultMessage):
+                result.session_id = message.session_id
                 if message.result:
                     result.final_text = message.result
 
@@ -173,7 +186,8 @@ async def run_agent(prompt: str, workspace_root: Path,
         while (text := await outbox.get()) is not None:
             await on_progress(text)
 
-    async with ClaudeSDKClient(options=_build_options(workspace_root, repos)) as client:
+    options = _build_options(workspace_root, repos, resume)
+    async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
         sender = asyncio.create_task(deliver())
         try:

@@ -1,9 +1,13 @@
 """Git and GitHub plumbing for the coding agent.
 
 The agent itself has no Bash or network access; this module owns every git
-operation. Repos live in a persistent workspace directory and are cloned
-automatically on first use. Each run resets them to origin, and any repo the
-agent leaves dirty becomes a branch + pull request.
+operation. Pristine clones live in a persistent workspace directory and are
+cloned automatically on first use; they are never worked in directly. Each
+conversation instead gets its own checkout of every repo — a git worktree
+on a branch dedicated to that conversation — so conversations can run
+concurrently and edits accumulate across turns. Each turn's changes become
+a commit pushed to the conversation's branch, which opens a pull request
+the first time and updates it every time after.
 
 GitHub access goes through the gh CLI, which reads GITHUB_TOKEN from the
 environment: git authenticates via `gh auth git-credential` plugged in as a
@@ -37,9 +41,11 @@ class WorkspaceError(Exception):
 
 
 @dataclass
-class OpenedPullRequest:
+class PullRequestUpdate:
+    """A pull request opened or updated by one turn's edits."""
     repo_name: str
     url: str
+    created: bool  # False when the turn added commits to an existing PR
 
 
 async def _run(argv: list[str], cwd: Path,
@@ -69,17 +75,36 @@ async def _run_git(repo_dir: Path, *args: str) -> str:
     return await _run(['git', *args], cwd=repo_dir)
 
 
+def split_summary(prompt: str, summary: str) -> tuple[str, str]:
+    """Split the agent's summary into a PR title and body.
+
+    The agent is instructed to lead its summary with a commit-subject-style
+    title line; the rest is the description. When the summary is missing
+    (e.g. a timed-out turn), the prompt's first line stands in.
+    """
+    first, _, rest = summary.strip().partition('\n')
+    title = first.strip('#*` ')  # tolerate heading/bold markup
+    if title:
+        return title, rest.strip()
+    return prompt.strip().splitlines()[0], summary.strip()
+
+
 def slugify(text: str) -> str:
     slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
     return slug[:40].rstrip('-') or 'task'
 
 
 class AgentWorkspace:
+    """The pristine clones, and the conversation checkouts spawned off them."""
+
     def __init__(self, root: Path, repos: dict[str, AgentRepo],
                  github_token: str | None):
         self.root = root
         self.repos = repos
         self.github_token = github_token
+        # Serializes clone-mutating operations (fetch, worktree add/remove)
+        # per repo; conversations otherwise run fully in parallel.
+        self._repo_locks = {name: asyncio.Lock() for name in repos}
         if github_token:
             # The empty helper first clears any configured helpers (e.g. a
             # credential manager) so gh, holding our token, is the only one
@@ -95,8 +120,8 @@ class AgentWorkspace:
             print('AgentWorkspace: GITHUB_TOKEN not set; using this '
                   'machine\'s ambient git/gh credentials.')
 
-    async def _run_authed(self, argv: list[str], cwd: Path,
-                          stdin_data: str | None = None) -> str:
+    async def run_authed(self, argv: list[str], cwd: Path,
+                         stdin_data: str | None = None) -> str:
         """Run a command that talks to GitHub, adding a hint on auth trouble."""
         try:
             return await _run(argv, cwd=cwd, env=self._auth_env,
@@ -109,10 +134,10 @@ class AgentWorkspace:
                 '`gh auth login` on this machine.)'
             ) from e
 
-    async def _run_git_authed(self, repo_dir: Path, *args: str) -> str:
+    async def run_git_authed(self, repo_dir: Path, *args: str) -> str:
         """Authed twin of _run_git, for git commands that talk to GitHub."""
-        return await self._run_authed(['git', *self._auth_flags, *args],
-                                      cwd=repo_dir)
+        return await self.run_authed(['git', *self._auth_flags, *args],
+                                     cwd=repo_dir)
 
     def missing_repos(self) -> list[str]:
         """Names of configured repos not present in the workspace."""
@@ -134,42 +159,94 @@ class AgentWorkspace:
         partial = self.root / f'{name}.cloning'
         if partial.exists():
             await asyncio.to_thread(shutil.rmtree, partial)
-        await self._run_git_authed(
+        await self.run_git_authed(
             self.root, 'clone', '--depth', '1', '--single-branch',
             '-b', self.repos[name].base_branch,
             self._clone_url(name), str(partial),
         )
         partial.rename(self.root / name)
 
-    async def reset_all(self):
-        """Bring every repo to a clean checkout of its base branch at origin."""
-        await asyncio.gather(*(self._reset(name) for name in self.repos))
+    async def create_checkout(self, root: Path,
+                              prompt: str) -> 'ConversationCheckout':
+        """Check out every repo under root as worktrees on a fresh branch
+        named for the prompt."""
+        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        branch = f'{AGENT_BRANCH_PREFIX}/{slugify(prompt)}-{timestamp}'
+        root.mkdir(parents=True, exist_ok=True)
+        await asyncio.gather(*(
+            self._add_worktree(name, root / name, branch)
+            for name in self.repos))
+        return ConversationCheckout(root, branch, self)
 
-    async def _reset(self, name: str):
+    def reopen_checkout(self, root: Path,
+                        branch: str) -> 'ConversationCheckout':
+        """Rebind a checkout that already exists on disk (state reload)."""
+        return ConversationCheckout(root, branch, self)
+
+    async def _add_worktree(self, name: str, path: Path, branch: str):
         repo_dir = self.root / name
         base = self.repos[name].base_branch
-        await self._run_git_authed(repo_dir, 'fetch', 'origin', '--prune')
-        await _run_git(repo_dir, 'checkout', '-B', base, f'origin/{base}')
-        await _run_git(repo_dir, 'clean', '-fdx')
+        async with self._repo_locks[name]:
+            if path.exists():
+                # Wreckage the conversation state doesn't know about (e.g.
+                # a crash mid-creation); clear it and start over.
+                await asyncio.to_thread(shutil.rmtree, path)
+            await _run_git(repo_dir, 'worktree', 'prune')
+            await self.run_git_authed(repo_dir, 'fetch', 'origin', '--prune')
+            await _run_git(repo_dir, 'worktree', 'add', '-B', branch,
+                           str(path), f'origin/{base}')
+
+    async def remove_checkout(self, checkout: 'ConversationCheckout'):
+        """Drop a conversation's worktrees and local branches.
+
+        The branch and any pull request live on GitHub; only local state
+        goes. Best-effort: a repo that fails to clean up is reported and
+        skipped rather than stopping the rest.
+        """
+        for name in self.repos:
+            repo_dir = self.root / name
+            path = checkout.root / name
+            async with self._repo_locks[name]:
+                try:
+                    if path.exists():
+                        await _run_git(repo_dir, 'worktree', 'remove',
+                                       '--force', str(path))
+                    await _run_git(repo_dir, 'branch', '-D', checkout.branch)
+                except WorkspaceError as error:
+                    print(f'AgentWorkspace: cleaning up {path}: {error}')
+        if checkout.root.exists():
+            await asyncio.to_thread(shutil.rmtree, checkout.root,
+                                    ignore_errors=True)
+
+
+class ConversationCheckout:
+    """One conversation's working copies: a worktree per repo, all on the
+    conversation's branch. Edits accumulate here across turns — nothing is
+    reset — and every turn's changes are pushed to the same branch, so each
+    repo accrues at most one pull request per conversation."""
+
+    def __init__(self, root: Path, branch: str, workspace: AgentWorkspace):
+        self.root = root
+        self.branch = branch
+        self._workspace = workspace
 
     async def dirty_repos(self) -> list[str]:
         """Names of repos with uncommitted changes (the agent's edits)."""
-        names = list(self.repos)
+        names = list(self._workspace.repos)
         statuses = await asyncio.gather(
             *(_run_git(self.root / name, 'status', '--porcelain')
               for name in names))
         return [name for name, status in zip(names, statuses)
                 if status.strip()]
 
-    async def publish(self, name: str, prompt: str, summary: str) -> OpenedPullRequest:
-        """Turn a dirty repo into a branch, commit, push, and pull request."""
-        repo = self.repos[name]
+    async def publish_turn(self, name: str, prompt: str, summary: str,
+                           pr_url: str | None) -> PullRequestUpdate:
+        """Commit and push one repo's edits; open the pull request if the
+        conversation doesn't have one for this repo yet."""
+        repo = self._workspace.repos[name]
         repo_dir = self.root / name
-        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        branch = f'{AGENT_BRANCH_PREFIX}/{slugify(prompt)}-{timestamp}'
-        title = prompt.strip().splitlines()[0]
+        title, body = split_summary(prompt, summary)
 
-        await _run_git(repo_dir, 'checkout', '-b', branch)
         await _run_git(repo_dir, 'add', '-A')
         await _run_git(
             repo_dir,
@@ -178,26 +255,25 @@ class AgentWorkspace:
             'commit', '-m', title[:72],
             '-m', f'Requested via {AGENT_REQUEST_SOURCE}:\n\n{prompt}',
         )
-        await self._run_git_authed(repo_dir, 'push', 'origin', branch)
-        try:
-            url = await self._create_pull_request(
-                repo, repo_dir, branch, title, summary)
-        finally:
-            await _run_git(repo_dir, 'checkout', repo.base_branch)
-            await _run_git(repo_dir, 'branch', '-D', branch)
-        return OpenedPullRequest(repo_name=name, url=url)
+        await self._workspace.run_git_authed(
+            repo_dir, 'push', '-u', 'origin', self.branch)
+
+        if pr_url is not None:
+            return PullRequestUpdate(repo_name=name, url=pr_url,
+                                     created=False)
+        url = await self._create_pull_request(repo, repo_dir, title, body)
+        return PullRequestUpdate(repo_name=name, url=url, created=True)
 
     async def _create_pull_request(self, repo: AgentRepo, repo_dir: Path,
-                                   branch: str, title: str,
-                                   summary: str) -> str:
-        body = summary.strip()[:60000] or '(The agent did not leave a summary.)'
+                                   title: str, body: str) -> str:
+        body = body[:60000] or '(The agent did not leave a summary.)'
         body += ('\n\n---\nOpened by the JermaBot coding agent at the '
                  f'owner\'s request via {AGENT_REQUEST_SOURCE}.')
         # --body-file - takes the body on stdin, dodging argv size limits.
-        output = await self._run_authed(
+        output = await self._workspace.run_authed(
             ['gh', 'pr', 'create',
              '--repo', repo.slug,
-             '--head', branch,
+             '--head', self.branch,
              '--base', repo.base_branch,
              '--title', title[:250],
              '--body-file', '-'],
