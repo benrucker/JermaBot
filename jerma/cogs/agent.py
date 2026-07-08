@@ -16,7 +16,7 @@ from .utils.agent_service import AgentBusyError, AgentTaskService, WorkspaceErro
 from .utils.split_message import MESSAGE_LIMIT, split_message
 
 BUSY_MESSAGE = "Hold up, gamer, I'm busy."
-CHECKING_EMOJI = discord.PartialEmoji.from_str('<a:jermaDetective:863205690764165160>')
+CHECKING_EMOJI = '👋'
 
 
 async def setup(bot):
