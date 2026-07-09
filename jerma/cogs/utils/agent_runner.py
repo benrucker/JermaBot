@@ -48,11 +48,15 @@ OnProgress = Callable[[str], Awaitable[None]]
 class AgentRunResult:
     final_text: str
     timed_out: bool
+    # The reply parsed into a PR/commit title and PR body, for turns that
+    # edited files.
+    title: str = ''
+    body: str = ''
     # Pass back as run_agent(resume=...) to continue this conversation.
     session_id: str | None = None
 
 
-def split_reply(prompt: str, reply: str) -> tuple[str, str]:
+def _split_reply(prompt: str, reply: str) -> tuple[str, str]:
     """Split a file-editing turn's reply into a PR/commit title and PR
     body, per the shape _build_instructions asks for. When the reply is
     missing (e.g. a timed-out turn), the prompt's first line stands in."""
@@ -212,4 +216,5 @@ async def run_agent(prompt: str, workspace_root: Path,
             outbox.put_nowait(None)  # deliver queued text, then stop
             await sender
 
+    result.title, result.body = _split_reply(prompt, result.final_text)
     return result

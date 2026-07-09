@@ -214,7 +214,16 @@ class ConversationCheckout:
     branch: str
     workspace: AgentWorkspace
 
-    async def dirty_repos(self) -> list[str]:
+    async def publish_turn(self, prompt: str, title: str, body: str,
+                           pr_urls: dict[str, str]) -> list[PullRequestUpdate]:
+        """Commit, push, and open or update a pull request for every repo
+        the agent edited, in parallel."""
+        return await asyncio.gather(*(
+            self._publish_repo(name, prompt, title, body,
+                               pr_url=pr_urls.get(name))
+            for name in await self._dirty_repos()))
+
+    async def _dirty_repos(self) -> list[str]:
         """Names of repos with uncommitted changes (the agent's edits)."""
         names = list(self.workspace.repos)
         statuses = await asyncio.gather(
@@ -223,8 +232,8 @@ class ConversationCheckout:
         return [name for name, status in zip(names, statuses)
                 if status.strip()]
 
-    async def publish_turn(self, name: str, prompt: str, title: str,
-                           body: str, pr_url: str | None) -> PullRequestUpdate:
+    async def _publish_repo(self, name: str, prompt: str, title: str,
+                            body: str, pr_url: str | None) -> PullRequestUpdate:
         """Commit and push one repo's edits; open the pull request if the
         conversation doesn't have one for this repo yet."""
         repo_dir = self.root / name

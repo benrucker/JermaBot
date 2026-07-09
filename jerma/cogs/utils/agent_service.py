@@ -27,7 +27,7 @@ from .agent_config import (
     get_github_token,
     get_workspace_root,
 )
-from .agent_runner import OnProgress, run_agent, split_reply
+from .agent_runner import OnProgress, run_agent
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
@@ -123,14 +123,8 @@ class AgentTaskService:
             if result.session_id is not None:
                 conversation.session_id = result.session_id
 
-            pull_requests = []
-            if names := await conversation.checkout.dirty_repos():
-                title, body = split_reply(prompt, result.final_text)
-                pull_requests = await asyncio.gather(*(
-                    conversation.checkout.publish_turn(
-                        name, prompt, title, body,
-                        pr_url=conversation.pr_urls.get(name))
-                    for name in names))
+            pull_requests = await conversation.checkout.publish_turn(
+                prompt, result.title, result.body, conversation.pr_urls)
             for update in pull_requests:
                 conversation.pr_urls[update.repo_name] = update.url
 
@@ -146,7 +140,7 @@ class AgentTaskService:
 
         await self._ready()
         checkout = await self.workspace.create_checkout(
-            self._conversation_root(key), prompt)
+            self.conversations_root / str(key), prompt)
         conversation = Conversation(checkout=checkout)
         self.conversations[key] = conversation
         self._save_state()
@@ -158,6 +152,8 @@ class AgentTaskService:
         delays or fails a user's turn."""
         while True:
             try:
+                # Removing worktrees needs the pristine clones in place.
+                await self._ready()
                 await self._evict_stale()
             except Exception as error:
                 print(f'Agent service: eviction failed: {error}')
@@ -194,15 +190,12 @@ class AgentTaskService:
     def _state_path(self) -> Path:
         return self.conversations_root / STATE_FILE
 
-    def _conversation_root(self, key: int | str) -> Path:
-        return self.conversations_root / str(key)
-
     def _load_state(self):
         path = self._state_path()
         if not path.exists():
             return
         for key, entry in json.loads(path.read_text(encoding='utf-8')).items():
-            root = self._conversation_root(key)
+            root = self.conversations_root / key
             if not root.exists():
                 print(f'Agent service: dropping conversation {key}; '
                       'its checkout is gone')
