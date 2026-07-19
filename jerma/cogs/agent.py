@@ -54,7 +54,9 @@ class Agent(commands.Cog):
         else:
             return
         prompt = raw.strip()
-        if not prompt:
+        images = [a for a in message.attachments
+                  if a.content_type and a.content_type.startswith('image/')]
+        if not prompt and not images:
             return
 
         if not await self.bot.is_owner(message.author):
@@ -64,7 +66,7 @@ class Agent(commands.Cog):
         if ctx.valid:
             return
 
-        await self._handle_prompt(message, prompt)
+        await self._handle_prompt(message, prompt, images)
 
     def _strip_mention(self, content: str) -> str | None:
         """The rest of a message that leads with a ping of the bot, else None."""
@@ -81,7 +83,8 @@ class Agent(commands.Cog):
         return (isinstance(channel, discord.Thread)
                 and channel.owner_id == self.bot.user.id)
 
-    async def _handle_prompt(self, message: discord.Message, prompt: str):
+    async def _handle_prompt(self, message: discord.Message, prompt: str,
+                              images: list[discord.Attachment] = ()):
         """Run one turn: a typing indicator shows the agent working, and a
         thread is created right before the first reply so the whole
         conversation — including any follow-ups — lives inside it."""
@@ -128,8 +131,12 @@ class Agent(commands.Cog):
 
         try:
             async with typing:
+                image_data = []
+                for a in images:
+                    image_data.append((a.filename, await a.read()))
                 report = await self.service.run(key, prompt,
-                                                on_progress=send_in_thread)
+                                                on_progress=send_in_thread,
+                                                images=image_data)
         except WorkspaceError as error:
             await set_status(f'Workspace error:\n{error}')
             return

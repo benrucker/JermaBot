@@ -64,7 +64,8 @@ def _split_reply(prompt: str, reply: str) -> tuple[str, str]:
     title = first.strip('#*` ')  # tolerate heading/bold markup
     if title:
         return title, rest.strip()
-    return prompt.strip().splitlines()[0], reply.strip()
+    lines = (prompt.strip() or reply.strip()).splitlines()
+    return (lines[0] if lines else 'untitled'), reply.strip()
 
 
 def _deny(reason: str) -> HookJSONOutput:
@@ -159,7 +160,8 @@ def _build_options(workspace_root: Path,
 async def run_agent(prompt: str, workspace_root: Path,
                     repos: dict[str, AgentRepo],
                     on_progress: OnProgress,
-                    resume: str | None = None) -> AgentRunResult:
+                    resume: str | None = None,
+                    image_paths: list[Path] = ()) -> AgentRunResult:
     """Run one agent turn; interim narration streams, the answer returns.
 
     Pass a previous result's session_id as resume to continue that
@@ -199,6 +201,11 @@ async def run_agent(prompt: str, workspace_root: Path,
     async def deliver():
         while (text := await outbox.get()) is not None:
             await on_progress(text)
+
+    if image_paths:
+        paths_str = '\n'.join(f'- {p}' for p in image_paths)
+        prompt = (f'{prompt}\n\nImage attachment(s) saved in the workspace:\n'
+                  f'{paths_str}\nUse the Read tool to view them.')
 
     options = _build_options(workspace_root, repos, resume)
     async with ClaudeSDKClient(options=options) as client:
