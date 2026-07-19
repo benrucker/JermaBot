@@ -111,7 +111,8 @@ class Agent(commands.Cog):
         async def ensure_channel():
             nonlocal channel
             if channel is None:
-                channel = await message.create_thread(name=prompt[:80])
+                channel = await message.create_thread(
+                    name=(prompt or 'image attachment')[:80])
                 typing.move_to(channel)
             return channel
 
