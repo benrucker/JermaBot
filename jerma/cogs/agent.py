@@ -13,6 +13,7 @@ import asyncio
 import math
 import traceback
 
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -20,6 +21,22 @@ from jermabot import JermaBot
 from .utils.agent_config import AGENT_TIMEOUT_SECONDS
 from .utils.agent_service import AgentTaskService, WorkspaceError
 from .utils.split_message import MESSAGE_LIMIT, split_message
+
+
+def _collect_embed_image_urls(message: discord.Message) -> list[str]:
+    """Return image URLs from Discord embeds created for pasted image links."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    for embed in message.embeds:
+        url = None
+        if embed.type == 'image' and embed.url:
+            url = embed.url
+        elif embed.image and embed.image.url:
+            url = embed.image.url
+        if url and url not in seen:
+            seen.add(url)
+            urls.append(url)
+    return urls
 
 
 async def setup(bot):
@@ -56,7 +73,8 @@ class Agent(commands.Cog):
         prompt = raw.strip()
         images = [a for a in message.attachments
                   if a.content_type and a.content_type.startswith('image/')]
-        if not prompt and not images:
+        inline_urls = _collect_embed_image_urls(message)
+        if not prompt and not images and not inline_urls:
             return
 
         if not await self.bot.is_owner(message.author):
@@ -66,7 +84,7 @@ class Agent(commands.Cog):
         if ctx.valid:
             return
 
-        await self._handle_prompt(message, prompt, images)
+        await self._handle_prompt(message, prompt, images, inline_urls)
 
     def _strip_mention(self, content: str) -> str | None:
         """The rest of a message that leads with a ping of the bot, else None."""
@@ -84,7 +102,8 @@ class Agent(commands.Cog):
                 and channel.owner_id == self.bot.user.id)
 
     async def _handle_prompt(self, message: discord.Message, prompt: str,
-                              images: list[discord.Attachment] = ()):
+                              images: list[discord.Attachment] = (),
+                              inline_urls: list[str] = ()):
         """Run one turn: a typing indicator shows the agent working, and a
         thread is created right before the first reply so the whole
         conversation — including any follow-ups — lives inside it."""
@@ -135,6 +154,18 @@ class Agent(commands.Cog):
                 image_data = []
                 for a in images:
                     image_data.append((a.filename, await a.read()))
+                if inline_urls:
+                    async with aiohttp.ClientSession() as session:
+                        for url in inline_urls:
+                            try:
+                                async with session.get(url) as resp:
+                                    ct = resp.headers.get('Content-Type', '')
+                                    if resp.status == 200 and ct.startswith('image/'):
+                                        filename = (url.rstrip('/').split('/')[-1]
+                                                    .split('?')[0] or 'image')
+                                        image_data.append((filename, await resp.read()))
+                            except Exception:
+                                pass
                 report = await self.service.run(key, prompt,
                                                 on_progress=send_in_thread,
                                                 images=image_data)
