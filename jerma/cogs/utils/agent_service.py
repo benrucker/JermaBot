@@ -104,7 +104,8 @@ class AgentTaskService:
                 task.cancel()
 
     async def run(self, key: int, prompt: str,
-                  on_progress: OnProgress) -> TaskReport:
+                  on_progress: OnProgress,
+                  images: list[tuple[str, bytes]] = ()) -> TaskReport:
         """Run one turn of the keyed conversation, creating it if new.
 
         Turns of the same conversation queue on its lock; different
@@ -113,12 +114,14 @@ class AgentTaskService:
         conversation = await self._get_or_create(key, prompt)
         async with conversation.lock:
             conversation.last_active = datetime.now()
+            image_paths = self._save_images(conversation.checkout.root, images)
             result = await run_agent(
                 prompt=prompt,
                 workspace_root=conversation.checkout.root,
                 repos=self.workspace.repos,
                 on_progress=on_progress,
                 resume=conversation.session_id,
+                image_paths=image_paths,
             )
             if result.session_id is not None:
                 conversation.session_id = result.session_id
@@ -132,6 +135,19 @@ class AgentTaskService:
             return TaskReport(answer=result.final_text,
                               pull_requests=pull_requests,
                               timed_out=result.timed_out)
+
+    def _save_images(self, root: Path,
+                     images: list[tuple[str, bytes]]) -> list[Path]:
+        if not images:
+            return []
+        attachments_dir = root / '_attachments'
+        attachments_dir.mkdir(exist_ok=True)
+        paths = []
+        for filename, data in images:
+            path = attachments_dir / Path(filename).name
+            path.write_bytes(data)
+            paths.append(path)
+        return paths
 
     async def _get_or_create(self, key: int, prompt: str) -> Conversation:
         conversation = self.conversations.get(key)
