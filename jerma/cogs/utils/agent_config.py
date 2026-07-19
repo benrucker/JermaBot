@@ -32,7 +32,10 @@ AGENT_REPOS: dict[str, AgentRepo] = {
 
 AGENT_BRANCH_PREFIX = 'jermabot'
 AGENT_COMMIT_NAME = 'JermaBot'
-AGENT_COMMIT_EMAIL = 'jermabot@users.noreply.github.com'
+# Deliberately non-resolving (RFC 2606 reserved TLD). A bare
+# <username>@users.noreply.github.com address links commits to whoever owns that
+# GitHub username -- github.com/Jermabot is a real, unrelated account.
+AGENT_COMMIT_EMAIL = 'jermabot@jermabot.invalid'
 AGENT_REQUEST_SOURCE = 'Discord'
 
 
