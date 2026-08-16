@@ -37,6 +37,9 @@ from .agent_config import (
 os.environ.pop('ANTHROPIC_API_KEY', None)
 
 AGENT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep']
+READONLY_AGENT_TOOLS = ['Read', 'Glob', 'Grep']
+
+_INTENT_CLASSIFIER_TIMEOUT = 30
 # notebook_path isn't used by any allowed tool today; it's defense in depth
 # in case NotebookEdit ever joins AGENT_TOOLS.
 _PATH_KEYS = ('file_path', 'path', 'notebook_path')
@@ -87,12 +90,12 @@ def _allow() -> HookJSONOutput:
     }
 
 
-def _make_path_guard(root: Path):
+def _make_path_guard(root: Path, allowed_tools: list[str] = AGENT_TOOLS):
     """PreToolUse hook: only the allowed tools, only inside the workspace."""
     async def guard(input_data, tool_use_id, context) -> HookJSONOutput:
         tool_name = input_data.get('tool_name', '')
         tool_input = input_data.get('tool_input') or {}
-        if tool_name not in AGENT_TOOLS:
+        if tool_name not in allowed_tools:
             return _deny(f'The {tool_name} tool is not permitted.')
         for key in _PATH_KEYS:
             raw = tool_input.get(key)
@@ -155,6 +158,156 @@ def _build_options(workspace_root: Path,
             'PreToolUse': [HookMatcher(hooks=[_make_path_guard(workspace_root)])],
         },
     )
+
+
+async def classify_intent(message_text: str) -> bool:
+    """Return True if message_text is a genuine request for a bot response.
+
+    Runs a single-turn Claude session with no tools. On any error, returns
+    False so accidental invocations are always silent.
+    """
+    prompt = (
+        'Classify the following Discord message. '
+        'The message was sent to JermaBot (a Discord bot) by a server member. '
+        'Is this a genuine, intentional request for a natural-language response '
+        '(e.g. asking a question, starting a conversation, making a request)? '
+        'A misspelled or garbled command (starting with !, /, ., or a similar '
+        'symbol prefix) is NOT a genuine request. '
+        'Reply with only YES or NO.\n\n'
+        f'Message: {message_text.strip() or "(empty)"}'
+    )
+
+    result_holder = {'text': ''}
+    options = ClaudeAgentOptions(
+        cwd=str(Path.home()),
+        resume=None,
+        tools=[],
+        disallowed_tools=['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
+                          'Task', 'WebFetch', 'WebSearch', 'NotebookEdit'],
+        permission_mode='acceptEdits',
+        setting_sources=[],
+        max_turns=1,
+        system_prompt={
+            'type': 'preset',
+            'preset': 'claude_code',
+            'append': 'When asked to classify a message, reply with only YES or NO.',
+        },
+    )
+
+    async def _consume(client: ClaudeSDKClient):
+        async for msg in client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock) and block.text:
+                        result_holder['text'] += block.text
+            elif isinstance(msg, ResultMessage) and msg.result:
+                result_holder['text'] = msg.result
+
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            await asyncio.wait_for(_consume(client),
+                                   timeout=_INTENT_CLASSIFIER_TIMEOUT)
+    except Exception:
+        return False
+
+    return 'yes' in result_holder['text'].lower()
+
+
+def _build_readonly_instructions(repos: dict[str, AgentRepo]) -> str:
+    repo_lines = '\n'.join(
+        f'- {name}/ — github.com/{repo.slug}, base branch {repo.base_branch}'
+        for name, repo in repos.items()
+    )
+    return (
+        'You are JermaBot, chatting with members of a Discord server. '
+        'Your working directory contains read-only checkouts of:\n'
+        f'{repo_lines}\n\n'
+        '- You may read files to answer questions but cannot make edits or '
+        'open pull requests.\n'
+        '- Answer questions, explain code, and help users understand the repos.\n'
+        '- Off-topic questions are fine; just answer them.\n'
+        '- Keep responses friendly and concise.'
+    )
+
+
+def _build_readonly_options(workspace_root: Path,
+                             repos: dict[str, AgentRepo],
+                             resume: str | None) -> ClaudeAgentOptions:
+    return ClaudeAgentOptions(
+        cwd=str(workspace_root),
+        resume=resume,
+        tools=list(READONLY_AGENT_TOOLS),
+        disallowed_tools=['Bash', 'Task', 'WebFetch', 'WebSearch',
+                          'Edit', 'Write', 'NotebookEdit'],
+        permission_mode='acceptEdits',
+        setting_sources=[],
+        max_turns=AGENT_MAX_TURNS,
+        system_prompt={
+            'type': 'preset',
+            'preset': 'claude_code',
+            'append': _build_readonly_instructions(repos),
+        },
+        hooks={
+            'PreToolUse': [HookMatcher(
+                hooks=[_make_path_guard(workspace_root, READONLY_AGENT_TOOLS)])],
+        },
+    )
+
+
+async def run_readonly_agent(prompt: str, workspace_root: Path,
+                              repos: dict[str, AgentRepo],
+                              on_progress: OnProgress,
+                              resume: str | None = None,
+                              image_paths: list[Path] = ()) -> AgentRunResult:
+    """Read-only variant of run_agent: no Edit/Write tools, no PR plumbing."""
+    result = AgentRunResult(final_text='', timed_out=False)
+    outbox: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def consume(client: ClaudeSDKClient):
+        async for message in client.receive_response():
+            if isinstance(message, SystemMessage):
+                if message.subtype == 'init':
+                    result.session_id = message.data.get('session_id')
+            elif isinstance(message, AssistantMessage):
+                texts = [block.text for block in message.content
+                         if isinstance(block, TextBlock) and block.text.strip()]
+                if any(isinstance(block, ToolUseBlock)
+                       for block in message.content):
+                    for text in texts:
+                        outbox.put_nowait(text)
+                elif texts:
+                    result.final_text = '\n\n'.join(texts)
+            elif isinstance(message, ResultMessage):
+                if message.result:
+                    result.final_text = message.result
+
+    async def deliver():
+        while (text := await outbox.get()) is not None:
+            await on_progress(text)
+
+    if image_paths:
+        paths_str = '\n'.join(f'- {p}' for p in image_paths)
+        prompt = (f'{prompt}\n\nImage attachment(s) saved in the workspace:\n'
+                  f'{paths_str}\nUse the Read tool to view them.')
+
+    options = _build_readonly_options(workspace_root, repos, resume)
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        sender = asyncio.create_task(deliver())
+        try:
+            await asyncio.wait_for(consume(client), timeout=AGENT_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            result.timed_out = True
+            try:
+                await client.interrupt()
+            except Exception:
+                pass
+        finally:
+            outbox.put_nowait(None)
+            await sender
+
+    return result
 
 
 async def run_agent(prompt: str, workspace_root: Path,

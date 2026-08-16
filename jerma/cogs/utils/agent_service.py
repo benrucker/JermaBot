@@ -25,9 +25,10 @@ from .agent_config import (
     AGENT_REPOS,
     get_conversations_root,
     get_github_token,
+    get_readonly_conversations_root,
     get_workspace_root,
 )
-from .agent_runner import OnProgress, run_agent
+from .agent_runner import OnProgress, run_agent, run_readonly_agent
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
@@ -36,6 +37,105 @@ from .agent_workspace import (
 )
 
 STATE_FILE = 'state.json'
+
+_READONLY_EVICTION_IDLE_HOURS = 4
+
+
+@dataclass
+class ReadonlyConversation:
+    """State for one whid-member conversation: just a session ID for resuming."""
+    session_id: str | None = None
+    last_active: datetime = field(default_factory=datetime.now)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+class ReadonlyAgentTaskService:
+    """Read-only agent sessions for whid members.
+
+    Shares the same workspace root as AgentTaskService (the pristine clones),
+    but never commits, pushes, or opens pull requests. Conversations are
+    kept in memory only; they survive bot restarts only as long as the Claude
+    SDK keeps the session transcript on disk and we still have the session ID.
+    """
+
+    def __init__(self):
+        self._workspace_root = get_workspace_root()
+        self._repos = AGENT_REPOS
+        self._github_token = get_github_token()
+        self.conversations: dict[int, ReadonlyConversation] = {}
+        self._ensure_task: asyncio.Task | None = None
+
+    def has_conversation(self, key: int) -> bool:
+        return key in self.conversations
+
+    def start(self):
+        self._ensure_task = asyncio.create_task(self._startup())
+
+    def close(self):
+        if self._ensure_task is not None:
+            self._ensure_task.cancel()
+
+    async def run(self, key: int, prompt: str,
+                  on_progress: OnProgress,
+                  images: list[tuple[str, bytes]] = ()) -> TaskReport:
+        """Run one turn of the keyed readonly conversation."""
+        await self._ready()
+        conversation = self._get_or_create(key)
+        async with conversation.lock:
+            conversation.last_active = datetime.now()
+            image_paths = self._save_images(key, images)
+            result = await run_readonly_agent(
+                prompt=prompt,
+                workspace_root=self._workspace_root,
+                repos=self._repos,
+                on_progress=on_progress,
+                resume=conversation.session_id,
+                image_paths=image_paths,
+            )
+            if result.session_id is not None:
+                conversation.session_id = result.session_id
+            return TaskReport(answer=result.final_text,
+                              pull_requests=[],
+                              timed_out=result.timed_out)
+
+    def _get_or_create(self, key: int) -> ReadonlyConversation:
+        if key not in self.conversations:
+            self.conversations[key] = ReadonlyConversation()
+        return self.conversations[key]
+
+    def _save_images(self, key: int,
+                     images: list[tuple[str, bytes]]) -> list[Path]:
+        if not images:
+            return []
+        attachments_dir = self._workspace_root / '_attachments' / str(key)
+        attachments_dir.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for filename, data in images:
+            path = attachments_dir / Path(filename).name
+            path.write_bytes(data)
+            paths.append(path)
+        return paths
+
+    async def _startup(self):
+        # Ensure the pristine clones exist (shared with owner AgentTaskService;
+        # ensure_repos is idempotent and safe to call from both).
+        from .agent_workspace import AgentWorkspace
+        workspace = AgentWorkspace(
+            root=self._workspace_root,
+            repos=self._repos,
+            github_token=self._github_token,
+        )
+        cloned = await workspace.ensure_repos()
+        if cloned:
+            print(f'Readonly agent service: cloned {", ".join(cloned)}')
+
+    async def _ready(self):
+        task = self._ensure_task
+        if task is None or task.cancelled() or (
+                task.done() and task.exception() is not None):
+            task = asyncio.create_task(self._startup())
+            self._ensure_task = task
+        await task
 
 
 @dataclass

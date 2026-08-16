@@ -1,8 +1,9 @@
-"""Configuration for the owner-only coding agent feature."""
+"""Configuration for the coding agent features."""
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
+WHID_GUILD_ID = 173840048343482368
 
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
@@ -52,6 +53,12 @@ def get_conversations_root() -> Path:
     """Directory holding per-conversation checkouts and their state file."""
     return _env_dir('JERMABOT_AGENT_CONVERSATIONS_DIR',
                     '~/jermabot-agent/conversations')
+
+
+def get_readonly_conversations_root() -> Path:
+    """Directory for readonly-mode SDK session working directories."""
+    return _env_dir('JERMABOT_AGENT_READONLY_DIR',
+                    '~/jermabot-agent/readonly-conversations')
 
 
 def get_github_token() -> str | None:
