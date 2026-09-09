@@ -21,18 +21,21 @@ within a file, since the SDK retries a failed batch with the same entries.
 Subagent transcripts are not supported (the agent has no Task tool, and
 list_subkeys is deliberately unimplemented).
 
-Why this store must not lose a batch: measured against SDK 0.2.110, the
-first resume that passes a session_store makes the store authoritative.
-`ClaudeSDKClient.connect()` always calls `store.load()` and materializes
-the result into a temporary CLAUDE_CONFIG_DIR, which it deletes on exit —
-from then on ~/.claude/projects stops receiving that session's turns. A
-dropped append is therefore a permanently lost turn, not a stale mirror,
-whatever the SDK's docstrings say. So `append` never raises for anything
-recoverable: the entries are written into the local clone and committed
-there (durable on this host) before the push is attempted, and a push that
-fails is recorded and retried on the next append, identity write, or turn
-end rather than reported back to the SDK, which would drop the batch.
-`flush()` says at the end of a turn what is still wrong.
+Why this store must not lose a batch: measured against SDK 0.2.110,
+`ClaudeSDKClient.connect()` always calls `store.load()`, and once the
+store holds the session it materializes what comes back into a temporary
+CLAUDE_CONFIG_DIR, which it deletes on exit — from then on
+~/.claude/projects stops receiving that session's turns. (A store with
+nothing for the session returns None and the CLI resumes from this host's
+disk as usual, which is why agent_service copies that copy in before the
+first store-backed turn.) A dropped append is therefore a permanently lost
+turn, not a stale mirror, whatever the SDK's docstrings say. So `append`
+never raises for anything recoverable: the entries are written into the
+local clone and committed there (durable on this host) before the push is
+attempted, and a push that fails is recorded and retried on the next
+append, identity write, or turn end rather than reported back to the SDK,
+which would drop the batch. `flush()` says at the end of a turn what is
+still wrong.
 
 Two hosts may share one backup repo (a dev machine and the server), so
 divergence is normal: the local commits are rebased onto whatever GitHub
@@ -96,6 +99,15 @@ def _entries(path: Path) -> list[dict]:
     if not path.exists():
         return []
     return _parse_entries(path.read_text(encoding='utf-8'), path)
+
+
+def read_transcript(path: Path) -> list[dict]:
+    """A transcript file this host wrote, as entries a store can take.
+
+    The same forgiving read as the store's own loader, for the same
+    reason: one half-written line costs an entry, not the conversation.
+    """
+    return _entries(path)
 
 
 def _write_entries(path: Path, entries: list[dict]):
@@ -197,6 +209,27 @@ class BackupStore:
         await self._sync()
         async with self._lock:
             return _entries(self._transcript_path(thread_id, session_id)) or None
+
+    async def has_transcript(self, thread_id: int, session_id: str) -> bool:
+        """Whether the backup holds anything for this session (R2.2).
+
+        The question a turn asks before it decides to resume: same sync as
+        load(), without reading a transcript that the SDK is about to read
+        again itself.
+        """
+        await self._ready()
+        await self._sync()
+        async with self._lock:
+            path = self._transcript_path(thread_id, session_id)
+            found = path.exists() and path.stat().st_size > 0
+            if found and self._dropped_keys.get(thread_id):
+                # An append that wrote the file and then fell over on its
+                # way to a commit left this thread on the lost list, and
+                # nothing retries those entries once the file is found.
+                # The ones that are in it stop being lost; a batch that
+                # never made it into the file is still reported.
+                self._stored(thread_id, _entries(path))
+        return found
 
     async def write_identity(self, thread_id: int, record: dict):
         """Store a conversation's identity record (R5.2)."""

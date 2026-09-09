@@ -11,8 +11,17 @@ import json
 
 import pytest
 
-from cogs.utils.agent_runner import AgentRunResult
-from cogs.utils.agent_service import AgentTaskService, Conversation
+from cogs.utils.agent_runner import (
+    AgentRunResult,
+    SessionResumeError,
+    local_transcript_path,
+)
+from cogs.utils.agent_service import (
+    RELOADING_NOTE,
+    AgentTaskService,
+    Conversation,
+    ReconstructedHistory,
+)
 from cogs.utils.agent_workspace import TurnPreparation, WorkspaceError
 
 BRANCH = 'jermabot/fix-the-thing-20260816-101500'
@@ -149,13 +158,25 @@ class FakeBackup:
     """The backup store as the service uses it: identity in, identity out,
     a session store per conversation, and a push that may be failing."""
 
-    def __init__(self, identities: dict | None = None):
+    def __init__(self, identities: dict | None = None,
+                 transcripts: set | None = None):
         self.identities = dict(identities or {})
         self.notes: list[str] = []
         self.stores: list[int] = []
         self.flushed: list[int] = []
         self.dropped: dict[int, str] = {}
         self.repo_slug = 'local/backup'
+        # (thread_id, session_id) pairs the backup holds a transcript for.
+        self.transcripts = set(transcripts or ())
+        self.appended: list[tuple] = []
+
+    async def has_transcript(self, thread_id: int, session_id: str) -> bool:
+        return (thread_id, session_id) in self.transcripts
+
+    async def append(self, thread_id: int, session_id: str,
+                     entries: list[dict]):
+        self.appended.append((thread_id, session_id, list(entries)))
+        self.transcripts.add((thread_id, session_id))
 
     def session_store(self, thread_id: int):
         self.stores.append(thread_id)
@@ -180,13 +201,21 @@ def one_turn(agent_dirs, monkeypatch):
     service.agent_calls = []
     service.agent_result = AgentRunResult(final_text='done', timed_out=False,
                                           session_id='sess')
+    # Turn-by-turn script for the tests that need one; an exception in it
+    # is raised instead of returned. Empty means every turn answers with
+    # agent_result.
+    service.agent_results = []
 
     async def ready():
         return None
 
     async def fake_run_agent(**kwargs):
         service.agent_calls.append(kwargs)
-        return service.agent_result
+        answer = (service.agent_results.pop(0) if service.agent_results
+                  else service.agent_result)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
 
     monkeypatch.setattr(service, '_ready', ready)
     monkeypatch.setattr('cogs.utils.agent_service.run_agent', fake_run_agent)
@@ -569,3 +598,250 @@ async def test_an_unreadable_backup_does_not_block_recovery(recovering):
     assert await recovering.recover(42, STARTER, {'z': PR_URL})
 
     assert recovering.asked == [('branch_for', PR_URL)]
+
+
+# --- where a turn's context comes from (R2.2, R2.4, R2c, R6.2) ---------
+
+
+def write_local_transcript(root, session_id: str):
+    """Stand in for the SDK: the transcript this host keeps for a session."""
+    path = local_transcript_path(root, session_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('{"type": "user"}\n', encoding='utf-8')
+    return path
+
+
+def _thread_history(text='Prior history:\n\n[..] Owner:\nhello',
+                    images=(), calls=None):
+    """A reconstruct callback, counting its calls in `calls`."""
+    async def reconstruct():
+        if calls is not None:
+            calls.append(text)
+        return ReconstructedHistory(text=text, images=list(images))
+    return reconstruct
+
+
+def new_conversation(service, conversations, key=42, **kwargs) -> Conversation:
+    root = conversations / str(key)
+    root.mkdir(parents=True, exist_ok=True)
+    conversation = Conversation(checkout=FakeCheckout(root), **kwargs)
+    service.conversations[key] = conversation
+    return conversation
+
+
+async def test_a_local_transcript_is_resumed(one_turn):
+    """R2.2 source 1: the SDK can still read this host's copy, so the turn
+    continues the session and the thread hears nothing."""
+    service, conversations = one_turn
+    conversation = new_conversation(service, conversations, session_id='sess')
+    write_local_transcript(conversation.checkout.root, 'sess')
+    posted, rebuilt = [], []
+
+    await service.run(42, 'do it', on_progress=_collect(posted),
+                      reconstruct=_thread_history(calls=rebuilt))
+
+    assert service.agent_calls[0]['resume'] == 'sess'
+    assert service.agent_calls[0]['prompt'] == 'do it'
+    assert rebuilt == []  # the thread was never read
+    assert posted == []   # nothing was lost, so nothing is said (R4.3)
+
+
+async def test_a_backed_up_transcript_is_resumed(one_turn):
+    """R2.2 source 2: this host's copy is gone (or frozen), and the backup
+    is what a resume actually loads from."""
+    service, conversations = one_turn
+    service.backup = FakeBackup(transcripts={(42, 'sess')})
+    new_conversation(service, conversations, session_id='sess',
+                     backed_up=True)
+    posted, rebuilt = [], []
+
+    await service.run(42, 'do it', on_progress=_collect(posted),
+                      reconstruct=_thread_history(calls=rebuilt))
+
+    assert service.agent_calls[0]['resume'] == 'sess'
+    assert rebuilt == []
+    assert posted == []
+
+
+async def test_no_transcript_anywhere_rebuilds_from_the_thread(one_turn):
+    """R2.2 source 3 with R2c: a new session, the thread's history in front
+    of the owner's message, its images beside this turn's own, and the one
+    muted line that admits what was lost (R4.3)."""
+    service, conversations = one_turn
+    service.backup = FakeBackup()  # empty: it has never seen this session
+    new_conversation(service, conversations, session_id='sess',
+                     backed_up=True)
+    service.agent_result = AgentRunResult(final_text='done', timed_out=False,
+                                          session_id='sess-2')
+    posted = []
+
+    await service.run(42, 'do it', on_progress=_collect(posted),
+                      images=[('now.png', b'now')],
+                      reconstruct=_thread_history(
+                          text='Prior history:\n\n[..] Owner:\nhello',
+                          images=[('then.png', b'then')]))
+
+    call = service.agent_calls[0]
+    assert call['resume'] is None
+    assert call['prompt'] == ('Prior history:\n\n[..] Owner:\nhello\n\n'
+                              'New message from the owner:\ndo it')
+    # The commit and pull request still describe what was asked, not the
+    # history bolted in front of it.
+    assert call['request'] == 'do it'
+    assert [path.name for path in call['image_paths']] == ['now.png',
+                                                           'then.png']
+    assert posted == [RELOADING_NOTE]
+    # R2c.4: the session the rebuilt turn made is what the next one
+    # resumes, and it is backed up like any other.
+    assert service.conversations[42].session_id == 'sess-2'
+    assert service.backup.identities[42]['session_id'] == 'sess-2'
+
+
+async def test_a_brand_new_conversation_says_nothing(one_turn):
+    """Nothing was lost: no session, no history, no muted line."""
+    service, conversations = one_turn
+    new_conversation(service, conversations)
+
+    posted = []
+    await service.run(42, 'do it', on_progress=_collect(posted),
+                      reconstruct=_thread_history(text=''))
+
+    assert service.agent_calls[0]['resume'] is None
+    assert service.agent_calls[0]['prompt'] == 'do it'
+    assert posted == []
+
+
+async def test_a_resume_the_sdk_refuses_falls_back_to_the_thread(one_turn):
+    """R2.4: the transcript was there a moment ago and would not load. The
+    same turn runs again from the thread, and says so once."""
+    service, conversations = one_turn
+    conversation = new_conversation(service, conversations, session_id='sess')
+    write_local_transcript(conversation.checkout.root, 'sess')
+    service.agent_results = [SessionResumeError('No conversation found')]
+    posted, rebuilt = [], []
+
+    report = await service.run(42, 'do it', on_progress=_collect(posted),
+                               reconstruct=_thread_history(calls=rebuilt))
+
+    assert report.answer == 'done'
+    assert len(service.agent_calls) == 2
+    assert service.agent_calls[0]['resume'] == 'sess'
+    assert service.agent_calls[1]['resume'] is None
+    assert service.agent_calls[1]['prompt'].endswith(
+        'New message from the owner:\ndo it')
+    assert len(rebuilt) == 1
+    assert posted == [RELOADING_NOTE]
+
+
+async def test_a_history_that_cannot_be_rebuilt_ends_the_turn(one_turn):
+    """R4.4: no transcript and no thread to read is the end of the turn,
+    with the cause in the thread rather than a silent fresh start."""
+    service, conversations = one_turn
+    new_conversation(service, conversations, session_id='sess')
+
+    async def broken():
+        raise RuntimeError('Discord said 500')
+
+    with pytest.raises(WorkspaceError, match='Discord said 500'):
+        await service.run(42, 'do it', on_progress=_collect([]),
+                          reconstruct=broken)
+
+    assert service.agent_calls == []
+
+
+async def test_a_local_transcript_is_copied_into_a_new_backup(one_turn):
+    """The first turn after the backup is switched on: the store is about
+    to become where the conversation lives, so this host's transcript goes
+    into it and the turn resumes as usual instead of starting over."""
+    service, conversations = one_turn
+    service.backup = FakeBackup()
+    conversation = new_conversation(service, conversations, session_id='sess')
+    path = write_local_transcript(conversation.checkout.root, 'sess')
+    # A torn last line, as a crash mid-write leaves: skipped, like the
+    # store's own loader skips it, rather than costing the conversation.
+    path.write_text('{"uuid": "u1"}\n\n{"uuid": "u2"}\n{"uuid"\n',
+                    encoding='utf-8')
+    posted, rebuilt = [], []
+
+    await service.run(42, 'do it', on_progress=_collect(posted),
+                      reconstruct=_thread_history(calls=rebuilt))
+
+    assert service.backup.appended == [(42, 'sess', [{'uuid': 'u1'},
+                                                     {'uuid': 'u2'}])]
+    assert service.agent_calls[0]['resume'] == 'sess'
+    assert rebuilt == []
+    assert posted == []
+    assert service.conversations[42].backed_up is True
+
+
+async def test_a_transcript_that_cannot_be_copied_stops_the_turn(one_turn):
+    """Running on would rebuild from the thread and leave the transcript
+    behind for good, so the turn fails with the cause instead."""
+    class Refusing(FakeBackup):
+        async def append(self, thread_id, session_id, entries):
+            raise RuntimeError('github is down')
+
+    service, conversations = one_turn
+    service.backup = Refusing()
+    conversation = new_conversation(service, conversations, session_id='sess')
+    write_local_transcript(conversation.checkout.root, 'sess')
+
+    with pytest.raises(WorkspaceError, match='github is down'):
+        await service.run(42, 'do it', on_progress=_collect([]))
+
+    assert service.agent_calls == []
+    # Still false: the next turn must try the copy again rather than
+    # believe the store has a transcript it never received.
+    assert service.conversations[42].backed_up is False
+
+
+async def test_a_second_message_reuses_the_rebuilt_session(one_turn,
+                                                           monkeypatch):
+    """R6.2: it queues on the conversation's lock, and the source decision
+    is made inside it, so it resumes what the rebuild made instead of
+    rebuilding the same thread again."""
+    service, conversations = one_turn
+    conversation = new_conversation(service, conversations, session_id='old')
+    rebuilt = []
+    running = asyncio.Event()   # the first turn is inside the lock
+    finish = asyncio.Event()    # ...and may now leave it
+    queued = asyncio.Event()    # the second message is on its way in
+
+    async def fake_run_agent(**kwargs):
+        service.agent_calls.append(kwargs)
+        if len(service.agent_calls) == 1:
+            running.set()
+            await finish.wait()
+        # What the SDK does on the way out, and what the next turn looks
+        # for.
+        write_local_transcript(conversation.checkout.root, 'sess-2')
+        return AgentRunResult(final_text='done', timed_out=False,
+                              session_id='sess-2')
+
+    monkeypatch.setattr('cogs.utils.agent_service.run_agent', fake_run_agent)
+    posted = []
+
+    async def second_message():
+        # Set from inside the task: run() reaches the conversation's lock
+        # without awaiting anything else, so once this is seen the second
+        # message really is queued behind the first.
+        queued.set()
+        return await service.run(42, 'second', on_progress=_collect(posted),
+                                 reconstruct=_thread_history(calls=rebuilt))
+
+    first = asyncio.create_task(
+        service.run(42, 'first', on_progress=_collect(posted),
+                    reconstruct=_thread_history(calls=rebuilt)))
+    await running.wait()
+    second = asyncio.create_task(second_message())
+    await queued.wait()
+    finish.set()
+
+    await asyncio.gather(first, second)
+
+    assert len(service.agent_calls) == 2
+    assert service.agent_calls[0]['resume'] is None
+    assert service.agent_calls[1]['resume'] == 'sess-2'
+    assert service.agent_calls[1]['prompt'] == 'second'
+    assert len(rebuilt) == 1
+    assert posted == [RELOADING_NOTE]

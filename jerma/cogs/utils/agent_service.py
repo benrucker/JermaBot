@@ -27,14 +27,27 @@ record beside it, so recover() asks the backup first and falls back to
 Discord and GitHub only when it has nothing (R2b.4, R3.3). Without
 JERMABOT_AGENT_BACKUP_REPO the bot still runs, loudly, with transcripts
 no more durable than this host.
+
+Every turn therefore begins by deciding where its context comes from
+(R2.2), in the spec's order: resume the session when its transcript is
+still readable — on this host, or in the backup, which is what a resumed
+session is actually rebuilt from once one has been backed up — and
+otherwise run a new session with the conversation's history rebuilt from
+its Discord thread. The rebuilding is the caller's job (only the cog knows
+Discord); this module decides when it is needed, says so in the thread in
+the one muted line R4.3 allows, and, when a resume that should have worked
+fails at the SDK's door, falls through to the same rebuild inside the same
+turn (R2.4). The new session is backed up like any other, so a
+conversation is lossless from a rebuilt turn on (R2c.4).
 """
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .agent_backup import BackupStore
+from .agent_backup import BackupStore, read_transcript
 from .agent_config import (
     AGENT_REPOS,
     get_backup_repo,
@@ -43,7 +56,13 @@ from .agent_config import (
     get_github_token,
     get_workspace_root,
 )
-from .agent_runner import AgentRunResult, OnProgress, run_agent
+from .agent_runner import (
+    AgentRunResult,
+    OnProgress,
+    SessionResumeError,
+    local_transcript_path,
+    run_agent,
+)
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
@@ -53,6 +72,29 @@ from .agent_workspace import (
 )
 
 STATE_FILE = 'state.json'
+# The one thing the owner hears about recovery, in Discord's muted subtext
+# style so it reads as harness chatter rather than the agent talking
+# (R4.3). Its wording is the spec's, verbatim.
+RELOADING_NOTE = '-# _Reloading thread history. Some context might be lost._'
+
+
+@dataclass
+class ReconstructedHistory:
+    """A conversation's history as its thread remembers it (R2c).
+
+    Built by the caller — only the cog knows Discord — and prepended to
+    the prompt of a turn that has no transcript to resume. `text` is the
+    whole prior-history block, already labelled as prior history; `images`
+    are attachments from earlier messages, re-downloaded so the agent can
+    still see them, as (filename, bytes) for the turn to save beside its
+    own. Empty text means the thread had nothing to rebuild from.
+    """
+    text: str
+    images: list[tuple[str, bytes]] = field(default_factory=list)
+
+
+# Called with no arguments; see ReconstructedHistory.
+Reconstruct = Callable[[], Awaitable[ReconstructedHistory]]
 
 
 @dataclass
@@ -160,11 +202,19 @@ class AgentTaskService:
 
     async def run(self, key: int, prompt: str,
                   on_progress: OnProgress,
-                  images: list[tuple[str, bytes]] = ()) -> TaskReport:
+                  images: list[tuple[str, bytes]] = (),
+                  reconstruct: Reconstruct | None = None) -> TaskReport:
         """Run one turn of the keyed conversation, creating it if new.
 
         Turns of the same conversation queue on its lock; different
-        conversations run in parallel.
+        conversations run in parallel. Everything about the turn — which
+        source its context comes from included — is decided under that
+        lock, so a second message arriving during a rebuild waits for it
+        and then resumes the session the first one made (R6.2).
+
+        `reconstruct` builds the conversation's history from its thread
+        for a turn that has no transcript to resume (R2c); a conversation
+        with no thread to read passes none and simply starts fresh.
         """
         conversation = self._get_or_create(key, prompt)
         async with conversation.lock:
@@ -196,23 +246,43 @@ class AgentTaskService:
             store = (self.backup.session_store(key)
                      if self.backup is not None and not self.backup_error
                      else None)
+            seeded = False
             if store is not None and not conversation.backed_up:
+                # The store is about to become where this conversation
+                # lives, so what this host has goes into it first.
+                seeded = await self._seed_backup(key, conversation)
                 # Set before the run, not after: from the moment the store
                 # is handed to the SDK it holds turns this host's
                 # transcript will not, and a restart in the middle of the
                 # turn must not leave the guard disarmed.
                 conversation.backed_up = True
                 await self._persist(key)
-            image_paths = self._save_images(conversation.checkout.root, images)
-            result = await run_agent(
-                prompt=prompt,
-                workspace_root=conversation.checkout.root,
-                repos=self.workspace.repos,
-                on_progress=on_progress,
-                resume=conversation.session_id,
-                image_paths=image_paths,
-                session_store=store,
-            )
+            # Where this turn's context comes from (R2.2). Decided here,
+            # inside the lock, so the answer holds for the whole turn.
+            resume = (conversation.session_id
+                      if await self._can_resume(key, conversation, store,
+                                                seeded)
+                      else None)
+            history = (None if resume is not None else
+                       await self._history(conversation, reconstruct,
+                                           on_progress))
+            try:
+                result = await self._run_turn(conversation, prompt, images,
+                                              history, resume, on_progress,
+                                              store)
+            except SessionResumeError as error:
+                # The transcript was there a moment ago and the SDK could
+                # not load it anyway. Loudly, and then the same turn runs
+                # again from the thread (R2.4) — nothing has happened yet
+                # that a second attempt would repeat.
+                print(f'Agent service: resuming session '
+                      f'{conversation.session_id} for {key} failed, so this '
+                      f'turn falls back to its thread: {error}')
+                history = await self._history(conversation, reconstruct,
+                                              on_progress)
+                result = await self._run_turn(conversation, prompt, images,
+                                              history, None, on_progress,
+                                              store)
             if result.session_id is not None:
                 conversation.session_id = result.session_id
                 # Persist the moment it changes: a publish that blows up
@@ -237,6 +307,139 @@ class AgentTaskService:
             return TaskReport(answer=result.final_text,
                               pull_requests=pull_requests,
                               timed_out=result.timed_out)
+
+    async def _run_turn(self, conversation: Conversation, prompt: str,
+                        images: list[tuple[str, bytes]],
+                        history: ReconstructedHistory | None,
+                        resume: str | None, on_progress: OnProgress,
+                        store) -> AgentRunResult:
+        """One attempt at the turn, with the context source already chosen.
+
+        A rebuilt history goes in front of the owner's message, labelled
+        as what it is, and its images are saved beside this turn's own so
+        the agent reads them all the same way (R2c.2).
+        """
+        request = prompt
+        if history is not None:
+            prompt = (f'{history.text}\n\n'
+                      f'New message from the owner:\n{prompt}')
+            images = [*images, *history.images]
+        image_paths = self._save_images(conversation.checkout.root, images)
+        return await run_agent(
+            prompt=prompt,
+            workspace_root=conversation.checkout.root,
+            repos=self.workspace.repos,
+            on_progress=on_progress,
+            resume=resume,
+            image_paths=image_paths,
+            session_store=store,
+            request=request,
+        )
+
+    async def _seed_backup(self, key: int,
+                           conversation: Conversation) -> bool:
+        """Copy this host's transcript into the backup before the store
+        takes the conversation over (R2.2).
+
+        The SDK asks the store first and falls back to this host's disk
+        only while the store has nothing for the session; from the moment
+        it has, the local copy stops being updated. Without this, the
+        first turn after JERMABOT_AGENT_BACKUP_REPO is set would have to
+        choose between resuming a copy that is about to freeze and
+        throwing the transcript away for a thread rebuild. One append
+        makes the store a true continuation instead.
+
+        Fails the turn rather than running on: carrying on would rebuild
+        from the thread and lose the transcript for good.
+
+        Returns whether the store is now known to hold this session, so
+        the resume decision below does not have to ask the backup a second
+        time — the question costs a sync of the whole backup repo. False
+        means unknown, not no.
+        """
+        session_id = conversation.session_id
+        if self.backup is None or session_id is None:
+            return False
+        path = local_transcript_path(conversation.checkout.root, session_id)
+        if not path.exists():
+            return False  # another host may still have backed it up
+        try:
+            if await self.backup.has_transcript(key, session_id):
+                return True  # the store already has it; nothing to copy
+            entries = read_transcript(path)
+            if entries:
+                await self.backup.append(key, session_id, entries)
+                return True
+        except Exception as error:
+            raise WorkspaceError(
+                "This conversation's transcript could not be copied into "
+                'the backup, so the turn stopped rather than starting the '
+                f'conversation over: {one_line(error)}') from error
+        return False
+
+    async def _can_resume(self, key: int, conversation: Conversation,
+                          store, seeded: bool = False) -> bool:
+        """Whether this conversation's transcript is still there to resume
+        from — the lossless sources of R2.2, in order.
+
+        A conversation that has run with the backup as its session store
+        resumes from what the store holds: the SDK asks the store first,
+        and once it has the session this host's copy stops being updated
+        (see agent_backup), so a local file left over from before that is
+        not an answer to this question. _seed_backup is what makes sure
+        the store does hold it.
+        """
+        session_id = conversation.session_id
+        if session_id is None:
+            return False  # a v0 thread, or a conversation that never ran
+        if seeded:
+            return True  # _seed_backup just established it
+        if not conversation.backed_up and local_transcript_path(
+                conversation.checkout.root, session_id).exists():
+            return True
+        if store is None or self.backup is None:
+            return False
+        try:
+            return await self.backup.has_transcript(key, session_id)
+        except Exception as error:
+            # R2.4: a source that fails is a source that falls through,
+            # with its cause on the record.
+            print('Agent service: looking for the backed-up transcript of '
+                  f'{key} ({session_id}) failed: {error}')
+            return False
+
+    async def _history(self, conversation: Conversation,
+                       reconstruct: Reconstruct | None,
+                       on_progress: OnProgress
+                       ) -> ReconstructedHistory | None:
+        """The conversation's history rebuilt from its thread, and the one
+        muted line that says so (R2c, R4.3).
+
+        The line is posted for anything the owner lost: a rebuilt history,
+        which is lossy by definition, or a session that existed and could
+        not be continued. That second half fires with no callback at all —
+        a conversation with no thread to read, such as a DM, rebuilds
+        nothing but has still lost everything it knew, and saying so is
+        the difference between a fresh start and a silent one. A
+        conversation with neither — a brand new one — has lost nothing and
+        hears nothing.
+        """
+        history = None
+        if reconstruct is not None:
+            try:
+                history = await reconstruct()
+            except Exception as error:
+                # Nothing is left to run the turn from, so the turn fails
+                # and says why (R4.4).
+                raise WorkspaceError(
+                    "This conversation's transcript is gone and its history "
+                    'could not be rebuilt from the thread: '
+                    f'{one_line(error)}') from error
+            if not history.text:
+                history = None  # nothing in the thread to tell the agent
+        if history is not None or conversation.session_id is not None:
+            await on_progress(RELOADING_NOTE)
+        return history
 
     def _save_images(self, root: Path,
                      images: list[tuple[str, bytes]]) -> list[Path]:
@@ -371,6 +574,11 @@ class AgentTaskService:
         frozen copy and quietly lose everything since. A conversation that
         never had a backup still has its local transcript and runs as it
         always did.
+
+        Deliberately not an R2.4 fall-through: a clone that failed once is
+        usually transient, and rebuilding from the thread instead would
+        trade a lossless transcript for a lossy summary and strand the
+        backup under the old session id.
         """
         if not conversation.backed_up:
             return

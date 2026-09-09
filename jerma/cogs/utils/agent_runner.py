@@ -7,10 +7,28 @@ agent, so the prompt-to-PR pipeline can't be steered by anything the agent
 reads.
 
 A conversation's transcript is mirrored off-host through the SDK's
-session_store option (agent_backup): passing one makes the store, not this
-host's disk, what a resumed session is rebuilt from, so a batch the store
-had to drop arrives as a MirrorErrorMessage and comes back on the result
-for the thread to hear about.
+session_store option (agent_backup): once the store holds a session, that
+is what a resume is rebuilt from rather than this host's disk, so a batch
+the store had to drop arrives as a MirrorErrorMessage and comes back on
+the result for the thread to hear about.
+
+Resuming a session the SDK cannot find is a failure of its own kind, so it
+comes back as SessionResumeError and the caller falls through to another
+source of context (R2.4). Measured against SDK 0.2.110: `--resume <id>`
+for a session that is neither on disk nor in the store exits the CLI with
+"No conversation found with session ID: <id>" on its stderr, and the
+ProcessError raised out of connect() says only "Check stderr output for
+details" unless an `options.stderr` callback is set — so one is, and the
+CLI's own words are what this module reports and what the thread sees.
+
+That reader is a detached task, so the last line it was sent is not
+guaranteed to have arrived by the time connect() raises. A ProcessError
+from connect is therefore taken as a lost resume whenever a resume was
+asked for, rather than sorted by its text: a process failure with some
+other cause repeats on the rebuilt attempt and ends the turn there, with
+the same stderr in the message. Anything that is not a ProcessError — a
+store load that timed out, for one — is the turn failing and propagates
+untouched.
 """
 import asyncio
 import os
@@ -25,10 +43,18 @@ from claude_agent_sdk import (
     HookJSONOutput,
     HookMatcher,
     MirrorErrorMessage,
+    ProcessError,
     ResultMessage,
     SystemMessage,
     TextBlock,
     ToolUseBlock,
+)
+# Private, deliberately: the transcript's path on disk is not part of the
+# SDK's public surface, and reimplementing its naming rules here would go
+# wrong silently the day they change.
+from claude_agent_sdk._internal.sessions import (
+    _get_projects_dir,
+    project_key_for_directory,
 )
 
 from .agent_config import (
@@ -37,7 +63,7 @@ from .agent_config import (
     AGENT_TIMEOUT_SECONDS,
     AgentRepo,
 )
-from .agent_workspace import one_line
+from .agent_workspace import WorkspaceError, one_line
 
 # Never let the SDK fall back to API billing; subscription auth comes from
 # CLAUDE_CODE_OAUTH_TOKEN (server) or the CLI login (dev machine). Done once
@@ -50,6 +76,26 @@ AGENT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep']
 _PATH_KEYS = ('file_path', 'path', 'notebook_path')
 
 OnProgress = Callable[[str], Awaitable[None]]
+
+
+class SessionResumeError(Exception):
+    """A resume the SDK could not load. The turn can still run, from
+    another source of context (R2.4), so this is separate from the
+    failures that end a turn."""
+
+
+def local_transcript_path(workspace_root: Path, session_id: str) -> Path:
+    """Where this host keeps a session's transcript.
+
+    The SDK files a session under the checkout it ran in, so the path is
+    computable from the conversation's identity alone (R2b.3) — no local
+    state needed to find out whether the transcript survived. Both halves
+    of the name come from the SDK itself rather than a copy of its rules,
+    so a layout change is an ImportError at startup instead of a
+    conversation that quietly rebuilds itself from its thread every turn.
+    """
+    return (_get_projects_dir() / project_key_for_directory(workspace_root)
+            / f'{session_id}.jsonl')
 
 
 @dataclass
@@ -148,13 +194,19 @@ def _build_instructions(repos: dict[str, AgentRepo]) -> str:
 def _build_options(workspace_root: Path,
                    repos: dict[str, AgentRepo],
                    resume: str | None,
-                   session_store=None) -> ClaudeAgentOptions:
+                   session_store=None,
+                   stderr=None) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         cwd=str(workspace_root),
         resume=resume,
-        # The transcript's off-host copy (R2b). With a store set, a resume
-        # loads the session from it rather than from this host's disk, so
-        # the store is what a conversation actually survives on.
+        # Without this the CLI's stderr is never piped, and every process
+        # failure arrives as ProcessError's placeholder text instead of
+        # the reason.
+        stderr=stderr,
+        # The transcript's off-host copy (R2b). A resume asks the store
+        # first and only falls back to this host's disk while the store
+        # has nothing for the session, so a conversation whose store holds
+        # it survives this host entirely.
         session_store=session_store,
         # A load reads the backup over the network — a fetch, and a
         # clone the first time. 60s (the default) is not enough headroom
@@ -217,11 +269,14 @@ async def run_agent(prompt: str, workspace_root: Path,
                     on_progress: OnProgress,
                     resume: str | None = None,
                     image_paths: list[Path] = (),
-                    session_store=None) -> AgentRunResult:
+                    session_store=None,
+                    request: str | None = None) -> AgentRunResult:
     """Run one agent turn; interim narration streams, the answer returns.
 
     Pass a previous result's session_id as resume to continue that
-    conversation with its context intact.
+    conversation with its context intact; a resume the SDK cannot load
+    raises SessionResumeError before the turn starts, so the caller can
+    run it again from another source of context.
 
     Text sent alongside tool calls is narration about work in progress and
     goes to on_progress as it happens; a text-only assistant message ends the
@@ -230,9 +285,22 @@ async def run_agent(prompt: str, workspace_root: Path,
     Narration is handed to on_progress through a queue so that slow delivery
     (e.g. Discord rate limits) neither backpressures the SDK message stream
     nor counts against the session timeout.
+
+    `request` is the owner's own words, for prompts that carry more than
+    them (a history rebuilt from the thread): a turn that ends without a
+    reply takes its commit title from there rather than from the harness's
+    framing.
     """
     result = AgentRunResult(final_text='', timed_out=False)
     outbox: asyncio.Queue[str | None] = asyncio.Queue()
+    # The CLI's own complaints, in the order it made them.
+    stderr_lines: list[str] = []
+
+    def process_failure(error: Exception) -> str:
+        """What actually went wrong with the CLI process. ProcessError's
+        own message is a placeholder, and the cause — "No conversation
+        found with session ID: ..." among it — is on stderr."""
+        return one_line('\n'.join(stderr_lines) or str(error))
 
     async def consume(client: ClaudeSDKClient):
         async for message in client.receive_response():
@@ -248,8 +316,35 @@ async def run_agent(prompt: str, workspace_root: Path,
                   f'{paths_str}\nUse the Read tool to view them.')
 
     options = _build_options(workspace_root, repos, resume,
-                             session_store)
-    async with ClaudeSDKClient(options=options) as client:
+                             session_store, stderr_lines.append)
+    client = ClaudeSDKClient(options=options)
+    try:
+        # connect() is where a resume is loaded, from the store or from
+        # disk, and where it fails if the session is gone. It cleans up
+        # after itself, so there is nothing to disconnect here.
+        await client.connect()
+    except ProcessError as error:
+        detail = process_failure(error)
+        if resume is None:
+            # Nothing to fall through to, so the turn ends here — saying
+            # what the CLI said rather than "check stderr".
+            raise WorkspaceError(
+                f'The agent process failed: {detail}') from error
+        # A resume was asked for, so this turn has somewhere else to go
+        # (R2.4). Not sorted by the stderr text: the reader is detached
+        # and may not have caught up, and a failure that has nothing to do
+        # with the session happens again on the rebuilt attempt below,
+        # where it ends the turn with this same detail.
+        raise SessionResumeError(detail) from error
+    except RuntimeError as error:
+        # The SDK's own failures loading a resume from the store (a load
+        # past load_timeout_ms, a store that raised). Not a missing
+        # session, so not a fall-through: the transcript is there and
+        # the owner should hear why it could not be read.
+        raise WorkspaceError(
+            f'The agent could not load this conversation: '
+            f'{one_line(error)}') from error
+    try:
         await client.query(prompt)
         sender = asyncio.create_task(deliver())
         try:
@@ -263,6 +358,16 @@ async def run_agent(prompt: str, workspace_root: Path,
         finally:
             outbox.put_nowait(None)  # deliver queued text, then stop
             await sender
+    except ProcessError as error:
+        # The CLI fell over mid-turn; same treatment, since the thread is
+        # about to be shown whatever this says.
+        raise WorkspaceError(
+            f'The agent process failed: {process_failure(error)}') from error
+    finally:
+        await client.disconnect()
 
-    result.title, result.body = _split_reply(prompt, result.final_text)
+    # `request` may legitimately be empty (an image with no words), and
+    # the prompt it would fall back to can carry a rebuilt history.
+    result.title, result.body = _split_reply(
+        prompt if request is None else request, result.final_text)
     return result

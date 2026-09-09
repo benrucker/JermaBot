@@ -220,6 +220,27 @@ async def test_a_retry_that_gets_through_is_not_reported(store, monkeypatch):
     assert await store.load(THREAD, SESSION) == [entry('u1', 'hello')]
 
 
+async def test_finding_the_file_does_not_forgive_a_batch_that_is_not_in_it(
+        store, monkeypatch):
+    """Every turn of a backed-up conversation asks has_transcript first,
+    so it must not clear a loss it cannot see: a batch that never made it
+    into the file is still reported at the turn's end (R2b.1)."""
+    await store.append(THREAD, SESSION, [entry('u1', 'hello')])
+
+    async def refuse():
+        raise WorkspaceError('the disk is full')
+
+    monkeypatch.setattr(store, '_ensure_clone', refuse)
+    with pytest.raises(WorkspaceError):
+        await store.append(THREAD, SESSION, [entry('u2', 'lost')])
+    monkeypatch.undo()
+
+    assert await store.has_transcript(THREAD, SESSION)
+    notes = await store.flush(THREAD)
+    assert any('never reached the transcript backup' in note
+               for note in notes)
+
+
 async def test_two_hosts_share_one_backup_repo(tmp_path, origin, store):
     """A dev machine and the server can both back up to one repo. Each
     conversation writes its own files, so a host that pushed second
@@ -352,3 +373,27 @@ async def test_the_sdk_adapter_scopes_a_key_to_its_conversation(store):
     assert await store.load(THREAD, SESSION) == [entry('u1', 'hello')]
     lines = transcript_path(store).read_text(encoding='utf-8').splitlines()
     assert [json.loads(line) for line in lines] == [entry('u1', 'hello')]
+
+
+async def test_another_hosts_transcript_is_found_after_a_sync(tmp_path,
+                                                              origin, store):
+    """R2.2 asks this before deciding to resume, and asks it on a host that
+    may never have seen the session."""
+    await store.append(THREAD, SESSION, [entry('u1', 'hello')])
+
+    elsewhere = make_store(tmp_path, origin, 'other-host')
+
+    assert await elsewhere.has_transcript(THREAD, SESSION)
+    assert not await elsewhere.has_transcript(THREAD, 'no-such-session')
+    assert not await elsewhere.has_transcript(7, SESSION)
+
+
+async def test_an_empty_transcript_file_is_not_a_transcript(store):
+    """There is nothing in it to resume from, so a turn that counted it
+    would fail at the SDK's door instead of rebuilding from its thread."""
+    await store.ensure_clone()
+    path = transcript_path(store)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('', encoding='utf-8')
+
+    assert not await store.has_transcript(THREAD, SESSION)

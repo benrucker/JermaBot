@@ -4,13 +4,23 @@ state.
 Discord objects are mocked at the boundary only (spec'd so the cog's
 isinstance checks are the real ones); nothing here talks to Discord.
 """
+import re
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
 
-from cogs.agent import Agent, parse_pr_announcements
+from cogs.agent import (
+    HISTORY_HEADING,
+    IMAGE_LINK_MAX_BYTES,
+    TIMEOUT_NOTICE,
+    Agent,
+    build_thread_history,
+    fetch_image_link,
+    parse_pr_announcements,
+)
 from cogs.utils.agent_service import TaskReport
 
 BOT_ID = 111
@@ -57,7 +67,9 @@ class FakeBot:
 
 def make_starter(content: str, author_id: int = OWNER_ID):
     return SimpleNamespace(content=content,
-                           author=SimpleNamespace(id=author_id))
+                           author=SimpleNamespace(id=author_id),
+                           id=THREAD_ID, attachments=[], embeds=[],
+                           created_at=datetime(2026, 8, 16, 14, 0))
 
 
 def make_thread(bot: FakeBot, owner_id: int = BOT_ID,
@@ -292,7 +304,7 @@ async def test_a_new_thread_gets_the_longest_archive(cog, monkeypatch):
     thread.send = AsyncMock()
     message.create_thread = AsyncMock(return_value=thread)
 
-    async def fake_run(key, prompt, on_progress, images=()):
+    async def fake_run(key, prompt, on_progress, images=(), reconstruct=None):
         assert key == MESSAGE_ID  # the thread will share the message's id
         return TaskReport(answer='done', pull_requests=[], timed_out=False)
 
@@ -352,7 +364,9 @@ def test_the_agents_own_prose_is_not_an_announcement():
 def make_history(thread, *contents, author_id: int = BOT_ID):
     """The thread's own messages, oldest first, as history() yields them."""
     messages = [SimpleNamespace(content=content,
-                                author=SimpleNamespace(id=author_id))
+                                author=SimpleNamespace(id=author_id),
+                                id=MESSAGE_ID, attachments=[], embeds=[],
+                                created_at=datetime(2026, 8, 16, 14, 3))
                 for content in contents]
 
     def history(**_):
@@ -444,3 +458,273 @@ async def test_an_unreadable_thread_says_so_instead_of_starting_over(
     assert ran == []
     posted = thread.send.await_args_list[0].args[0]
     assert "couldn't read this thread's history" in posted
+
+
+# --- the thread as prior history (R2c) ---------------------------------
+
+
+def make_attachment(filename: str, data: bytes | None = None,
+                    content_type: str = 'image/png'):
+    """An attachment that either still downloads or is gone from Discord."""
+    attachment = MagicMock(spec=discord.Attachment)
+    attachment.filename = filename
+    attachment.content_type = content_type
+    attachment.read = AsyncMock(
+        return_value=data) if data is not None else AsyncMock(
+            side_effect=http_error(discord.NotFound, 404))
+    return attachment
+
+
+def make_embed(url: str):
+    """The embed Discord builds for a pasted image link."""
+    embed = MagicMock(spec=discord.Embed)
+    embed.type = 'image'
+    embed.url = url
+    embed.image = None
+    return embed
+
+
+def make_history_message(content: str, author_id: int = OWNER_ID,
+                         minute: int = 2, message_id: int = MESSAGE_ID,
+                         attachments=(), embeds=()):
+    return SimpleNamespace(
+        id=message_id,
+        content=content,
+        attachments=list(attachments),
+        embeds=list(embeds),
+        author=SimpleNamespace(id=author_id),
+        created_at=datetime(2026, 8, 16, 14, minute))
+
+
+async def refuse_fetch(url):
+    """A link that will not come back: somebody else's web server."""
+    raise ValueError('HTTP 404')
+
+
+async def build(*messages, fetch=refuse_fetch):
+    return await build_thread_history(messages, BOT_ID, OWNER_ID, fetch)
+
+
+async def test_the_thread_comes_back_as_labelled_turns_in_order():
+    history = await build(
+        make_history_message('fix the thing', minute=2),
+        make_history_message('Here is your answer.', author_id=BOT_ID,
+                             minute=3),
+        make_history_message('and also fix that', minute=4))
+
+    assert history.text == (
+        f"""{HISTORY_HEADING}
+
+[2026-08-16 14:02 UTC] Owner:
+fix the thing
+
+[2026-08-16 14:03 UTC] You (agent):
+Here is your answer.
+
+[2026-08-16 14:04 UTC] Owner:
+and also fix that""")
+    assert history.images == []
+
+
+async def test_the_harness_speaks_as_the_harness_not_as_the_agent():
+    """R2c.1b: the bot posts things on its own behalf, and an agent told
+    they were its own words would answer for them next turn."""
+    history = await build(
+        make_history_message('fix the thing'),
+        make_history_message(f'Pull request for **jermabot**: {DEMO_PR}',
+                             author_id=BOT_ID, minute=3),
+        make_history_message('-# _Reloading thread history. Some context '
+                             'might be lost._',
+                             author_id=BOT_ID, minute=4),
+        make_history_message(TIMEOUT_NOTICE, author_id=BOT_ID, minute=5),
+        make_history_message('Workspace error: the push failed',
+                             author_id=BOT_ID, minute=6))
+
+    assert history.text.split('\n\n')[2:] == [
+        f'[2026-08-16 14:03 UTC] [harness] Pull request opened for '
+        f'jermabot: {DEMO_PR}',
+        '[2026-08-16 14:04 UTC] [harness] Reloading thread history. Some '
+        'context might be lost.',
+        '[2026-08-16 14:05 UTC] [harness] The turn timed out and published '
+        'what it had finished.',
+        '[2026-08-16 14:06 UTC] [harness] The turn failed: the push failed',
+    ]
+
+
+async def test_an_answer_with_an_announcement_keeps_both_apart():
+    """One message can be the agent talking and the harness announcing."""
+    history = await build(make_history_message(
+        f'Done.\nUpdated the pull request for **jermabot**: {DEMO_PR}',
+        author_id=BOT_ID, minute=3))
+
+    assert history.text.split('\n\n')[1:] == [
+        '[2026-08-16 14:03 UTC] You (agent):\nDone.',
+        f'[2026-08-16 14:03 UTC] [harness] Pull request updated for '
+        f'jermabot: {DEMO_PR}',
+    ]
+
+
+async def test_images_come_back_downloaded_and_lost_ones_are_named():
+    """R2c.2: the agent saw these, so they are fetched again; one Discord
+    has stopped serving is a gap the agent should know about rather than a
+    message that silently changed."""
+    history = await build(make_history_message(
+        'what is wrong with this?',
+        attachments=[make_attachment('shot.png', b'PNG'),
+                     make_attachment('gone.png'),
+                     make_attachment('notes.txt', b'text',
+                                     content_type='text/plain')]))
+
+    assert history.images == [(f'{MESSAGE_ID}-shot.png', b'PNG')]
+    lines = history.text.split('\n\n')[1].splitlines()
+    assert lines[:3] == [
+        '[2026-08-16 14:02 UTC] Owner:',
+        'what is wrong with this?',
+        f'[image attachment: {MESSAGE_ID}-shot.png]',
+    ]
+    # The text file is not an image and no business of the agent's; the
+    # image Discord has stopped serving is a named gap, not a message that
+    # quietly changed.
+    assert len(lines) == 4
+    assert lines[3].startswith('[image attachment gone.png: Discord no '
+                               'longer has this file (')
+
+
+async def test_a_stranger_in_the_thread_is_not_the_conversation():
+    history = await build(
+        make_history_message('fix the thing'),
+        make_history_message('lol', author_id=STRANGER_ID, minute=3))
+
+    assert 'lol' not in history.text
+
+
+async def test_an_empty_thread_rebuilds_nothing():
+    """Nothing to tell the agent; the service starts the session clean."""
+    history = await build(make_history_message('hi', author_id=STRANGER_ID))
+
+    assert history.text == ''
+
+
+async def test_the_starter_leads_and_the_new_message_is_left_out(cog):
+    """The message an agent thread grew from lives in the parent channel,
+    and the one being answered belongs at the end of the prompt, not in
+    the history."""
+    starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1)
+    thread = make_thread(cog.bot, starter=starter)
+    asked = {}
+
+    def history(**kwargs):
+        asked.update(kwargs)
+
+        async def iterator():
+            yield make_history_message('Here is your answer.',
+                                       author_id=BOT_ID, minute=3)
+        return iterator()
+
+    thread.history = history
+    upto = make_history_message('and also fix that', minute=4)
+
+    rebuilt = await cog._thread_history(thread, upto)
+
+    assert asked == {'limit': None, 'oldest_first': True, 'before': upto}
+    assert rebuilt.text.split('\n\n')[1:] == [
+        f'[2026-08-16 14:01 UTC] Owner:\n<@{BOT_ID}> fix the thing',
+        '[2026-08-16 14:03 UTC] You (agent):\nHere is your answer.',
+    ]
+
+
+async def test_a_thread_turn_offers_the_service_its_history(cog, monkeypatch):
+    """The service decides whether the history is needed; the cog only
+    hands over the way to build it (R2c)."""
+    thread = make_thread(cog.bot)
+    thread.typing = MagicMock(side_effect=_NoTyping)
+    thread.send = AsyncMock()
+    make_history(thread, 'Here is your answer.')
+    captured = {}
+
+    async def fake_run(key, prompt, on_progress, images=(), reconstruct=None):
+        captured['reconstruct'] = reconstruct
+        return TaskReport(answer='done', pull_requests=[], timed_out=False)
+
+    monkeypatch.setattr(cog.service, 'run', fake_run)
+
+    await cog._handle_prompt(make_message(thread, 'and also fix that'),
+                             thread, 'and also fix that')
+
+    assert captured['reconstruct'] is not None
+    rebuilt = await captured['reconstruct']()
+    assert 'Here is your answer.' in rebuilt.text
+
+
+async def test_a_pasted_image_link_is_downloaded_again():
+    """A link arrives as an embed rather than an attachment, so there is
+    nothing of ours to read it from; it is fetched from the web the way
+    the live turn fetches it, so the picture is really in the rebuilt
+    history (R2c.2)."""
+    async def fetch(url):
+        assert url == 'https://example.com/a.png'
+        return 'a.png', b'PNG'
+
+    history = await build(
+        make_history_message('look at this',
+                             embeds=[make_embed('https://example.com/a.png')]),
+        fetch=fetch)
+
+    assert history.images == [(f'{MESSAGE_ID}-a.png', b'PNG')]
+    assert history.text.splitlines()[-1] == (
+        f'[image link https://example.com/a.png: {MESSAGE_ID}-a.png]')
+
+
+async def test_a_pasted_image_link_that_will_not_come_back_says_why():
+    """A message that quietly lost its picture is worse than one that says
+    where it was and what happened to it (R2c.2)."""
+    history = await build(make_history_message(
+        'look at this', embeds=[make_embed('https://example.com/a.png')]))
+
+    assert history.images == []
+    assert history.text.splitlines()[-1] == (
+        '[image link https://example.com/a.png: could not be fetched '
+        '(HTTP 404)]')
+
+
+class _Response:
+    def __init__(self, status=200, content_type='image/png',
+                 body=b'PNG', length=None):
+        self.status = status
+        self.headers = {'Content-Type': content_type}
+        if length is not None:
+            self.headers['Content-Length'] = str(length)
+        self.content = SimpleNamespace(read=AsyncMock(return_value=body))
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _session(response):
+    return SimpleNamespace(get=lambda url, timeout: response)
+
+
+async def test_an_image_link_comes_back_as_a_file():
+    name, data = await fetch_image_link(
+        _session(_Response()), 'https://example.com/pics/a.png?x=1')
+
+    assert (name, data) == ('a.png', b'PNG')
+
+
+@pytest.mark.parametrize('response, cause', [
+    (_Response(status=404), 'HTTP 404'),
+    (_Response(content_type='text/html'), 'not an image (text/html)'),
+    (_Response(content_type=''), 'not an image (no type)'),
+    (_Response(length=IMAGE_LINK_MAX_BYTES + 1),
+     f'too large ({IMAGE_LINK_MAX_BYTES + 1} bytes)'),
+    (_Response(body=b'x' * (IMAGE_LINK_MAX_BYTES + 1)),
+     f'too large (over {IMAGE_LINK_MAX_BYTES} bytes)'),
+])
+async def test_a_link_that_is_not_an_image_says_why(response, cause):
+    """Both the live turn and a rebuilt history quote this reason, so it
+    has to name the actual problem (R2c.2)."""
+    with pytest.raises(ValueError, match=re.escape(cause)):
+        await fetch_image_link(_session(response), 'https://example.com/a')

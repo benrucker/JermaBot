@@ -17,6 +17,10 @@ def agent_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv('JERMABOT_AGENT_REPOS_DIR', str(repos))
     monkeypatch.setenv('JERMABOT_AGENT_CONVERSATIONS_DIR', str(conversations))
     monkeypatch.setenv('JERMABOT_AGENT_BACKUP_DIR', str(tmp_path / 'backup'))
+    # Where the SDK would keep this host's transcripts: a turn asks
+    # whether one is still there, so no test may go looking in the real
+    # ~/.claude.
+    monkeypatch.setenv('CLAUDE_CONFIG_DIR', str(tmp_path / 'claude'))
     # No backup repo by default: a service built here talks to no GitHub
     # at all. Tests that want one hand the service a stub.
     monkeypatch.delenv('JERMABOT_AGENT_BACKUP_REPO', raising=False)
