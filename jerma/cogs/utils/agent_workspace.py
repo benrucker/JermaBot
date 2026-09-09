@@ -136,7 +136,7 @@ def _worktree_is_live(path: Path) -> bool:
     return gitdir_path.exists()
 
 
-def _one_line(error: object) -> str:
+def one_line(error: object) -> str:
     """An error as one short line: notes are Discord subtext, and git
     likes to answer in paragraphs."""
     return ' '.join(str(error).split())[:300]
@@ -551,7 +551,7 @@ class ConversationCheckout:
             # Never worth failing a turn over: the branch is gone either
             # way, so say so and start over.
             return (f'-# _Couldn\'t check the pull request for **{name}** '
-                    f'({_one_line(error)}); starting a fresh branch._')
+                    f'({one_line(error)}); starting a fresh branch._')
         if state.get('mergedAt'):
             outcome = 'was merged'
         elif state.get('state') == 'CLOSED':
@@ -604,7 +604,7 @@ class ConversationCheckout:
         except WorkspaceError as error:
             # Either phase can land here, so the wording names neither.
             return (f"-# _Couldn't catch **{name}** up: "
-                    f'{_one_line(error)}._')
+                    f'{one_line(error)}._')
         return None
 
     async def _take_in_origin_branch(self, repo_dir: Path) -> list[str]:

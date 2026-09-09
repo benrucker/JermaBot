@@ -21,9 +21,12 @@ Discord and GitHub still know: the pull requests a thread announced, or a
 search of the agent's pull requests for the one that names the thread
 (R3.3). The cog supplies the Discord half; everything after it is here.
 
-What the agent remembers of the conversation is a separate problem: that
-is the SDK's transcript, and it is only as durable as this host until a
-later phase backs it up.
+What the agent remembers of the conversation — the SDK's transcript — is
+backed up off this host by agent_backup, which also keeps the identity
+record beside it, so recover() asks the backup first and falls back to
+Discord and GitHub only when it has nothing (R2b.4, R3.3). Without
+JERMABOT_AGENT_BACKUP_REPO the bot still runs, loudly, with transcripts
+no more durable than this host.
 """
 import asyncio
 import json
@@ -31,18 +34,22 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .agent_backup import BackupStore
 from .agent_config import (
     AGENT_REPOS,
+    get_backup_repo,
+    get_backup_root,
     get_conversations_root,
     get_github_token,
     get_workspace_root,
 )
-from .agent_runner import OnProgress, run_agent
+from .agent_runner import AgentRunResult, OnProgress, run_agent
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
     PullRequestUpdate,
     WorkspaceError,  # noqa: F401 — re-exported for callers
+    one_line,
 )
 
 STATE_FILE = 'state.json'
@@ -67,6 +74,12 @@ class Conversation:
     checkout: ConversationCheckout
     session_id: str | None = None
     pr_urls: dict[str, str] = field(default_factory=dict)  # repo -> PR url
+    # Whether a turn of this conversation has run with the backup as its
+    # session store. Once one has, the SDK stopped updating this host's
+    # transcript (see agent_backup), so the backup is the only place the
+    # rest of the conversation exists, and a turn without it would quietly
+    # resume from a frozen copy.
+    backed_up: bool = False
     # Kept for the state file's shape only; nothing reads it since
     # eviction went away.
     last_active: datetime = field(default_factory=datetime.now)
@@ -78,6 +91,7 @@ class Conversation:
             'branch': self.checkout.branch,
             'session_id': self.session_id,
             'pr_urls': self.pr_urls,
+            'backed_up': self.backed_up,
             'last_active': self.last_active.isoformat(),
         }
 
@@ -93,6 +107,7 @@ class Conversation:
                                           thread_id),
             session_id=entry.get('session_id'),
             pr_urls=entry.get('pr_urls') or {},
+            backed_up=bool(entry.get('backed_up')),
             last_active=(datetime.fromisoformat(last_active) if last_active
                          else datetime.now()),
         )
@@ -108,7 +123,17 @@ class AgentTaskService:
             github_token=get_github_token(),
         )
         self.conversations_root = get_conversations_root()
+        backup_repo = get_backup_repo()
+        self.backup = (BackupStore(get_backup_root(), backup_repo,
+                                   self.workspace)
+                       if backup_repo else None)
         self.conversations: dict[int, Conversation] = {}
+        # Backup trouble a turn should mention: a clone that never came
+        # up, and an identity record that could not be written.
+        self.backup_error: str | None = None
+        # Keyed by conversation: turns run in parallel, and a thread must
+        # hear about its own record, not another thread's.
+        self.identity_error: dict[int, str] = {}
         self._ensure_task: asyncio.Task | None = None
         # Two messages arriving together in a thread this host has no
         # record of must not recover it twice, which would leave the
@@ -122,6 +147,11 @@ class AgentTaskService:
     def start(self):
         """Load conversation state and begin readying repos in the background."""
         self._load_state()
+        if self.backup is None:
+            print('Agent service: JERMABOT_AGENT_BACKUP_REPO is not set, so '
+                  'nothing backs up conversation transcripts off this host. '
+                  'A conversation that loses its transcript will fall back '
+                  'to rebuilding what it can from its thread.')
         self._ensure_task = asyncio.create_task(self._startup())
 
     def close(self):
@@ -140,6 +170,7 @@ class AgentTaskService:
         async with conversation.lock:
             conversation.last_active = datetime.now()
             await self._ready()
+            self._require_backup(conversation)
             # Git continuity (R3): the worktrees are a cache, so a turn
             # that comes after a restart, a sweep, or a lost disk gets them
             # back here, on a branch that starts over if GitHub finished
@@ -151,12 +182,27 @@ class AgentTaskService:
             for name in preparation.finished_repos:
                 conversation.pr_urls.pop(name, None)
             # The branch and its pull requests may have moved.
-            self._save_state()
+            await self._persist(key)
             # Straight out to the thread, ahead of the answer: these are
             # already true, and the turn can still fail on its way to a
             # report the owner would never see (R3.7).
             for note in preparation.notes:
                 await on_progress(note)
+            # A store that cannot be reached is not handed out: the SDK
+            # would fail the turn loading from it, while a conversation
+            # that never depended on the backup still runs from its local
+            # transcript (the ones that do depend on it were refused
+            # above by _require_backup).
+            store = (self.backup.session_store(key)
+                     if self.backup is not None and not self.backup_error
+                     else None)
+            if store is not None and not conversation.backed_up:
+                # Set before the run, not after: from the moment the store
+                # is handed to the SDK it holds turns this host's
+                # transcript will not, and a restart in the middle of the
+                # turn must not leave the guard disarmed.
+                conversation.backed_up = True
+                await self._persist(key)
             image_paths = self._save_images(conversation.checkout.root, images)
             result = await run_agent(
                 prompt=prompt,
@@ -165,19 +211,29 @@ class AgentTaskService:
                 on_progress=on_progress,
                 resume=conversation.session_id,
                 image_paths=image_paths,
+                session_store=store,
             )
             if result.session_id is not None:
                 conversation.session_id = result.session_id
                 # Persist the moment it changes: a publish that blows up
-                # below must not cost the id the next turn resumes from.
-                self._save_state()
+                # below must not cost the id the next turn resumes from,
+                # and the backup's transcript is filed under it.
+                await self._persist(key)
 
-            pull_requests = await conversation.checkout.publish_turn(
-                prompt, result.title, result.body, conversation.pr_urls)
-            for update in pull_requests:
-                conversation.pr_urls[update.repo_name] = update.url
+            try:
+                pull_requests = await conversation.checkout.publish_turn(
+                    prompt, result.title, result.body, conversation.pr_urls)
+                for update in pull_requests:
+                    conversation.pr_urls[update.repo_name] = update.url
 
-            self._save_state()
+                await self._persist(key)
+            finally:
+                # Last thing in the turn, and said even when publishing the
+                # code failed: the backup is what the next turn resumes
+                # from, so a copy that never left this host is news for the
+                # thread even though the reply stands (R2b.1).
+                for note in await self._backup_notes(key, result):
+                    await on_progress(note)
             return TaskReport(answer=result.final_text,
                               pull_requests=pull_requests,
                               timed_out=result.timed_out)
@@ -213,14 +269,16 @@ class AgentTaskService:
                       pr_urls: dict[str, str]) -> bool:
         """Put back a conversation this host has no record of (R3.3).
 
-        The caller supplies what Discord knows: the pull requests the
-        thread announced, most recently announced last, and the message
-        that started the thread. The branch comes from those pull
-        requests; when the thread announced none, the agent's pull
-        requests on GitHub are searched for one that names this thread.
-        Returns whether anything was found — a conversation whose turns
-        never touched code has nothing to recover and simply starts fresh
-        on its next edit.
+        Sources in order: the identity record in the backup repo, which
+        knows the session id too and so restores the whole conversation
+        rather than only its code (R2b.4); then what the caller says
+        Discord knows — the pull requests the thread announced, most
+        recently announced last, and the message that started the thread —
+        which gives the branch; then, for a thread that announced none, a
+        search of the agent's pull requests on GitHub for one that names
+        this thread. Returns whether anything was found — a conversation
+        whose turns never touched code has nothing to recover and simply
+        starts fresh on its next edit.
         """
         if self.has_conversation(key):
             return False
@@ -230,6 +288,21 @@ class AgentTaskService:
             # second look rather than building one of its own.
             if self.has_conversation(key):
                 return False
+            identity = await self._backup_identity(key)
+            if identity is not None:
+                # Everything at once, session id included, so the turn
+                # resumes the conversation rather than only its branch.
+                # The thread's announcements are as true as the record
+                # and may be newer than the last identity that reached
+                # GitHub, so keep both; the record wins where they differ.
+                identity = {**identity,
+                            'pr_urls': {**pr_urls,
+                                        **(identity.get('pr_urls') or {})}}
+                self.conversations[key] = Conversation.from_state(
+                    identity, self.conversations_root / str(key),
+                    self.workspace, key)
+                await self._persist(key)
+                return True
             if pr_urls:
                 latest = list(pr_urls.values())[-1]
                 branch = await self.workspace.branch_for_pull_request(latest)
@@ -247,14 +320,91 @@ class AgentTaskService:
                 key)
             self.conversations[key] = Conversation(checkout=checkout,
                                                    pr_urls=dict(pr_urls))
-            self._save_state()
+            await self._persist(key)
             return True
+
+    async def _backup_identity(self, key: int) -> dict | None:
+        """The identity record the backup repo holds for a thread, if any
+        (R2b.4, R3.3 source 1).
+
+        A backup that cannot be read is logged and skipped rather than
+        failing recovery: the thread and GitHub are still to be tried
+        (R2.4).
+        """
+        if self.backup is None:
+            return None
+        try:
+            record = await self.backup.read_identity(key)
+        except Exception as error:
+            print(f'Agent service: reading the backup identity for {key} '
+                  f'failed: {error}')
+            return None
+        if record and record.get('branch'):
+            return record
+        return None
+
+    async def _backup_notes(self, key: int,
+                            result: AgentRunResult) -> list[str]:
+        """Muted lines for a turn the backup could not fully store."""
+        if self.backup is None:
+            return []
+        notes = []
+        # The store says the same thing better when it has a note of its
+        # own for this thread, so only one of the two is posted.
+        if result.mirror_errors and key not in self.backup.dropped:
+            notes.append('-# _Part of this turn is missing from the '
+                         'transcript backup: '
+                         f'{"; ".join(result.mirror_errors)}._')
+        identity_error = self.identity_error.pop(key, None)
+        if identity_error:
+            notes.append("-# _This conversation's identity record was not "
+                         f'updated: {identity_error}._')
+        notes.extend(await self.backup.flush(key))
+        return notes
+
+    def _require_backup(self, conversation: Conversation):
+        """Refuse a turn whose transcript the backup cannot supply (R2b.1).
+
+        Only conversations that have already run with the store: from
+        their first store-backed turn the SDK stopped writing this host's
+        transcript, so resuming without the backup would answer from a
+        frozen copy and quietly lose everything since. A conversation that
+        never had a backup still has its local transcript and runs as it
+        always did.
+        """
+        if not conversation.backed_up:
+            return
+        if self.backup is None:
+            raise WorkspaceError(
+                'This conversation is backed up to GitHub, but '
+                'JERMABOT_AGENT_BACKUP_REPO is not set, so its transcript '
+                'cannot be read. Set it back to the backup repo and try '
+                'again: running without it would answer from a stale copy '
+                'of the conversation.')
+        if self.backup_error:
+            raise WorkspaceError(
+                'This conversation is backed up to GitHub, but the backup '
+                f'repo could not be cloned: {self.backup_error}')
 
     async def _startup(self):
         cloned = await self.workspace.ensure_repos()
         if cloned:
             print(f'Agent service: cloned {", ".join(cloned)} '
                   f'into {self.workspace.root}')
+        # Same job as the repo clones: get the backup ready before any
+        # turn needs it.
+        if self.backup is not None:
+            try:
+                await self.backup.ensure_clone()
+                self.backup_error = None
+            except Exception as error:
+                # Not raised: a conversation with nothing backed up yet has
+                # nothing to load and can still run. _require_backup fails
+                # the ones that do depend on it (R2b).
+                self.backup_error = one_line(error)
+                print('Agent service: the transcript backup repo '
+                      f'{self.backup.repo_slug} could not be cloned: '
+                      f'{error}')
 
     async def _ready(self):
         """Wait for the startup task, restarting it if it failed."""
@@ -279,6 +429,29 @@ class AgentTaskService:
             self.conversations[int(key)] = Conversation.from_state(
                 entry, self.conversations_root / key, self.workspace,
                 int(key))
+
+    async def _persist(self, key: int):
+        """Save an identity everywhere it lives: state.json on this host,
+        and the backup repo off it (R5.1, R5.2).
+
+        Never raises: this runs in the middle of a turn, and an identity
+        that could not be copied off the host is a note for the thread,
+        not a lost answer.
+        """
+        self._save_state()
+        conversation = self.conversations.get(key)
+        if self.backup is None or conversation is None:
+            return
+        record = {'thread_id': key, **conversation.to_state()}
+        # last_active changes every turn and nothing reads it; leaving it
+        # out keeps the record's history down to real changes of identity.
+        record.pop('last_active', None)
+        try:
+            await self.backup.write_identity(key, record)
+        except Exception as error:
+            self.identity_error[key] = one_line(error)
+            print(f'Agent service: backing up the identity for {key} '
+                  f'failed: {error}')
 
     def _save_state(self):
         self.conversations_root.mkdir(parents=True, exist_ok=True)

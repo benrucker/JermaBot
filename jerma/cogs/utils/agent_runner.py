@@ -5,11 +5,17 @@ and a PreToolUse hook confines every file operation to the workspace
 directory. Git and pull requests are handled by agent_workspace, not the
 agent, so the prompt-to-PR pipeline can't be steered by anything the agent
 reads.
+
+A conversation's transcript is mirrored off-host through the SDK's
+session_store option (agent_backup): passing one makes the store, not this
+host's disk, what a resumed session is rebuilt from, so a batch the store
+had to drop arrives as a MirrorErrorMessage and comes back on the result
+for the thread to hear about.
 """
 import asyncio
 import os
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -18,6 +24,7 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     HookJSONOutput,
     HookMatcher,
+    MirrorErrorMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -30,6 +37,7 @@ from .agent_config import (
     AGENT_TIMEOUT_SECONDS,
     AgentRepo,
 )
+from .agent_workspace import one_line
 
 # Never let the SDK fall back to API billing; subscription auth comes from
 # CLAUDE_CODE_OAUTH_TOKEN (server) or the CLI login (dev machine). Done once
@@ -54,6 +62,10 @@ class AgentRunResult:
     body: str = ''
     # Pass back as run_agent(resume=...) to continue this conversation.
     session_id: str | None = None
+    # Why the session store dropped a batch of transcript entries, one
+    # cause per batch (R2b.1): the turn stands, but its backup is
+    # incomplete and the thread has to be told.
+    mirror_errors: list[str] = field(default_factory=list)
 
 
 def _split_reply(prompt: str, reply: str) -> tuple[str, str]:
@@ -135,10 +147,20 @@ def _build_instructions(repos: dict[str, AgentRepo]) -> str:
 
 def _build_options(workspace_root: Path,
                    repos: dict[str, AgentRepo],
-                   resume: str | None) -> ClaudeAgentOptions:
+                   resume: str | None,
+                   session_store=None) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         cwd=str(workspace_root),
         resume=resume,
+        # The transcript's off-host copy (R2b). With a store set, a resume
+        # loads the session from it rather than from this host's disk, so
+        # the store is what a conversation actually survives on.
+        session_store=session_store,
+        # A load reads the backup over the network — a fetch, and a
+        # clone the first time. 60s (the default) is not enough headroom
+        # for that, and a load that runs past it raises out of connect()
+        # and takes the turn down with it.
+        load_timeout_ms=300_000,
         tools=list(AGENT_TOOLS),
         disallowed_tools=['Bash', 'Task', 'WebFetch', 'WebSearch'],
         permission_mode='acceptEdits',
@@ -157,11 +179,45 @@ def _build_options(workspace_root: Path,
     )
 
 
+def handle_message(message, result: AgentRunResult,
+                   outbox: asyncio.Queue) -> None:
+    """Fold one SDK message into the turn's result.
+
+    Narration goes to the outbox; a text-only assistant message is the
+    answer. Module level rather than a closure so a turn's message
+    handling can be tested without an SDK subprocess.
+    """
+    # Checked before SystemMessage, which it subclasses: a transcript
+    # batch the backup dropped must not disappear into the init branch,
+    # since the store is the only durable transcript after a resume.
+    if isinstance(message, MirrorErrorMessage):
+        # One per dropped batch: a long turn can lose more than one.
+        result.mirror_errors.append(
+            one_line(message.error or 'unknown cause'))
+    elif isinstance(message, SystemMessage):
+        # The init message names the session up front, so it's known
+        # even if a timeout cuts the run short of its ResultMessage.
+        if message.subtype == 'init':
+            result.session_id = message.data.get('session_id')
+    elif isinstance(message, AssistantMessage):
+        texts = [block.text for block in message.content
+                 if isinstance(block, TextBlock) and block.text.strip()]
+        if any(isinstance(block, ToolUseBlock) for block in message.content):
+            for text in texts:
+                outbox.put_nowait(text)
+        elif texts:
+            result.final_text = '\n\n'.join(texts)
+    elif isinstance(message, ResultMessage):
+        if message.result:
+            result.final_text = message.result
+
+
 async def run_agent(prompt: str, workspace_root: Path,
                     repos: dict[str, AgentRepo],
                     on_progress: OnProgress,
                     resume: str | None = None,
-                    image_paths: list[Path] = ()) -> AgentRunResult:
+                    image_paths: list[Path] = (),
+                    session_store=None) -> AgentRunResult:
     """Run one agent turn; interim narration streams, the answer returns.
 
     Pass a previous result's session_id as resume to continue that
@@ -180,23 +236,7 @@ async def run_agent(prompt: str, workspace_root: Path,
 
     async def consume(client: ClaudeSDKClient):
         async for message in client.receive_response():
-            if isinstance(message, SystemMessage):
-                # The init message names the session up front, so it's known
-                # even if a timeout cuts the run short of its ResultMessage.
-                if message.subtype == 'init':
-                    result.session_id = message.data.get('session_id')
-            elif isinstance(message, AssistantMessage):
-                texts = [block.text for block in message.content
-                         if isinstance(block, TextBlock) and block.text.strip()]
-                if any(isinstance(block, ToolUseBlock)
-                       for block in message.content):
-                    for text in texts:
-                        outbox.put_nowait(text)
-                elif texts:
-                    result.final_text = '\n\n'.join(texts)
-            elif isinstance(message, ResultMessage):
-                if message.result:
-                    result.final_text = message.result
+            handle_message(message, result, outbox)
 
     async def deliver():
         while (text := await outbox.get()) is not None:
@@ -207,7 +247,8 @@ async def run_agent(prompt: str, workspace_root: Path,
         prompt = (f'{prompt}\n\nImage attachment(s) saved in the workspace:\n'
                   f'{paths_str}\nUse the Read tool to view them.')
 
-    options = _build_options(workspace_root, repos, resume)
+    options = _build_options(workspace_root, repos, resume,
+                             session_store)
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
         sender = asyncio.create_task(deliver())

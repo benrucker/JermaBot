@@ -85,6 +85,12 @@ CLAUDE_CODE_OAUTH_TOKEN=...
 # read/write on Contents and Pull requests:
 # https://github.com/settings/personal-access-tokens/new
 GITHUB_TOKEN=...
+# A private repo (owner/name) the agent backs conversation transcripts up
+# to, so a conversation survives losing this host. Create it empty and give
+# the token above read/write on its Contents. Without it the bot still
+# runs, and says so at startup, but a conversation is only as durable as
+# this machine.
+JERMABOT_AGENT_BACKUP_REPO=owner/name
 ```
 
 ### Running JermaBot:
