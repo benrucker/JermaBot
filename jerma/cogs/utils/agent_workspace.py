@@ -9,6 +9,13 @@ concurrently and edits accumulate across turns. Each turn's changes become
 a commit pushed to the conversation's branch, which opens a pull request
 the first time and updates it every time after.
 
+Checkouts are disposable: naming a conversation's branch is separate from
+putting worktrees on disk, and materialize() rebuilds them at any later
+time. A conversation never restarts its branch, so materializing starts
+from the branch itself whenever it still exists on origin, and only falls
+back to the repo's base branch when it does not (a brand new conversation,
+or one whose branch was merged and deleted).
+
 GitHub access goes through the gh CLI, which reads GITHUB_TOKEN from the
 environment: git authenticates via `gh auth git-credential` plugged in as a
 per-command credential helper, and pull requests are opened with
@@ -75,6 +82,22 @@ async def _run_git(repo_dir: Path, *args: str) -> str:
     return await _run(['git', *args], cwd=repo_dir)
 
 
+def _worktree_is_live(path: Path) -> bool:
+    """Whether path is a git worktree whose repository is still there."""
+    link = path / '.git'  # a worktree's .git is a file, not a directory
+    if not link.is_file():
+        return False
+    gitdir = link.read_text(encoding='utf-8').partition('gitdir:')[2].strip()
+    if not gitdir:
+        return False
+    # git writes the gitdir absolute by default, but relative to the worktree
+    # under worktree.useRelativePaths; never resolve it against the CWD.
+    gitdir_path = Path(gitdir)
+    if not gitdir_path.is_absolute():
+        gitdir_path = path / gitdir_path
+    return gitdir_path.exists()
+
+
 def slugify(text: str) -> str:
     slug = re.sub(r'[^a-z0-9]+', '-', text.lower()).strip('-')
     return slug[:40].rstrip('-') or 'task'
@@ -88,7 +111,7 @@ class AgentWorkspace:
         self.root = root
         self.repos = repos
         self.github_token = github_token
-        # Serializes clone-mutating operations (fetch, worktree add/remove)
+        # Serializes clone-mutating operations (fetch, worktree add)
         # per repo; conversations otherwise run fully in parallel.
         self._repo_locks = {name: asyncio.Lock() for name in repos}
         if github_token:
@@ -141,67 +164,73 @@ class AgentWorkspace:
         return f'https://github.com/{self.repos[name].slug}.git'
 
     async def _clone(self, name: str):
-        """Shallow-clone a repo, atomically: no half-cloned dir survives."""
+        """Clone a repo, atomically: no half-cloned dir survives.
+
+        Full depth on purpose: conversation branches are fetched into these
+        clones later, and a shallow base has no ancestor in common with
+        them, so nothing could ever be merged. Disk is not a concern.
+        """
         partial = self.root / f'{name}.cloning'
         if partial.exists():
             await asyncio.to_thread(shutil.rmtree, partial)
         await self.run_git_authed(
-            self.root, 'clone', '--depth', '1', '--single-branch',
+            self.root, 'clone', '--single-branch',
             '-b', self.repos[name].base_branch,
             self._clone_url(name), str(partial),
         )
         partial.rename(self.root / name)
 
-    async def create_checkout(self, root: Path,
-                              prompt: str) -> 'ConversationCheckout':
-        """Check out every repo under root as worktrees on a fresh branch
-        named for the prompt."""
+    def new_checkout(self, root: Path, prompt: str) -> 'ConversationCheckout':
+        """Name a new conversation's checkout: a branch of its own, under
+        root. Nothing is on disk yet; materialize() puts it there."""
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
         branch = f'{AGENT_BRANCH_PREFIX}/{slugify(prompt)}-{timestamp}'
-        root.mkdir(parents=True, exist_ok=True)
-        await asyncio.gather(*(
-            self._add_worktree(name, root / name, branch)
-            for name in self.repos))
         return ConversationCheckout(root, branch, self)
+
+    async def materialize(self, checkout: 'ConversationCheckout'):
+        """(Re)create only the worktrees the checkout is missing.
+
+        Repo by repo: a half-built checkout (one repo failed, or the
+        pristine clone of one repo was re-cloned) must not cost the repos
+        that are fine — worse, rebuilding a healthy worktree would throw
+        away edits the agent has not committed yet.
+        """
+        checkout.root.mkdir(parents=True, exist_ok=True)
+        await asyncio.gather(*(
+            self._add_worktree(name, checkout.root / name, checkout.branch)
+            for name in checkout.stale_repos()))
 
     async def _add_worktree(self, name: str, path: Path, branch: str):
         repo_dir = self.root / name
-        base = self.repos[name].base_branch
         async with self._repo_locks[name]:
             if path.exists():
-                # Wreckage the conversation state doesn't know about (e.g.
-                # a crash mid-creation); clear it and start over.
+                # Wreckage: a crash mid-creation, or a directory orphaned
+                # by its pristine clone. The branch on origin is the truth,
+                # so the directory is rebuilt from it.
                 await asyncio.to_thread(shutil.rmtree, path)
             await _run_git(repo_dir, 'worktree', 'prune')
-            await self.run_git_authed(repo_dir, 'fetch', 'origin', '--prune')
+            start_point = await self._fetch_start_point(name, repo_dir, branch)
             await _run_git(repo_dir, 'worktree', 'add', '-B', branch,
-                           str(path), f'origin/{base}')
+                           str(path), start_point)
 
-    async def remove_checkout(self, checkout: 'ConversationCheckout'):
-        """Drop a conversation's worktrees and local branches.
+    async def _fetch_start_point(self, name: str, repo_dir: Path,
+                                 branch: str) -> str:
+        """Fetch, and return the ref the worktree should start at: the
+        conversation's own branch when origin still has it, else the base.
 
-        The branch and any pull request live on GitHub; only local state
-        goes. Best-effort: a repo that fails to clean up is reported and
-        skipped rather than stopping the rest.
+        The pristine clones are single-branch, so the conversation's branch
+        needs an explicit refspec to reach them.
         """
-        await asyncio.gather(*(self._remove_worktree(name, checkout)
-                               for name in self.repos))
-        if checkout.root.exists():
-            await asyncio.to_thread(shutil.rmtree, checkout.root,
-                                    ignore_errors=True)
-
-    async def _remove_worktree(self, name: str,
-                               checkout: 'ConversationCheckout'):
-        repo_dir = self.root / name
-        path = checkout.root / name
-        async with self._repo_locks[name]:
-            try:
-                if path.exists():
-                    await _run_git(repo_dir, 'worktree', 'remove',
-                                   '--force', str(path))
-                await _run_git(repo_dir, 'branch', '-D', checkout.branch)
-            except WorkspaceError as error:
-                print(f'AgentWorkspace: cleaning up {path}: {error}')
+        base = self.repos[name].base_branch
+        await self.run_git_authed(repo_dir, 'fetch', 'origin', '--prune')
+        heads = await self.run_git_authed(repo_dir, 'ls-remote', '--heads',
+                                          'origin', f'refs/heads/{branch}')
+        if not heads.strip():
+            return f'origin/{base}'
+        await self.run_git_authed(
+            repo_dir, 'fetch', 'origin',
+            f'+refs/heads/{branch}:refs/remotes/origin/{branch}')
+        return f'origin/{branch}'
 
 
 @dataclass
@@ -209,10 +238,30 @@ class ConversationCheckout:
     """One conversation's working copies: a worktree per repo, all on the
     conversation's branch. Edits accumulate here across turns — nothing is
     reset — and every turn's changes are pushed to the same branch, so each
-    repo accrues at most one pull request per conversation."""
+    repo accrues at most one pull request per conversation.
+
+    The directories are a cache: this object is meaningful without them
+    (root and branch are all the conversation record keeps) and
+    ensure_materialized rebuilds them from origin before a turn runs."""
     root: Path
     branch: str
     workspace: AgentWorkspace
+
+    def is_materialized(self) -> bool:
+        """Whether every repo has a usable worktree on disk right now."""
+        return not self.stale_repos()
+
+    def stale_repos(self) -> list[str]:
+        """Repos whose worktree has to be (re)built: never created, deleted,
+        or orphaned. A worktree's `.git` is a file pointing back into its
+        pristine clone, so a clone that was wiped (and possibly re-cloned)
+        leaves directories here pointing at nothing."""
+        return [name for name in self.workspace.repos
+                if not _worktree_is_live(self.root / name)]
+
+    async def ensure_materialized(self):
+        if not self.is_materialized():
+            await self.workspace.materialize(self)
 
     async def publish_turn(self, prompt: str, title: str, body: str,
                            pr_urls: dict[str, str]) -> list[PullRequestUpdate]:

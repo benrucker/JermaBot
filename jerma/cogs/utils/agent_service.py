@@ -3,25 +3,28 @@
 This is the seam between Discord and the machinery: the agent cog only
 knows this module's interface (has_conversation / run / start / close), so
 changes to how conversations execute stay behind it. A conversation is
-keyed by the Discord channel its replies live in and owns a checkout (git
-worktrees on a dedicated branch), an agent session, and at most one pull
-request per repo, updated turn by turn. Conversations run concurrently;
-turns of the same conversation queue on its lock.
+keyed by the Discord channel its replies live in and owns a branch, an
+agent session, and at most one pull request per repo, updated turn by turn.
+Conversations run concurrently; turns of the same conversation queue on its
+lock.
 
-Conversation state persists to a JSON file beside the checkouts, so
-conversations survive restarts; the agent sessions themselves resume from
-the SDK's on-disk transcripts, which are keyed by the checkout directory —
-another reason each conversation keeps one directory for life.
+A conversation is its identity — thread id, branch, session id, pull
+request urls — and that is what state.json holds. The worktrees are a
+cache, rebuilt from the branch on origin at the start of any turn that
+finds them missing (see agent_workspace), so an entry is never dropped
+because its directory went away and the code side of a conversation
+continues on its own branch however long the gap. Nothing evicts
+identities. What the agent remembers of the conversation is a separate
+problem: that is the SDK's transcript, and it is only as durable as this
+host until a later phase backs it up.
 """
 import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from .agent_config import (
-    AGENT_CONVERSATION_IDLE_DAYS,
-    AGENT_EVICTION_INTERVAL_SECONDS,
     AGENT_REPOS,
     get_conversations_root,
     get_github_token,
@@ -48,10 +51,17 @@ class TaskReport:
 
 @dataclass
 class Conversation:
-    """One channel's ongoing work: its checkout, session, and pull requests."""
+    """One channel's ongoing work: its branch, session, and pull requests.
+
+    The checkout names the branch and where its worktrees go; they may or
+    may not be on disk at any moment, and the conversation is complete
+    without them.
+    """
     checkout: ConversationCheckout
     session_id: str | None = None
     pr_urls: dict[str, str] = field(default_factory=dict)  # repo -> PR url
+    # Kept for the state file's shape only; nothing reads it since
+    # eviction went away.
     last_active: datetime = field(default_factory=datetime.now)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -67,16 +77,21 @@ class Conversation:
     @classmethod
     def from_state(cls, entry: dict, root: Path,
                    workspace: AgentWorkspace) -> 'Conversation':
+        """Rebuild from a persisted entry. Every field but the branch is
+        optional so that entries written by older versions — and by later
+        ones, which may add fields — still load."""
+        last_active = entry.get('last_active')
         return cls(
             checkout=ConversationCheckout(root, entry['branch'], workspace),
-            session_id=entry['session_id'],
-            pr_urls=entry['pr_urls'],
-            last_active=datetime.fromisoformat(entry['last_active']),
+            session_id=entry.get('session_id'),
+            pr_urls=entry.get('pr_urls') or {},
+            last_active=(datetime.fromisoformat(last_active) if last_active
+                         else datetime.now()),
         )
 
 
 class AgentTaskService:
-    """Runs conversations, each against its own persistent checkout."""
+    """Runs conversations, each on its own branch and checkout."""
 
     def __init__(self):
         self.workspace = AgentWorkspace(
@@ -87,7 +102,6 @@ class AgentTaskService:
         self.conversations_root = get_conversations_root()
         self.conversations: dict[int, Conversation] = {}
         self._ensure_task: asyncio.Task | None = None
-        self._evict_task: asyncio.Task | None = None
 
     def has_conversation(self, key: int) -> bool:
         return key in self.conversations
@@ -96,12 +110,10 @@ class AgentTaskService:
         """Load conversation state and begin readying repos in the background."""
         self._load_state()
         self._ensure_task = asyncio.create_task(self._startup())
-        self._evict_task = asyncio.create_task(self._evict_loop())
 
     def close(self):
-        for task in (self._ensure_task, self._evict_task):
-            if task is not None:
-                task.cancel()
+        if self._ensure_task is not None:
+            self._ensure_task.cancel()
 
     async def run(self, key: int, prompt: str,
                   on_progress: OnProgress,
@@ -111,9 +123,13 @@ class AgentTaskService:
         Turns of the same conversation queue on its lock; different
         conversations run in parallel.
         """
-        conversation = await self._get_or_create(key, prompt)
+        conversation = self._get_or_create(key, prompt)
         async with conversation.lock:
             conversation.last_active = datetime.now()
+            # The worktrees are a cache; a conversation whose turn comes
+            # after a restart, a sweep, or a lost disk gets them back here.
+            await self._ready()
+            await conversation.checkout.ensure_materialized()
             image_paths = self._save_images(conversation.checkout.root, images)
             result = await run_agent(
                 prompt=prompt,
@@ -125,6 +141,9 @@ class AgentTaskService:
             )
             if result.session_id is not None:
                 conversation.session_id = result.session_id
+                # Persist the moment it changes: a publish that blows up
+                # below must not cost the id the next turn resumes from.
+                self._save_state()
 
             pull_requests = await conversation.checkout.publish_turn(
                 prompt, result.title, result.body, conversation.pr_urls)
@@ -141,7 +160,7 @@ class AgentTaskService:
         if not images:
             return []
         attachments_dir = root / '_attachments'
-        attachments_dir.mkdir(exist_ok=True)
+        attachments_dir.mkdir(parents=True, exist_ok=True)
         paths = []
         for filename, data in images:
             path = attachments_dir / Path(filename).name
@@ -149,44 +168,19 @@ class AgentTaskService:
             paths.append(path)
         return paths
 
-    async def _get_or_create(self, key: int, prompt: str) -> Conversation:
+    def _get_or_create(self, key: int, prompt: str) -> Conversation:
+        """Deliberately synchronous: with no await between the lookup and
+        the insert, two turns arriving together cannot both create one."""
         conversation = self.conversations.get(key)
         if conversation is not None:
             return conversation
 
-        await self._ready()
-        checkout = await self.workspace.create_checkout(
+        checkout = self.workspace.new_checkout(
             self.conversations_root / str(key), prompt)
         conversation = Conversation(checkout=checkout)
         self.conversations[key] = conversation
         self._save_state()
         return conversation
-
-    async def _evict_loop(self):
-        """Evict idle conversations at boot and daily after. Eviction is
-        housekeeping, deliberately its own background job so cleanup never
-        delays or fails a user's turn."""
-        while True:
-            try:
-                # Removing worktrees needs the pristine clones in place.
-                await self._ready()
-                await self._evict_stale()
-            except Exception as error:
-                print(f'Agent service: eviction failed: {error}')
-            await asyncio.sleep(AGENT_EVICTION_INTERVAL_SECONDS)
-
-    async def _evict_stale(self):
-        """Drop conversations idle past the limit; their PRs live on GitHub."""
-        cutoff = datetime.now() - timedelta(days=AGENT_CONVERSATION_IDLE_DAYS)
-        stale = [key for key, conversation in self.conversations.items()
-                 if conversation.last_active < cutoff
-                 and not conversation.lock.locked()]
-        for key in stale:
-            await self.workspace.remove_checkout(
-                self.conversations.pop(key).checkout)
-        if stale:
-            self._save_state()
-            print(f'Agent service: evicted {len(stale)} idle conversation(s)')
 
     async def _startup(self):
         cloned = await self.workspace.ensure_repos()
@@ -210,14 +204,12 @@ class AgentTaskService:
         path = self._state_path()
         if not path.exists():
             return
+        # Entries are kept whatever the disk looks like: the checkout is
+        # rebuilt on demand, and an identity is the one thing that cannot
+        # be recreated locally.
         for key, entry in json.loads(path.read_text(encoding='utf-8')).items():
-            root = self.conversations_root / key
-            if not root.exists():
-                print(f'Agent service: dropping conversation {key}; '
-                      'its checkout is gone')
-                continue
             self.conversations[int(key)] = Conversation.from_state(
-                entry, root, self.workspace)
+                entry, self.conversations_root / key, self.workspace)
 
     def _save_state(self):
         self.conversations_root.mkdir(parents=True, exist_ok=True)

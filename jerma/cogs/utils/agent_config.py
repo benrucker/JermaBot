@@ -6,11 +6,6 @@ from pathlib import Path
 
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
-# Conversations idle this long lose their checkouts; branches and pull
-# requests live on GitHub, so only local state goes. A background sweep
-# runs at the given interval to enforce it.
-AGENT_CONVERSATION_IDLE_DAYS = 7
-AGENT_EVICTION_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
