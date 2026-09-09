@@ -35,6 +35,13 @@ fixed messages are not the agent's words and must not come back as them,
 so every shape this cog posts (the muted subtext lines, pull request
 announcements, timeouts, error replies) is written from a constant here
 and read back as a plain "[harness] ..." fact.
+
+Messages posted while the bot was down are not lost either (R6.4). Once
+the bot is connected, a background job reads every text channel it can
+see, active and archived threads alike, keeps the ones recognized as
+ours, and runs whatever the owner said after the bot's last word in each
+as ordinary turns. It discovers those threads from Discord, so it works
+on a host that has never heard of any of them (R6.5).
 """
 import asyncio
 import functools
@@ -132,6 +139,14 @@ def _harness_message(content: str) -> str | None:
     return None
 
 
+def _all_muted(content: str) -> bool:
+    """Whether a message of the bot's is nothing but muted harness lines —
+    the reloading note, a merge conflict, a backup that would not push.
+    Such a message is news about the turn, not the turn's answer."""
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    return bool(lines) and all(_MUTED_LINE.match(line) for line in lines)
+
+
 def _harness_line(line: str) -> str | None:
     """The same for one line of a message: the muted subtext the harness
     posts, and the pull request announcements _handle_prompt writes."""
@@ -166,9 +181,19 @@ async def fetch_image_link(session, url: str) -> tuple[str, bytes]:
         length = response.headers.get('Content-Length')
         if length is not None and int(length) > IMAGE_LINK_MAX_BYTES:
             raise ValueError(f'too large ({length} bytes)')
-        data = await response.content.read(IMAGE_LINK_MAX_BYTES + 1)
-        if len(data) > IMAGE_LINK_MAX_BYTES:
-            raise ValueError(f'too large (over {IMAGE_LINK_MAX_BYTES} bytes)')
+        # Read the body chunk by chunk: read(n) returns only what has
+        # already been buffered, which silently truncates anything the
+        # server sends in pieces. Kept as pieces and joined once, so a
+        # 25MB picture is not copied a few hundred times on the way in.
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in response.content.iter_chunked(65536):
+            chunks.append(chunk)
+            size += len(chunk)
+            if size > IMAGE_LINK_MAX_BYTES:
+                raise ValueError(
+                    f'too large (over {IMAGE_LINK_MAX_BYTES} bytes)')
+        data = b''.join(chunks)
         filename = url.rstrip('/').split('/')[-1].split('?')[0] or 'image'
         return filename, data
 
@@ -314,11 +339,20 @@ class Agent(commands.Cog):
         # thread id -> whether it is one of our agent threads. Each answer
         # costs a message fetch, and a thread's answer never changes.
         self._agent_threads: dict[int, bool] = {}
+        # The startup catch-up, kept so it never runs twice at once and
+        # dies with the cog.
+        self._catch_up_task: asyncio.Task | None = None
+        # Messages this path has taken, so the catch-up cannot take them
+        # again. Only the owner's own turns land here, and the catch-up
+        # empties the set when it finishes.
+        self._live_ids: set[int] = set()
 
     async def cog_load(self):
         self.service.start()
 
     async def cog_unload(self):
+        if self._catch_up_task is not None:
+            self._catch_up_task.cancel()
         self.service.close()
 
     @commands.Cog.listener()
@@ -355,19 +389,232 @@ class Agent(commands.Cog):
             await message.reply(f'{UNREACHABLE_DISCORD}{error}')
             return
 
+        # Recorded before the turn rather than after it: a catch-up
+        # running right now must not replay a message this path has
+        # already taken (R6.4).
+        self._live_ids.add(message.id)
+        await self._run_turn(message, channel, raw)
+
+    async def _run_turn(self, message: discord.Message, channel,
+                        raw: str) -> bool:
+        """The tail of the message path: what the owner asked for, its
+        pictures, and the turn itself.
+
+        Shared with the startup catch-up so a message the bot missed goes
+        through exactly what a live one does. False when there was nothing
+        to run.
+        """
         prompt = raw.strip()
         images = [a for a in message.attachments
                   if a.content_type and a.content_type.startswith('image/')]
         inline_urls = _collect_embed_image_urls(message)
         if not prompt and not images and not inline_urls:
-            return
+            return False
 
         ctx = await self.bot.get_context(message)
         if ctx.valid:
-            return
+            return False
 
         await self._handle_prompt(message, channel, prompt, images,
                                   inline_urls)
+        return True
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """Start the catch-up for whatever arrived while the bot was down.
+
+        on_ready fires on every fresh IDENTIFY, never on a RESUME — where
+        the gateway replays the events of the gap itself — so a second one
+        is exactly the case where messages were missed, and it gets its
+        own catch-up. Only one runs at a time.
+        """
+        if self._catch_up_task is None or self._catch_up_task.done():
+            self._catch_up_task = asyncio.create_task(self._catch_up())
+
+    async def _catch_up(self):
+        """Answer the messages the bot was not running to hear (R6.4).
+
+        Nothing waits for this — the bot is online and answering live
+        messages throughout — so it is also the only thing that reports
+        its own failures.
+
+        Threads are done one at a time: a turn is minutes of git and agent
+        work, and a restart with a backlog has no reason to start a dozen
+        recoveries at once. A failure in one is reported in that thread by
+        the turn itself and never reaches the next one.
+
+        A message on_message has taken is never replayed here: the live
+        path records its id, and this one skips both those ids and
+        anything posted since it started. Recording rather than inferring
+        is the point — on_ready arrives seconds after the gateway starts
+        delivering messages, so timing alone would replay what the bot
+        already answered while it was booting. The conversation lock then
+        orders whatever the two paths hand over.
+
+        Guild threads only, which is where conversations live; the spec
+        asks for no more (a ping in a channel with no thread, or a DM,
+        keeps the durability it always had).
+        """
+        started_at = discord.utils.utcnow()
+        try:
+            try:
+                threads = await self._discover_agent_threads()
+            except Exception:
+                # Said plainly: a summary of nothing scanned would read
+                # as a bot with nothing to catch up on.
+                traceback.print_exc()
+                print('Agent catch-up: could not work out which threads to '
+                      'scan, so nothing was caught up on.')
+                return
+            scanned = replayed = 0
+            for thread in threads:
+                scanned += 1
+                try:
+                    messages = await self._unanswered_messages(
+                        thread, started_at)
+                except Exception as error:
+                    # A thread that stopped being readable halfway
+                    # through hears about it (R6.4). That reply is a
+                    # bot message, so the next catch-up takes the
+                    # thread as answered rather than repeating this
+                    # every restart; the owner posts again to retry.
+                    traceback.print_exc()
+                    await self._say_in_thread(
+                        thread, f'{UNREADABLE_THREAD}{error}')
+                    continue
+                for message in messages:
+                    # Checked again here: a message can sit behind
+                    # minutes of earlier turns, and on_message may have
+                    # taken it in the meantime.
+                    if self._is_live(message, started_at):
+                        continue
+                    try:
+                        if await self._replay(message, thread):
+                            replayed += 1
+                    except Exception:
+                        # A turn reports its own trouble in its own
+                        # thread; this is only for what escapes that.
+                        traceback.print_exc()
+            print(f'Agent catch-up: scanned {scanned} agent thread(s), '
+                  f'replayed {replayed} message(s).')
+        except Exception:
+            traceback.print_exc()
+        # The ids stay: a turn taken during this run may still be going
+        # when a later catch-up scans its thread, and would be replayed
+        # if forgotten. A process sees a handful of owner messages a
+        # day, so the set never amounts to anything.
+
+    async def _say_in_thread(self, thread: discord.Thread, text: str):
+        """Tell a thread what went wrong in it, if it will still take a
+        message; a thread the bot cannot write to is not a reason to lose
+        the rest of the catch-up."""
+        try:
+            await thread.send(text[:MESSAGE_LIMIT])
+        except (discord.HTTPException, aiohttp.ClientError,
+                asyncio.TimeoutError) as error:
+            print(f'Agent catch-up: could not report the trouble in thread '
+                  f'{thread.id}: {error}')
+
+    async def _discover_agent_threads(self) -> list[discord.Thread]:
+        """Every agent thread the bot can see, active or archived (R6.5).
+
+        Discovered from Discord, so a host that has lost its conversations
+        table still finds them all; the table only shortcuts recognizing
+        one (see _is_agent_thread). A channel that cannot be read is said
+        out loud and skipped, because it must not cost the other channels
+        their catch-up.
+        """
+        found: list[discord.Thread] = []
+        seen: set[int] = set()
+        for guild in self.bot.guilds:
+            for channel in guild.text_channels:
+                candidates = [thread for thread in guild.threads
+                              if thread.parent_id == channel.id]
+                try:
+                    async for thread in channel.archived_threads(limit=None):
+                        candidates.append(thread)
+                except (discord.HTTPException, aiohttp.ClientError,
+                        asyncio.TimeoutError) as error:
+                    # Forbidden included: the bot loses history permission
+                    # in a channel now and then. Whatever was already
+                    # cached as active is still worth looking at.
+                    print(f'Agent catch-up: could not list the archived '
+                          f'threads of #{channel} in {guild}: {error}')
+                for thread in candidates:
+                    if thread.id in seen:
+                        continue
+                    seen.add(thread.id)
+                    try:
+                        if await self._is_agent_thread(thread):
+                            found.append(thread)
+                    except (discord.HTTPException, aiohttp.ClientError,
+                            asyncio.TimeoutError) as error:
+                        print(f'Agent catch-up: could not tell whether '
+                              f'thread {thread.id} is one of ours: {error}')
+        return found
+
+    async def _unanswered_messages(self, thread: discord.Thread,
+                                   started_at) -> list[discord.Message]:
+        """The owner's messages this thread never got an answer to, oldest
+        first (R6.4).
+
+        Read from the newest end back to the bot's last message: whatever
+        the owner said after it is what went unanswered. A pull request
+        announcement or an error notice is the bot having spoken, and it
+        is the owner's reply to one that still needs running. A message
+        of nothing but muted harness lines is not — it is news about a
+        turn, and a turn that posted one and then died left the request
+        before it unanswered. Anything the bot narrated on its own way to
+        an answer is indistinguishable from the answer, so a turn
+        interrupted after it started talking stays lost (R6.3). Anyone
+        else in the thread is not part of the conversation.
+
+        Skipped either way: what on_message has already taken, by id, and
+        anything posted since this catch-up started.
+        """
+        assert self.bot.user is not None
+        unanswered: list[discord.Message] = []
+        answered = False
+        async for message in thread.history(limit=None, oldest_first=False):
+            if self._is_live(message, started_at):
+                continue
+            if message.author.id == self.bot.user.id:
+                if _all_muted(message.content):
+                    continue
+                answered = True
+                break
+            if await self.bot.is_owner(message.author):
+                unanswered.append(message)
+        if not answered:
+            # The message a thread grew from lives in the parent channel,
+            # so the loop above never sees it. A thread the bot never got
+            # a word into is one whose first turn died with the bot, and
+            # that starter is the message to run — unless the thread was
+            # made after this job started, in which case the turn that
+            # made it is running right now.
+            starter = await self._fetch_starter(thread)
+            if starter is not None and not self._is_live(starter, started_at):
+                unanswered.append(starter)
+        unanswered.reverse()
+        return unanswered
+
+    def _is_live(self, message, started_at) -> bool:
+        """Whether this message is on_message's rather than the catch-up's:
+        one it has taken, or one that arrived after the catch-up began."""
+        return (message.id in self._live_ids
+                or message.created_at >= started_at)
+
+    async def _replay(self, message: discord.Message,
+                      thread: discord.Thread) -> bool:
+        """One missed message, run as a turn of its thread. A message that
+        leads with a ping (the one that started the thread) loses it,
+        exactly as the live path does."""
+        # Recorded like a live message, so a later catch-up that scans
+        # this thread while the turn is still running leaves it alone.
+        self._live_ids.add(message.id)
+        stripped = self._strip_mention(message.content)
+        raw = message.content if stripped is None else stripped
+        return await self._run_turn(message, thread, raw)
 
     @staticmethod
     def _maybe_thread(channel) -> bool:
@@ -469,7 +716,11 @@ class Agent(commands.Cog):
         """
         assert self.bot.user is not None
         starter = await self._fetch_starter(thread)
-        messages = [] if starter is None else [starter]
+        # The starter is the first thing said in the conversation, except
+        # when it is the message being answered — a first turn replayed
+        # at startup — and then there is no prior history at all.
+        messages = ([] if starter is None or starter.id == upto.id
+                    else [starter])
         messages += [message async for message in thread.history(
             limit=None, oldest_first=True, before=upto)]
         async with aiohttp.ClientSession() as session:

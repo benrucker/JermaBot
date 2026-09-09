@@ -4,8 +4,9 @@ state.
 Discord objects are mocked at the boundary only (spec'd so the cog's
 isinstance checks are the real ones); nothing here talks to Discord.
 """
+import asyncio
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -16,6 +17,7 @@ from cogs.agent import (
     HISTORY_HEADING,
     IMAGE_LINK_MAX_BYTES,
     TIMEOUT_NOTICE,
+    UNREADABLE_THREAD,
     Agent,
     build_thread_history,
     fetch_image_link,
@@ -53,6 +55,7 @@ class FakeBot:
         self.user = SimpleNamespace(id=BOT_ID)
         self.channels: dict[int, object] = {}
         self.fetch_calls: list[int] = []
+        self.guilds: list[object] = []
 
     async def is_owner(self, user) -> bool:
         return getattr(user, 'id', None) == OWNER_ID
@@ -609,7 +612,10 @@ async def test_the_starter_leads_and_the_new_message_is_left_out(cog):
     """The message an agent thread grew from lives in the parent channel,
     and the one being answered belongs at the end of the prompt, not in
     the history."""
-    starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1)
+    # A starter carries the id of the thread it grew from; the message
+    # being answered is a later one.
+    starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1,
+                                   message_id=THREAD_ID)
     thread = make_thread(cog.bot, starter=starter)
     asked = {}
 
@@ -688,13 +694,22 @@ async def test_a_pasted_image_link_that_will_not_come_back_says_why():
 
 
 class _Response:
+    """A response whose body arrives in pieces, as a real one does."""
+
     def __init__(self, status=200, content_type='image/png',
                  body=b'PNG', length=None):
         self.status = status
         self.headers = {'Content-Type': content_type}
         if length is not None:
             self.headers['Content-Length'] = str(length)
-        self.content = SimpleNamespace(read=AsyncMock(return_value=body))
+        self.body = body
+        self.content = SimpleNamespace(iter_chunked=self._iter_chunked)
+
+    def _iter_chunked(self, size: int):
+        async def chunks():
+            for start in range(0, len(self.body), size):
+                yield self.body[start:start + size]
+        return chunks()
 
     async def __aenter__(self):
         return self
@@ -714,6 +729,18 @@ async def test_an_image_link_comes_back_as_a_file():
     assert (name, data) == ('a.png', b'PNG')
 
 
+async def test_an_image_bigger_than_one_chunk_comes_back_whole():
+    """A body arrives in pieces, and only the first is buffered when the
+    download starts; an image cut off at that boundary would reach the
+    agent as a broken file."""
+    body = bytes(range(256)) * 1024  # 256 KiB, several chunks
+
+    name, data = await fetch_image_link(
+        _session(_Response(body=body)), 'https://example.com/big.png')
+
+    assert (name, data) == ('big.png', body)
+
+
 @pytest.mark.parametrize('response, cause', [
     (_Response(status=404), 'HTTP 404'),
     (_Response(content_type='text/html'), 'not an image (text/html)'),
@@ -728,3 +755,438 @@ async def test_a_link_that_is_not_an_image_says_why(response, cause):
     has to name the actual problem (R2c.2)."""
     with pytest.raises(ValueError, match=re.escape(cause)):
         await fetch_image_link(_session(response), 'https://example.com/a')
+
+
+# --- startup catch-up: what arrived while the bot was down (R6.4-5) ----
+
+# The moment the catch-up job starts; everything it should answer is
+# older, and anything younger is a live message on_message already has.
+NOW = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
+
+
+def at(minutes: int) -> datetime:
+    return NOW + timedelta(minutes=minutes)
+
+
+def missed_message(content: str, author_id: int = OWNER_ID,
+                   minutes: int = -5, message_id: int = MESSAGE_ID):
+    return SimpleNamespace(
+        id=message_id,
+        content=content,
+        attachments=[],
+        embeds=[],
+        author=SimpleNamespace(id=author_id, bot=author_id == BOT_ID),
+        created_at=at(minutes),
+        reply=AsyncMock(),
+        create_thread=AsyncMock())
+
+
+def set_history(thread, messages):
+    """The thread's messages, oldest first; history() honours oldest_first
+    and before the way Discord's does, so the direction the cog asks for
+    and the message it stops at both matter."""
+    def history(*, limit=None, oldest_first=True, before=None):
+        # Discord pages by snowflake, so the id is the key, as it is
+        # for the real thing.
+        ordered = [message for message in messages
+                   if before is None or message.id < before.id]
+        if not oldest_first:
+            ordered.reverse()
+
+        async def iterator():
+            for message in ordered:
+                yield message
+        return iterator()
+
+    thread.history = history
+
+
+def set_archived(channel, threads=(), error=None):
+    """What channel.archived_threads() yields, or raises."""
+    def archived_threads(**_):
+        async def iterator():
+            if error is not None:
+                raise error
+            for thread in threads:
+                yield thread
+        return iterator()
+
+    channel.archived_threads = archived_threads
+
+
+def make_parent_channel(channel_id: int, starters: dict):
+    """A text channel holding the starter messages its threads grew from."""
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.id = channel_id
+
+    async def fetch_message(message_id):
+        starter = starters.get(message_id)
+        if starter is None:
+            raise http_error(discord.NotFound, 404)
+        return starter
+
+    channel.fetch_message = AsyncMock(side_effect=fetch_message)
+    set_archived(channel)
+    return channel
+
+
+def make_agent_thread(bot, thread_id: int, parent, owner_id: int = BOT_ID,
+                      messages=()):
+    """A thread of ours in `parent`, whose starter is the owner's ping."""
+    thread = MagicMock(spec=discord.Thread)
+    thread.id = thread_id
+    thread.owner_id = owner_id
+    thread.parent = parent
+    thread.parent_id = parent.id
+    thread.typing = MagicMock(side_effect=_NoTyping)
+    thread.send = AsyncMock()
+    set_history(thread, messages)
+    bot.channels[thread_id] = thread
+    return thread
+
+
+def make_guild(text_channels, threads=()):
+    return SimpleNamespace(text_channels=list(text_channels),
+                           threads=list(threads))
+
+
+def starter_for(thread_id: int, minutes: int = -60,
+                content: str = f'<@{BOT_ID}> fix the thing'):
+    return SimpleNamespace(
+        id=thread_id, content=content, attachments=[], embeds=[],
+        author=SimpleNamespace(id=OWNER_ID, bot=False),
+        created_at=at(minutes), reply=AsyncMock(),
+        create_thread=AsyncMock())
+
+
+async def test_discovery_covers_active_and_archived_threads(cog):
+    """R6.5: the set of agent threads comes from Discord, not from the
+    conversations table, so a wiped host finds every one of them."""
+    parent = make_parent_channel(
+        PARENT_ID, {1: starter_for(1), 2: starter_for(2), 3: starter_for(3)})
+    active = make_agent_thread(cog.bot, 1, parent)
+    archived = make_agent_thread(cog.bot, 2, parent)
+    stranger = make_agent_thread(cog.bot, 3, parent, owner_id=STRANGER_ID)
+    set_archived(parent, [archived])
+    cog.bot.guilds = [make_guild([parent], threads=[active, stranger])]
+
+    found = await cog._discover_agent_threads()
+
+    assert [thread.id for thread in found] == [1, 2]
+
+
+async def test_a_thread_listed_twice_is_only_caught_up_on_once(cog):
+    """The library's cache and the archive listing can both hand over the
+    same thread; running its messages twice would answer them twice."""
+    parent = make_parent_channel(PARENT_ID, {1: starter_for(1)})
+    thread = make_agent_thread(cog.bot, 1, parent)
+    set_archived(parent, [thread])
+    cog.bot.guilds = [make_guild([parent], threads=[thread])]
+
+    found = await cog._discover_agent_threads()
+
+    assert found == [thread]
+
+
+async def test_a_channel_that_cannot_be_read_does_not_stop_the_others(cog):
+    forbidden = make_parent_channel(PARENT_ID, {})
+    set_archived(forbidden, error=http_error(discord.Forbidden, 403))
+    readable = make_parent_channel(PARENT_ID + 1, {5: starter_for(5)})
+    set_archived(readable, [make_agent_thread(cog.bot, 5, readable)])
+    cog.bot.guilds = [make_guild([forbidden, readable])]
+
+    found = await cog._discover_agent_threads()
+
+    assert [thread.id for thread in found] == [5]
+
+
+async def test_a_thread_answered_last_has_nothing_to_catch_up_on(cog):
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('and also fix that', minutes=-20),
+        missed_message('Done.', author_id=BOT_ID, minutes=-19),
+    ])
+
+    assert await cog._unanswered_messages(thread, NOW) == []
+
+
+async def test_every_owner_message_after_the_bots_last_word_is_unanswered(
+        cog):
+    """Two messages posted while the bot was down, in the order they were
+    posted (R6.1). The bot's harness lines are the bot talking, so it is
+    what the owner said after them that still needs an answer."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    first = missed_message('and also fix that', minutes=-10, message_id=11)
+    second = missed_message('and this', minutes=-9, message_id=12)
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('fix the thing', minutes=-30, message_id=9),
+        missed_message(f'Pull request for **jermabot**: {DEMO_PR}',
+                       author_id=BOT_ID, minutes=-29, message_id=10),
+        first,
+        missed_message('lol', author_id=STRANGER_ID, minutes=-9,
+                       message_id=13),
+        second,
+    ])
+
+    assert await cog._unanswered_messages(thread, NOW) == [first, second]
+
+
+async def test_a_thread_the_bot_never_answered_replays_its_starter(cog):
+    """The first turn died with the bot: the thread holds nothing of ours,
+    and the message it grew from — which lives in the parent channel — is
+    the one that went unanswered."""
+    starter = starter_for(THREAD_ID)
+    parent = make_parent_channel(PARENT_ID, {THREAD_ID: starter})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[])
+
+    assert await cog._unanswered_messages(thread, NOW) == [starter]
+
+
+async def test_a_message_that_arrived_live_is_left_to_on_message(cog):
+    """It came in after the job started, so on_message already has it;
+    running it here too would answer it twice."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    missed = missed_message('and also fix that', minutes=-10, message_id=11)
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('Done.', author_id=BOT_ID, minutes=-20),
+        missed,
+        missed_message('one more thing', minutes=1, message_id=12),
+    ])
+
+    assert await cog._unanswered_messages(thread, NOW) == [missed]
+
+
+async def test_a_turn_that_only_posted_a_muted_line_never_answered(cog):
+    """A muted subtext line is harness news, not an answer: a turn that
+    posted one and then died with the bot leaves the request in front of
+    it unanswered."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    request = missed_message('and also fix that', minutes=-10, message_id=11)
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('Done.', author_id=BOT_ID, minutes=-30),
+        request,
+        missed_message('-# _Reloading thread history. Some context might '
+                       'be lost._', author_id=BOT_ID, minutes=-9),
+    ])
+
+    assert await cog._unanswered_messages(thread, NOW) == [request]
+
+
+async def test_a_message_on_message_already_took_is_not_replayed(cog):
+    """The gateway delivers messages for seconds before on_ready fires, so
+    a message posted while the bot boots is answered live; its timestamp
+    is older than the catch-up, and only the recorded id keeps it from
+    being answered a second time."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('Done.', author_id=BOT_ID, minutes=-30),
+        missed_message('and also fix that', minutes=-10, message_id=11),
+    ])
+    cog._live_ids.add(11)
+
+    assert await cog._unanswered_messages(thread, NOW) == []
+
+
+async def test_a_thread_made_during_the_catch_up_is_left_alone(cog):
+    """Its first turn is running right now, in the live path: the starter
+    of a thread younger than the catch-up is nobody's backlog."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID, minutes=1)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[])
+
+    assert await cog._unanswered_messages(thread, NOW) == []
+
+
+async def test_a_starter_on_message_took_while_booting_is_left_alone(cog):
+    """The same thread a moment earlier: the ping that made it arrived
+    before the catch-up started, and the live path has it."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID, minutes=-1)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[])
+    cog._live_ids.add(THREAD_ID)
+
+    assert await cog._unanswered_messages(thread, NOW) == []
+
+
+@pytest.fixture
+def frozen_now(monkeypatch):
+    """The catch-up asks Discord for the time; pin it to NOW."""
+    monkeypatch.setattr(discord.utils, 'utcnow', lambda: NOW)
+
+
+async def two_thread_guild(cog, first_messages, second_messages):
+    parent = make_parent_channel(
+        PARENT_ID, {1: starter_for(1), 2: starter_for(2)})
+    first = make_agent_thread(cog.bot, 1, parent, messages=first_messages)
+    second = make_agent_thread(cog.bot, 2, parent, messages=second_messages)
+    cog.bot.guilds = [make_guild([parent], threads=[first, second])]
+    return first, second
+
+
+async def test_catch_up_runs_missed_messages_as_ordinary_turns(
+        cog, handled, frozen_now, capsys):
+    """R6.4: exactly the live path, so recovery, the typing indicator, the
+    reply and the pull request all behave as they do for a live message."""
+    first, second = await two_thread_guild(
+        cog,
+        [missed_message('Done.', author_id=BOT_ID, minutes=-30),
+         missed_message('and also fix that', minutes=-10, message_id=11),
+         missed_message('and this', minutes=-9, message_id=12)],
+        [missed_message('Done.', author_id=BOT_ID, minutes=-8)])
+
+    await cog._catch_up()
+
+    assert handled == [(first, 'and also fix that'), (first, 'and this')]
+    assert ('scanned 2 agent thread(s), replayed 2 message(s)'
+            in capsys.readouterr().out)
+
+
+async def test_a_replayed_starter_loses_its_ping_like_a_live_one(
+        cog, handled, frozen_now):
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[])
+    cog.bot.guilds = [make_guild([parent], threads=[thread])]
+
+    await cog._catch_up()
+
+    assert handled == [(thread, 'fix the thing')]
+
+
+async def test_one_failing_thread_does_not_stop_the_next(
+        cog, monkeypatch, frozen_now):
+    first, second = await two_thread_guild(
+        cog,
+        [missed_message('Done.', author_id=BOT_ID, minutes=-40),
+         missed_message('and also fix that', minutes=-10, message_id=11)],
+        [missed_message('Done.', author_id=BOT_ID, minutes=-40),
+         missed_message('and this', minutes=-9, message_id=12)])
+    ran = []
+
+    async def fake_handle(message, source, prompt, images, inline_urls):
+        ran.append((source, prompt))
+        if source is first:
+            raise RuntimeError('the workspace is on fire')
+
+    monkeypatch.setattr(cog, '_handle_prompt', fake_handle)
+
+    await cog._catch_up()
+
+    assert ran == [(first, 'and also fix that'), (second, 'and this')]
+
+
+async def test_a_thread_that_stops_being_readable_is_skipped(
+        cog, handled, frozen_now):
+    first, second = await two_thread_guild(
+        cog, [],
+        [missed_message('Done.', author_id=BOT_ID, minutes=-40),
+         missed_message('and this', minutes=-9, message_id=12)])
+
+    def history(**_):
+        raise http_error(discord.HTTPException, 503)
+
+    first.history = history
+
+    await cog._catch_up()
+
+    assert handled == [(second, 'and this')]
+    # R6.4: the failure is reported in the thread it happened in.
+    first.send.assert_awaited_once()
+    assert first.send.await_args.args[0].startswith(UNREADABLE_THREAD)
+
+
+async def test_the_live_path_and_the_catch_up_never_share_a_message(
+        cog, handled, frozen_now):
+    """The message arrived while the bot was booting, so on_message
+    answered it and recorded its id; the catch-up leaves it alone, and
+    keeps the id: its turn may still be running when a later catch-up
+    (a reconnect that lost the session) scans this thread again."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('Done.', author_id=BOT_ID, minutes=-30),
+        missed_message('and also fix that', minutes=-10, message_id=11),
+    ])
+    cog.bot.guilds = [make_guild([parent], threads=[thread])]
+    cog._live_ids.add(11)
+
+    await cog._catch_up()
+    await cog._catch_up()
+
+    assert handled == []
+    assert cog._live_ids == {11}
+
+
+async def test_a_replayed_message_is_not_replayed_by_the_next_catch_up(
+        cog, handled, frozen_now):
+    """A replay is a live turn from then on: a second catch-up that
+    scans the thread before the reply lands leaves it alone."""
+    parent = make_parent_channel(
+        PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
+    thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
+        missed_message('Done.', author_id=BOT_ID, minutes=-30),
+        missed_message('and also fix that', minutes=-10, message_id=11),
+    ])
+    cog.bot.guilds = [make_guild([parent], threads=[thread])]
+
+    await cog._catch_up()
+    await cog._catch_up()
+
+    assert [prompt for _, prompt in handled] == ['and also fix that']
+    assert 11 in cog._live_ids
+
+
+async def test_on_message_records_what_it_takes(cog, handled):
+    thread = make_thread(cog.bot)
+
+    await cog.on_message(make_message(thread, 'and also fix that'))
+
+    assert handled == [(thread, 'and also fix that')]
+    assert cog._live_ids == {MESSAGE_ID}
+
+
+async def test_a_replayed_starter_is_not_its_own_prior_history(cog):
+    """A first turn replayed at startup is answering the starter itself,
+    so there is nothing in front of it; a conversation handed its own
+    request as prior history would be told it had lost some."""
+    starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1,
+                                   message_id=THREAD_ID)
+    thread = make_thread(cog.bot, starter=starter)
+    make_history(thread)
+
+    rebuilt = await cog._thread_history(thread, starter)
+
+    assert rebuilt.text == ''
+
+
+async def test_a_second_catch_up_waits_for_the_first_but_still_runs(
+        cog, monkeypatch):
+    """on_ready fires on every fresh IDENTIFY, and each of those is a gap
+    the gateway did not replay, so each deserves a catch-up. Only one
+    already running stops the next."""
+    runs = []
+    release = asyncio.Event()
+
+    async def fake_catch_up():
+        runs.append(1)
+        await release.wait()
+
+    monkeypatch.setattr(cog, '_catch_up', fake_catch_up)
+
+    await cog.on_ready()
+    await asyncio.sleep(0)  # let the task reach its first await
+    await cog.on_ready()
+
+    assert runs == [1]
+
+    release.set()
+    await cog._catch_up_task
+    await cog.on_ready()
+    await cog._catch_up_task
+
+    assert runs == [1, 1]
