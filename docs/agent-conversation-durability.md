@@ -1,6 +1,9 @@
 # Coding agent: durable conversations
 
-Status: requirements, v1 (supersedes the v0 "evict after 7 idle days" behavior).
+Status: implemented, v1 (supersedes the v0 "evict after 7 idle days"
+behavior). Built on branch `durable-agent-conversations`, 2026-09-09; see
+"Implementation notes" at the end for where the build deviates from the
+wording below.
 
 ## Problem
 
@@ -257,3 +260,52 @@ Each must pass with no owner intervention beyond posting the message.
     branch, then post a follow-up. The thread shows the muted merge line
     naming the conflicting files, the turn still completes and pushes, and
     the branch has no half-finished merge state.
+
+## Implementation notes
+
+What the build settled that the requirements above left open, and where it
+deliberately differs from their wording. The requirements themselves stand
+as written.
+
+- **The backup is the SDK's session store, not a copy taken after the
+  turn.** R2b.1's "copied at the end of every turn" and R2b.3's "restore
+  places the file exactly where the SDK will look for it" are realized as
+  a store-backed resume: `ClaudeAgentOptions.session_store` writes each
+  batch into the backup repo as the turn runs, and a resume is rebuilt
+  from what the store returns rather than from a restored local file.
+- **Once the store holds a session, this host's transcript stops being
+  updated** (measured against SDK 0.2.110), so the store is the sole
+  record of that conversation rather than a mirror of one. The first
+  backup-enabled turn therefore seeds the store from the local transcript
+  first, so enabling the backup on an existing conversation continues it
+  instead of freezing or discarding what this host already had.
+- **A conversation that has run with the store refuses to run when the
+  backup repo is unavailable**, rather than falling through to a thread
+  rebuild. This is deliberate: R2.4's fall-through is for a transcript
+  that is missing, not for a store that is momentarily unreachable, and
+  falling through would let one transient failure permanently downgrade a
+  lossless conversation to a lossy summary and strand its backup under the
+  old session id. Conversations that never used the store still run from
+  their local transcript.
+- **Backup layout**, keyed by thread id, the one identifier Discord
+  guarantees: `<thread_id>/transcript/<session_id>.jsonl` and
+  `<thread_id>/identity.json`.
+- **Idle eviction is gone entirely**, taking R4.1's "or never". Nothing
+  sweeps materializations; worktrees are simply rebuilt when a turn finds
+  them missing.
+- **A turn interrupted after it started narrating is not replayed** by
+  the startup catch-up: its progress messages are indistinguishable from
+  an answer, so the message counts as answered (R6.3). A turn that died
+  leaving only muted harness lines does count as unanswered and is
+  replayed (R6.4).
+- **Catch-up covers guild threads only** — where conversations live. A
+  ping in a channel with no thread, or a DM, keeps the durability it
+  always had.
+- **Catch-up runs on every fresh gateway session, not only at process
+  start.** It hangs off `on_ready`, which fires on each IDENTIFY and never
+  on a RESUME, so exactly the reconnects that could have missed messages
+  get a catch-up.
+- **Pull request bodies carry `Discord thread: <id>`**, so R3.3's GitHub
+  search matches a thread to its pull request exactly for every PR opened
+  from this version on. The first-commit-message match remains, for pull
+  requests opened before it.
