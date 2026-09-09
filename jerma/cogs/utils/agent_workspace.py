@@ -22,8 +22,10 @@ worktrees are rebuilt, whatever origin has on the branch that this host
 does not is taken in (the owner resolving a conflict on GitHub, an "Update
 branch" click, a push from anywhere else), and each repo's base branch is
 merged in so the agent edits current code and the pull request stays
-mergeable. Nothing there may fail a turn — trouble comes back as muted
-notes for the thread.
+mergeable. The catching up never fails a turn: a branch that would not
+fetch, merge, or push comes back as a muted note for the thread (R3.7).
+Building the checkout is not so forgiving — a worktree that cannot be put
+on disk raises, since there is then nothing for the agent to edit.
 
 A conversation has one branch name across every repo but a pull request
 per repo, so "the branch is gone" is ambiguous when repos disagree. The
@@ -97,14 +99,22 @@ async def _run(argv: list[str], cwd: Path,
                env: dict[str, str] | None = None,
                stdin_data: str | None = None) -> str:
     """Run a command, returning stdout or raising WorkspaceError."""
-    proc = await asyncio.create_subprocess_exec(
-        *argv,
-        cwd=str(cwd),
-        stdin=asyncio.subprocess.PIPE if stdin_data is not None else None,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv,
+            cwd=str(cwd),
+            stdin=asyncio.subprocess.PIPE if stdin_data is not None else None,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+    except OSError as error:
+        # A directory that went away under us, or a missing executable:
+        # the process never started, so there is no exit code to report.
+        # Named here rather than left to surface as a bare traceback.
+        raise WorkspaceError(
+            f'`{argv[0]}` could not be run in {cwd}: '
+            f'{one_line(error)}') from error
     stdout, stderr = await proc.communicate(
         stdin_data.encode() if stdin_data is not None else None)
     if proc.returncode != 0:

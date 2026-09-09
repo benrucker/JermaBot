@@ -27,7 +27,9 @@ use is not a concern.
 - **Agent thread**: a Discord thread the bot created to hold one
   conversation. Its id equals the id of the owner message that started it.
 - **Identity**: the durable facts about a conversation: thread id, branch
-  name, pull request URL per repo, SDK session id. Small, and kept forever.
+  name, pull request URL per repo, SDK session id, and whether the
+  conversation has run with the transcript backup as its session store
+  (`backed_up`). Small, and kept forever.
 - **Transcript**: the Agent SDK's session file for a conversation: every
   prompt, reply, tool call, and tool result, as the agent experienced them.
   The SDK writes it under its projects directory, keyed by the checkout
@@ -72,7 +74,7 @@ use is not a concern.
       says so (R4.3).
 3. Whichever source is used, the agent also gets the git context it would
    have had: the conversation's branch checked out at its current remote
-   tip, and the pull request URL(s) and their open/merged/closed state.
+   tip.
 4. If a higher-priority source is present but fails, fall through to the
    next rather than failing the turn. The failure is logged with its cause.
 
@@ -95,7 +97,9 @@ use is not a concern.
    layout on the production host rather than assuming it.
 4. Session id is therefore promoted to identity and is recoverable with
    the rest of it (R3.3 sources plus the backup store's own index, keyed
-   by thread id).
+   by thread id). `backed_up` travels with it: it is what says whether a
+   turn may run at all while the store is unreachable (see the
+   implementation notes).
 5. Backups are never deleted by the eviction sweep. Local transcript
    copies may be.
 
@@ -139,8 +143,8 @@ use is not a concern.
    (the earlier turns never edited code), the next turn that edits code
    creates one as it does today.
 4. If the branch was merged or deleted on GitHub, the turn proceeds on a
-   fresh branch from the base, and the reply in the thread states that the
-   previous PR was merged/closed and a new one was opened.
+   fresh branch from the base, and a muted line in the thread states that
+   the previous PR was merged/closed and a new one was opened.
 5. Before every turn, the harness catches the branch up to its base:
    fetch, then merge the base branch into the conversation branch. A
    clean merge is committed and pushed with the turn, so the agent always
@@ -160,8 +164,11 @@ use is not a concern.
 1. Local materializations may still be swept on any schedule, or never.
    The sweep may not remove identity records.
 2. Recovery is automatic and requires no action from the owner. It runs
-   inside the same turn as the message that triggered it, under the
-   conversation lock, with the typing indicator showing.
+   inside the same turn as the message that triggered it, under a lock
+   that admits one recovery per conversation, with the typing indicator
+   showing. (Branch and PR recovery comes before the conversation exists
+   and so before its lock, on a recovery lock of its own; thread
+   reconstruction runs under the conversation lock.)
 3. The owner sees at most one short status line about recovery in the
    thread. Silent recovery is acceptable when it succeeds losslessly. The
    line is a Discord subtext heading in italics, so it reads as muted
@@ -309,3 +316,21 @@ as written.
   search matches a thread to its pull request exactly for every PR opened
   from this version on. The first-commit-message match remains, for pull
   requests opened before it.
+- **Pull request state is the harness's business, not the model's**, which
+  is why R2.3's git context stops at the branch. The harness holds the
+  pull request urls and their open/merged/closed state, acts on them
+  (R3.4's restart), and reports them in the thread; nothing about them is
+  passed to the model. A turn rebuilt from the thread does see the
+  announcements and the R3.4 line, as harness facts — which is how such a
+  turn knows a pull request exists at all.
+- **A store the first backed-up turn cannot seed fails the turn**, for the
+  same reason `_require_backup` refuses a turn whose store is unreachable:
+  carrying on would rebuild from the thread and leave the local transcript
+  behind under an id nothing will resume again.
+- **The backup clone and the pristine repo clones are retried on the next
+  turn**, not only at startup. A clone that failed at boot, or a directory
+  deleted while the bot ran, is re-made by the readiness check every turn
+  passes through, so R4.2's "no action from the owner" survives a
+  transient GitHub failure without a restart. A backup clone that keeps
+  failing is tried at most once a minute, so an outage does not cost every
+  turn a network clone.

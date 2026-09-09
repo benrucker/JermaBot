@@ -31,10 +31,13 @@ conversation's transcript is gone from this host and from the backup, the
 service asks for build_thread_history(), which reads the whole thread back
 — the owner's messages, the agent's replies, and the images, re-downloaded
 — and hands it over as prior history for a new session. The bot's own
-fixed messages are not the agent's words and must not come back as them,
-so every shape this cog posts (the muted subtext lines, pull request
-announcements, timeouts, error replies) is written from a constant here
-and read back as a plain "[harness] ..." fact.
+fixed messages are not the agent's words and must not come back as them.
+The shapes this cog writes itself — pull request announcements, timeouts,
+error replies — are constants here, so rewording one cannot leave the old
+wording looking like an answer. Everything else it posts is relayed from
+the service and the workspace as a muted subtext line (`-# _..._`), and
+that shape, not any particular wording, is what reading a thread back
+recognizes. Either way the line returns as a plain "[harness] ..." fact.
 
 Messages posted while the bot was down are not lost either (R6.4). Once
 the bot is connected, a background job reads every text channel it can
@@ -60,6 +63,7 @@ from .utils.agent_service import (
     ReconstructedHistory,
     WorkspaceError,
 )
+from .utils.agent_workspace import one_line
 from .utils.split_message import MESSAGE_LIMIT, split_message
 
 
@@ -116,16 +120,12 @@ HISTORY_HEADING = ('Prior history of this conversation (reconstructed from '
 UNFETCHED_LINK = "-# _Couldn't fetch the image link {url}: {cause}._"
 
 
-def _one_line(text: str) -> str:
-    return ' '.join(str(text).split())[:300]
-
-
 def _harness_message(content: str) -> str | None:
     """What a whole message of the bot's own means, if it is one of its
     fixed shapes, so the agent hears it as something that happened rather
     than as something it said (R2c.1b)."""
     if content.startswith(WORKSPACE_ERROR):
-        rest = _one_line(content[len(WORKSPACE_ERROR):])
+        rest = one_line(content[len(WORKSPACE_ERROR):])
         return f'The turn failed: {rest}'
     if content.startswith(f'{UNEXPECTED_ERROR}\n```py'):
         return 'The turn failed with an unexpected error.'
@@ -135,7 +135,7 @@ def _harness_message(content: str) -> str | None:
         return 'The turn ended without a reply.'
     if content == NO_THREAD_HERE or content.startswith(
             (UNREACHABLE_DISCORD, UNREADABLE_THREAD)):
-        return f'A message went unanswered: {_one_line(content)}'
+        return f'A message went unanswered: {one_line(content)}'
     return None
 
 
@@ -226,7 +226,7 @@ async def _owner_block(message, fetch
         except (discord.HTTPException, aiohttp.ClientError,
                 asyncio.TimeoutError) as error:
             lines.append(f'[image attachment {attachment.filename}: Discord '
-                         f'no longer has this file ({_one_line(error)})]')
+                         f'no longer has this file ({one_line(error)})]')
             continue
         images.append((name, data))
         lines.append(f'[image attachment: {name}]')
@@ -237,7 +237,7 @@ async def _owner_block(message, fetch
             # Anything at all: this is somebody else's web server, and a
             # named gap is worth more to the agent than a lost picture.
             lines.append(f'[image link {url}: could not be fetched '
-                         f'({_one_line(error)})]')
+                         f'({one_line(error)})]')
             continue
         name = f'{message.id}-{filename}'
         images.append((name, data))
@@ -809,7 +809,7 @@ class Agent(commands.Cog):
                                 # hear rather than guess at.
                                 await send_in_thread(
                                     UNFETCHED_LINK.format(
-                                        url=url, cause=_one_line(error)))
+                                        url=url, cause=one_line(error)))
                 reconstruct = None
                 if isinstance(source, discord.Thread):
                     try:

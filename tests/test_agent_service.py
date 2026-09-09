@@ -8,15 +8,18 @@ change and asks it before it asks GitHub.
 """
 import asyncio
 import json
+import shutil
 
 import pytest
 
+from cogs.utils.agent_config import AGENT_REPOS
 from cogs.utils.agent_runner import (
     AgentRunResult,
     SessionResumeError,
     local_transcript_path,
 )
 from cogs.utils.agent_service import (
+    BACKUP_RETRY_SECONDS,
     RELOADING_NOTE,
     AgentTaskService,
     Conversation,
@@ -169,6 +172,15 @@ class FakeBackup:
         # (thread_id, session_id) pairs the backup holds a transcript for.
         self.transcripts = set(transcripts or ())
         self.appended: list[tuple] = []
+        # Startup's half: how often the clone was asked for, and what
+        # GitHub says when it is (None being "here it is").
+        self.clones = 0
+        self.clone_error: Exception | None = None
+
+    async def ensure_clone(self):
+        self.clones += 1
+        if self.clone_error is not None:
+            raise self.clone_error
 
     async def has_transcript(self, thread_id: int, session_id: str) -> bool:
         return (thread_id, session_id) in self.transcripts
@@ -196,6 +208,33 @@ class FakeBackup:
 @pytest.fixture
 def one_turn(agent_dirs, monkeypatch):
     """A service whose turns run no agent and touch no git."""
+    service, conversations = _scripted_agent(agent_dirs, monkeypatch)
+
+    async def ready():
+        return None
+
+    monkeypatch.setattr(service, '_ready', ready)
+    return service, conversations
+
+
+@pytest.fixture
+def starting_up(agent_dirs, monkeypatch):
+    """The same, with the real _ready: these tests are about what it
+    readies. Cloning a repo is faked down to making its directory, so
+    ensure_repos' own bookkeeping is what runs."""
+    service, conversations = _scripted_agent(agent_dirs, monkeypatch)
+    service.cloned = []
+
+    async def fake_clone(name):
+        service.cloned.append(name)
+        (service.workspace.root / name / '.git').mkdir(parents=True)
+
+    monkeypatch.setattr(service.workspace, '_clone', fake_clone)
+    return service, conversations
+
+
+def _scripted_agent(agent_dirs, monkeypatch):
+    """A service whose agent runs are answered from a script."""
     _, conversations = agent_dirs
     service = AgentTaskService()
     service.agent_calls = []
@@ -206,9 +245,6 @@ def one_turn(agent_dirs, monkeypatch):
     # agent_result.
     service.agent_results = []
 
-    async def ready():
-        return None
-
     async def fake_run_agent(**kwargs):
         service.agent_calls.append(kwargs)
         answer = (service.agent_results.pop(0) if service.agent_results
@@ -217,7 +253,6 @@ def one_turn(agent_dirs, monkeypatch):
             raise answer
         return answer
 
-    monkeypatch.setattr(service, '_ready', ready)
     monkeypatch.setattr('cogs.utils.agent_service.run_agent', fake_run_agent)
     return service, conversations
 
@@ -510,6 +545,70 @@ async def test_a_backup_that_will_not_clone_only_stops_what_needs_it(
 
     with pytest.raises(WorkspaceError, match='repository not found'):
         await service.run(7, 'do it', on_progress=_collect([]))
+
+
+async def test_a_backup_clone_that_failed_at_boot_is_retried(starting_up):
+    """R4.2: recovery takes no action from the owner, so one blip while
+    the bot was starting must not refuse every backed-up conversation
+    until somebody restarts it."""
+    service, conversations = starting_up
+    service.backup = FakeBackup()
+    service.backup.clone_error = RuntimeError('fatal: unable to access')
+    service.conversations[42] = Conversation(
+        checkout=FakeCheckout(conversations / '42'),
+        session_id='sess', backed_up=True)
+
+    with pytest.raises(WorkspaceError, match='could not be cloned'):
+        await service.run(42, 'do it', on_progress=_collect([]))
+    assert service.backup_error
+    assert service.agent_calls == []
+
+    # Within the cooldown the failure stands: no clone per turn during
+    # an outage, and the turn is refused with the same cause.
+    with pytest.raises(WorkspaceError, match='could not be cloned'):
+        await service.run(42, 'do it', on_progress=_collect([]))
+    assert service.backup.clones == 1
+
+    service.backup.clone_error = None
+    service._backup_failed_at -= BACKUP_RETRY_SECONDS
+    report = await service.run(42, 'do it', on_progress=_collect([]))
+
+    # The next turn asked for the clone again, got it, and ran.
+    assert service.backup.clones == 2
+    assert service.backup_error is None
+    assert report.answer == 'done'
+
+
+async def test_a_pristine_clone_deleted_mid_life_comes_back(starting_up):
+    """The clones were only ever made at startup, so a directory that went
+    away afterwards left every later turn without a repo to work in."""
+    service, conversations = starting_up
+    service.conversations[42] = Conversation(
+        checkout=FakeCheckout(conversations / '42'))
+
+    await service.run(42, 'do it', on_progress=_collect([]))
+    assert sorted(service.cloned) == sorted(AGENT_REPOS)
+
+    shutil.rmtree(service.workspace.root / 'jermabot')
+    await service.run(42, 'do it', on_progress=_collect([]))
+
+    assert service.cloned.count('jermabot') == 2
+    assert service.workspace.missing_repos() == []
+
+
+async def test_a_startup_with_nothing_to_redo_is_not_repeated(starting_up):
+    """The retry is only for what went missing: a healthy service clones
+    once, however many turns run."""
+    service, conversations = starting_up
+    service.backup = FakeBackup()
+    service.conversations[42] = Conversation(
+        checkout=FakeCheckout(conversations / '42'))
+
+    await service.run(42, 'do it', on_progress=_collect([]))
+    await service.run(42, 'again', on_progress=_collect([]))
+
+    assert sorted(service.cloned) == sorted(AGENT_REPOS)
+    assert service.backup.clones == 1
 
 
 async def test_an_identity_the_backup_refuses_does_not_cost_the_answer(

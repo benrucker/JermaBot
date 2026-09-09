@@ -93,7 +93,7 @@ GITHUB_TOKEN=...
 JERMABOT_AGENT_BACKUP_REPO=owner/name
 ```
 
-Without `JERMABOT_AGENT_BACKUP_REPO` the bot still runs and says so at startup, but a conversation is then only as durable as this machine. If the repo is set and can't be cloned, that's reported at startup instead of taking the bot down: conversations that never used the backup keep running from their local transcripts, and ones that did refuse to run until it's reachable rather than answering from a frozen copy.
+Without `JERMABOT_AGENT_BACKUP_REPO` the bot still runs and says so at startup, but a conversation is then only as durable as this machine. If the repo is set and can't be cloned, that's reported at startup instead of taking the bot down: conversations that never used the backup keep running from their local transcripts, and ones that did refuse to run until it's reachable rather than answering from a frozen copy. The clone is retried about once a minute as turns come in, so they pick up again on their own once GitHub is back.
 
 The agent's directories can be moved, but the defaults are usually fine:
 
@@ -119,9 +119,9 @@ Ping the bot with a request and it replies in a thread; every later message the 
 Muted subtext lines (`-# _..._`) in a thread are the harness talking, never the agent:
 
 - `Reloading thread history. Some context might be lost.` — no transcript was available, so this turn's context came from the thread.
-- `Couldn't merge <base> into this branch: ...` or `Couldn't catch <repo> up: ...` — the turn ran on a stale branch. Resolve it on GitHub and the next turn picks the fix up.
-- `The pull request for <repo> was merged/was closed/is gone from GitHub; starting a fresh branch ...` — GitHub is done with the old branch, so the next edit opens a new PR.
-- `Backup not pushed to GitHub: ...`, `Part of this turn is missing from the transcript backup: ...`, `This conversation's identity record was not updated: ...` — the answer and its pull request stand, but the durable copy is behind, so it's worth fixing before the next turn needs it.
+- `Couldn't merge <base> into this branch: ...`, `Couldn't catch <repo> up with its branch on GitHub: ...`, or `Couldn't catch <repo> up: ...` — the turn ran on a stale branch. Resolve it on GitHub and the next turn picks the fix up.
+- `The pull request for <repo> was merged/was closed/is gone from GitHub; starting a fresh branch ...`, or `Couldn't check the pull request for <repo> (...); starting a fresh branch.` — the branch is gone from GitHub, so the next edit opens a new PR.
+- `Backup not pushed to GitHub: ...`, `The backup could not be read from GitHub: ...`, `The backup could not be merged with GitHub's copy: ...`, `Some of this turn never reached the transcript backup: ...`, `Part of this turn is missing from the transcript backup: ...`, `This conversation's identity record was not updated: ...` — the answer and its pull request stand, but the durable copy is behind, so it's worth fixing before the next turn needs it.
 - `Couldn't fetch the image link ...` — an image in the message couldn't be downloaded, so the agent didn't see it.
 
 ### Running JermaBot:

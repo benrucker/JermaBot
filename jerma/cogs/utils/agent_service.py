@@ -42,6 +42,7 @@ conversation is lossless from a rebuilt turn on (R2c.4).
 """
 import asyncio
 import json
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -76,6 +77,10 @@ STATE_FILE = 'state.json'
 # style so it reads as harness chatter rather than the agent talking
 # (R4.3). Its wording is the spec's, verbatim.
 RELOADING_NOTE = '-# _Reloading thread history. Some context might be lost._'
+# How long a failed backup clone stands before a turn tries it again. Each
+# try is a network clone with no timeout of its own, so during an outage
+# turns that never needed the backup should not each pay for one.
+BACKUP_RETRY_SECONDS = 60
 
 
 @dataclass
@@ -173,6 +178,7 @@ class AgentTaskService:
         # Backup trouble a turn should mention: a clone that never came
         # up, and an identity record that could not be written.
         self.backup_error: str | None = None
+        self._backup_failed_at = 0.0  # time.monotonic() of the last failure
         # Keyed by conversation: turns run in parallel, and a thread must
         # hear about its own record, not another thread's.
         self.identity_error: dict[int, str] = {}
@@ -224,9 +230,10 @@ class AgentTaskService:
             # Git continuity (R3): the worktrees are a cache, so a turn
             # that comes after a restart, a sweep, or a lost disk gets them
             # back here, on a branch that starts over if GitHub finished
-            # with it and that catches up with its base either way. What
-            # went wrong in there is a note for the thread, not a failed
-            # turn.
+            # with it and that catches up with its base either way. A
+            # catch-up that went wrong is a note for the thread, not a
+            # failed turn (R3.7); a checkout that cannot be built at all
+            # raises, since there would be nothing for the agent to edit.
             preparation = await conversation.checkout.prepare_for_turn(
                 conversation.pr_urls)
             for name in preparation.finished_repos:
@@ -495,9 +502,11 @@ class AgentTaskService:
             if identity is not None:
                 # Everything at once, session id included, so the turn
                 # resumes the conversation rather than only its branch.
-                # The thread's announcements are as true as the record
-                # and may be newer than the last identity that reached
-                # GitHub, so keep both; the record wins where they differ.
+                # The thread's announcements cover repos the record says
+                # nothing about, so both are kept; where the two disagree
+                # the record wins, and either answer is safe — a url whose
+                # branch GitHub no longer has is dropped by
+                # prepare_for_turn at the start of the turn anyway (R3.4).
                 identity = {**identity,
                             'pr_urls': {**pr_urls,
                                         **(identity.get('pr_urls') or {})}}
@@ -610,18 +619,38 @@ class AgentTaskService:
                 # nothing to load and can still run. _require_backup fails
                 # the ones that do depend on it (R2b).
                 self.backup_error = one_line(error)
+                self._backup_failed_at = time.monotonic()
                 print('Agent service: the transcript backup repo '
                       f'{self.backup.repo_slug} could not be cloned: '
                       f'{error}')
 
     async def _ready(self):
-        """Wait for the startup task, restarting it if it failed."""
+        """Wait for the startup task, restarting it when what it readied is
+        not, or is no longer, there.
+
+        A task that finished cleanly is not proof of anything: the backup
+        clone records its failure instead of raising, and a pristine clone
+        can be deleted long after startup. Either would otherwise stand
+        until someone restarted the bot — and a stuck backup_error refuses
+        every backed-up conversation, which R4.2 says must recover by
+        itself. Retrying is nearly free when the directories are in
+        place: ensure_repos and ensure_clone then do nothing. A backup
+        clone that keeps failing is not free — it is a network clone per
+        try — so those are spaced BACKUP_RETRY_SECONDS apart. One task at
+        a time, so two turns cannot clone at once.
+        """
         task = self._ensure_task
-        if task is None or task.cancelled() or (
-                task.done() and task.exception() is not None):
+        if task is None or task.cancelled() or (task.done() and (
+                task.exception() is not None or self._needs_startup())):
             task = asyncio.create_task(self._startup())
             self._ensure_task = task
         await task
+
+    def _needs_startup(self) -> bool:
+        """Whether a finished startup has something left to redo."""
+        backup_due = bool(self.backup_error) and (
+            time.monotonic() - self._backup_failed_at >= BACKUP_RETRY_SECONDS)
+        return backup_due or bool(self.workspace.missing_repos())
 
     def _state_path(self) -> Path:
         return self.conversations_root / STATE_FILE

@@ -16,7 +16,12 @@ import subprocess
 import pytest
 
 from cogs.utils.agent_config import AgentRepo
-from cogs.utils.agent_workspace import AgentWorkspace, ConversationCheckout
+from cogs.utils.agent_workspace import (
+    AgentWorkspace,
+    ConversationCheckout,
+    WorkspaceError,
+    _run,
+)
 
 # An old branch, so a restart's fresh timestamp cannot collide with it.
 BRANCH = 'jermabot/do-a-thing-20260101-000000'
@@ -126,6 +131,14 @@ def clone_of_the_branch(tmp_path, origin, name: str = 'elsewhere'):
     git(tmp_path, 'clone', str(origin), str(clone))
     git(clone, 'checkout', BRANCH)
     return clone
+
+
+async def test_a_command_that_never_starts_names_its_cause(tmp_path):
+    """A worktree deleted under a running turn takes the working directory
+    with it, and the process then never starts — no exit code to report.
+    The owner still gets a cause rather than a raw OSError."""
+    with pytest.raises(WorkspaceError, match='`git` could not be run'):
+        await _run(['git', 'status'], cwd=tmp_path / 'not-a-directory')
 
 
 async def test_materialize_starts_a_new_branch_from_the_base(workspace,
