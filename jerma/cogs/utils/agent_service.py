@@ -14,9 +14,16 @@ cache, rebuilt from the branch on origin at the start of any turn that
 finds them missing (see agent_workspace), so an entry is never dropped
 because its directory went away and the code side of a conversation
 continues on its own branch however long the gap. Nothing evicts
-identities. What the agent remembers of the conversation is a separate
-problem: that is the SDK's transcript, and it is only as durable as this
-host until a later phase backs it up.
+identities.
+
+When even state.json is gone, recover() puts an identity back from what
+Discord and GitHub still know: the pull requests a thread announced, or a
+search of the agent's pull requests for the one that names the thread
+(R3.3). The cog supplies the Discord half; everything after it is here.
+
+What the agent remembers of the conversation is a separate problem: that
+is the SDK's transcript, and it is only as durable as this host until a
+later phase backs it up.
 """
 import asyncio
 import json
@@ -75,14 +82,15 @@ class Conversation:
         }
 
     @classmethod
-    def from_state(cls, entry: dict, root: Path,
-                   workspace: AgentWorkspace) -> 'Conversation':
+    def from_state(cls, entry: dict, root: Path, workspace: AgentWorkspace,
+                   thread_id: int | None = None) -> 'Conversation':
         """Rebuild from a persisted entry. Every field but the branch is
         optional so that entries written by older versions — and by later
         ones, which may add fields — still load."""
         last_active = entry.get('last_active')
         return cls(
-            checkout=ConversationCheckout(root, entry['branch'], workspace),
+            checkout=ConversationCheckout(root, entry['branch'], workspace,
+                                          thread_id),
             session_id=entry.get('session_id'),
             pr_urls=entry.get('pr_urls') or {},
             last_active=(datetime.fromisoformat(last_active) if last_active
@@ -102,6 +110,11 @@ class AgentTaskService:
         self.conversations_root = get_conversations_root()
         self.conversations: dict[int, Conversation] = {}
         self._ensure_task: asyncio.Task | None = None
+        # Two messages arriving together in a thread this host has no
+        # record of must not recover it twice, which would leave the
+        # second turn on a different Conversation (and a different lock)
+        # from the first.
+        self._recovery_lock = asyncio.Lock()
 
     def has_conversation(self, key: int) -> bool:
         return key in self.conversations
@@ -126,10 +139,24 @@ class AgentTaskService:
         conversation = self._get_or_create(key, prompt)
         async with conversation.lock:
             conversation.last_active = datetime.now()
-            # The worktrees are a cache; a conversation whose turn comes
-            # after a restart, a sweep, or a lost disk gets them back here.
             await self._ready()
-            await conversation.checkout.ensure_materialized()
+            # Git continuity (R3): the worktrees are a cache, so a turn
+            # that comes after a restart, a sweep, or a lost disk gets them
+            # back here, on a branch that starts over if GitHub finished
+            # with it and that catches up with its base either way. What
+            # went wrong in there is a note for the thread, not a failed
+            # turn.
+            preparation = await conversation.checkout.prepare_for_turn(
+                conversation.pr_urls)
+            for name in preparation.finished_repos:
+                conversation.pr_urls.pop(name, None)
+            # The branch and its pull requests may have moved.
+            self._save_state()
+            # Straight out to the thread, ahead of the answer: these are
+            # already true, and the turn can still fail on its way to a
+            # report the owner would never see (R3.7).
+            for note in preparation.notes:
+                await on_progress(note)
             image_paths = self._save_images(conversation.checkout.root, images)
             result = await run_agent(
                 prompt=prompt,
@@ -176,11 +203,52 @@ class AgentTaskService:
             return conversation
 
         checkout = self.workspace.new_checkout(
-            self.conversations_root / str(key), prompt)
+            self.conversations_root / str(key), prompt, thread_id=key)
         conversation = Conversation(checkout=checkout)
         self.conversations[key] = conversation
         self._save_state()
         return conversation
+
+    async def recover(self, key: int, starter_prompt: str,
+                      pr_urls: dict[str, str]) -> bool:
+        """Put back a conversation this host has no record of (R3.3).
+
+        The caller supplies what Discord knows: the pull requests the
+        thread announced, most recently announced last, and the message
+        that started the thread. The branch comes from those pull
+        requests; when the thread announced none, the agent's pull
+        requests on GitHub are searched for one that names this thread.
+        Returns whether anything was found — a conversation whose turns
+        never touched code has nothing to recover and simply starts fresh
+        on its next edit.
+        """
+        if self.has_conversation(key):
+            return False
+        async with self._recovery_lock:
+            # The lock is held across the GitHub round-trip below, so a
+            # second caller waits here and finds the conversation on this
+            # second look rather than building one of its own.
+            if self.has_conversation(key):
+                return False
+            if pr_urls:
+                latest = list(pr_urls.values())[-1]
+                branch = await self.workspace.branch_for_pull_request(latest)
+            else:
+                found = await self.workspace.find_conversation_on_github(
+                    key, starter_prompt)
+                if found is None:
+                    return False
+                branch, pr_urls = found
+            if not branch:
+                return False
+
+            checkout = ConversationCheckout(
+                self.conversations_root / str(key), branch, self.workspace,
+                key)
+            self.conversations[key] = Conversation(checkout=checkout,
+                                                   pr_urls=dict(pr_urls))
+            self._save_state()
+            return True
 
     async def _startup(self):
         cloned = await self.workspace.ensure_repos()
@@ -209,7 +277,8 @@ class AgentTaskService:
         # be recreated locally.
         for key, entry in json.loads(path.read_text(encoding='utf-8')).items():
             self.conversations[int(key)] = Conversation.from_state(
-                entry, self.conversations_root / key, self.workspace)
+                entry, self.conversations_root / key, self.workspace,
+                int(key))
 
     def _save_state(self):
         self.conversations_root.mkdir(parents=True, exist_ok=True)

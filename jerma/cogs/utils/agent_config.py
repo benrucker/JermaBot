@@ -32,6 +32,17 @@ AGENT_COMMIT_NAME = 'JermaBot'
 # GitHub username -- github.com/Jermabot is a real, unrelated account.
 AGENT_COMMIT_EMAIL = 'jermabot@jermabot.invalid'
 AGENT_REQUEST_SOURCE = 'Discord'
+# The last lines of every pull request the agent opens. The footer marks a
+# pull request as ours when the identity record is gone and GitHub is all
+# that is left to search (R3.3); the thread line then says which
+# conversation it belongs to.
+AGENT_PR_FOOTER = ("Opened by the JermaBot coding agent at the owner's "
+                   f'request via {AGENT_REQUEST_SOURCE}.')
+
+
+def pr_thread_line(thread_id: int) -> str:
+    """The line in a pull request body naming the thread it came from."""
+    return f'{AGENT_REQUEST_SOURCE} thread: {thread_id}'
 
 
 def _env_dir(var: str, default: str) -> Path:

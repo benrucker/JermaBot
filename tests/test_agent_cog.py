@@ -1,4 +1,5 @@
-"""Thread recognition: derived from Discord, never from local state.
+"""Thread recognition and recovery: derived from Discord, never from local
+state.
 
 Discord objects are mocked at the boundary only (spec'd so the cog's
 isinstance checks are the real ones); nothing here talks to Discord.
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 import pytest
 
-from cogs.agent import Agent
+from cogs.agent import Agent, parse_pr_announcements
 from cogs.utils.agent_service import TaskReport
 
 BOT_ID = 111
@@ -304,3 +305,142 @@ async def test_a_new_thread_gets_the_longest_archive(cog, monkeypatch):
         == 10080
     assert cog._agent_threads[NEW_THREAD_ID] is True
     thread.send.assert_awaited_once_with('done')
+
+
+# --- pull request announcements, read back out of a thread (R3.3) ------
+
+DEMO_PR = 'https://github.com/benrucker/JermaBot/pull/1'
+OTHER_PR = 'https://github.com/ecfidler/shigure-js/pull/2'
+
+
+def test_both_announcement_shapes_are_read():
+    urls = parse_pr_announcements([
+        'Working on it.',
+        f'Pull request for **jermabot**: {DEMO_PR}',
+        f'Updated the pull request for **jermabot**: {DEMO_PR}',
+    ])
+
+    assert urls == {'jermabot': DEMO_PR}
+
+
+def test_the_latest_announcement_per_repo_wins_and_ends_the_dict():
+    """A conversation whose branch was merged away opens a second pull
+    request, and the branch to recover is the newest one's."""
+    replaced = 'https://github.com/benrucker/JermaBot/pull/3'
+    urls = parse_pr_announcements([
+        f'Pull request for **jermabot**: {DEMO_PR}',
+        f'Pull request for **shigure-js**: {OTHER_PR}',
+        f'Pull request for **jermabot**: {replaced}',
+    ])
+
+    assert urls == {'shigure-js': OTHER_PR, 'jermabot': replaced}
+    assert list(urls.values())[-1] == replaced
+
+
+def test_the_agents_own_prose_is_not_an_announcement():
+    urls = parse_pr_announcements([
+        f'I opened a pull request for **jermabot**: see {DEMO_PR} for it.',
+        f'Pull request for jermabot: {DEMO_PR}',
+    ])
+
+    assert urls == {}
+
+
+# --- recovering a conversation this host has no record of --------------
+
+
+def make_history(thread, *contents, author_id: int = BOT_ID):
+    """The thread's own messages, oldest first, as history() yields them."""
+    messages = [SimpleNamespace(content=content,
+                                author=SimpleNamespace(id=author_id))
+                for content in contents]
+
+    def history(**_):
+        async def iterator():
+            for message in messages:
+                yield message
+        return iterator()
+
+    thread.history = history
+
+
+@pytest.fixture
+def recovered(cog, monkeypatch):
+    """Records what the cog handed the service to recover from."""
+    calls = []
+
+    async def fake_recover(key, starter_prompt, pr_urls):
+        calls.append((key, starter_prompt, pr_urls))
+        return bool(pr_urls)
+
+    monkeypatch.setattr(cog.service, 'recover', fake_recover)
+    return calls
+
+
+async def test_a_threads_own_announcements_recover_its_pull_requests(
+        cog, recovered):
+    thread = make_thread(cog.bot)
+    make_history(thread,
+                 'On it.',
+                 f'Pull request for **jermabot**: {DEMO_PR}')
+
+    await cog._recover_conversation(thread, THREAD_ID)
+
+    assert recovered == [(THREAD_ID, 'fix the thing', {'jermabot': DEMO_PR})]
+
+
+async def test_a_thread_without_announcements_is_looked_up_by_its_starter(
+        cog, recovered):
+    """Nothing was ever announced, so the request that started the thread
+    is all GitHub can be searched by."""
+    thread = make_thread(cog.bot)
+    make_history(thread, 'Here is your answer.')
+
+    await cog._recover_conversation(thread, THREAD_ID)
+
+    assert recovered == [(THREAD_ID, 'fix the thing', {})]
+
+
+async def test_a_known_conversation_is_not_recovered_again(cog, recovered):
+    thread = make_thread(cog.bot)
+    make_history(thread, f'Pull request for **jermabot**: {DEMO_PR}')
+    cog.service.conversations[THREAD_ID] = object()
+
+    await cog._recover_conversation(thread, THREAD_ID)
+
+    assert recovered == []
+
+
+async def test_an_unrelated_thread_is_not_recovered(cog, recovered):
+    """A ping in someone else's thread: no conversation of ours to put
+    back, and its history is none of our business."""
+    thread = make_thread(cog.bot, owner_id=STRANGER_ID)
+    make_history(thread, f'Pull request for **jermabot**: {DEMO_PR}')
+
+    await cog._recover_conversation(thread, THREAD_ID)
+
+    assert recovered == []
+
+
+async def test_an_unreadable_thread_says_so_instead_of_starting_over(
+        cog, monkeypatch, recovered):
+    """Reading the thread is how its branch is found; running anyway would
+    quietly abandon the pull request the conversation already has."""
+    thread = make_thread(cog.bot)
+    thread.typing = MagicMock(side_effect=_NoTyping)
+    thread.send = AsyncMock()
+
+    def history(**_):
+        raise http_error(discord.HTTPException, 503)
+
+    thread.history = history
+    ran = []
+    monkeypatch.setattr(cog.service, 'run',
+                        lambda *a, **k: ran.append(a))
+
+    await cog._handle_prompt(make_message(thread, 'and also fix that'),
+                             thread, 'and also fix that')
+
+    assert ran == []
+    posted = thread.send.await_args_list[0].args[0]
+    assert "couldn't read this thread's history" in posted

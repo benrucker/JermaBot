@@ -18,9 +18,17 @@ consulted first as a fast path, and each answer is cached per thread.
 Threads Discord auto-archived count too — a message unarchives one, and
 that MESSAGE_CREATE can arrive before the thread is back in the library's
 cache, leaving a PartialMessageable to be fetched.
+
+A recognized thread the service has never heard of is a conversation whose
+identity record this host lost. The thread itself remembers some of it:
+every pull request the bot opened was announced in it, and those
+announcements are parsed back out here and handed to the service, which
+turns them into a branch (R3.3). A thread with no announcements is looked
+up on GitHub by the message that started it.
 """
 import asyncio
 import math
+import re
 import traceback
 
 import aiohttp
@@ -31,6 +39,32 @@ from jermabot import JermaBot
 from .utils.agent_config import AGENT_TIMEOUT_SECONDS
 from .utils.agent_service import AgentTaskService, WorkspaceError
 from .utils.split_message import MESSAGE_LIMIT, split_message
+
+
+# The bot's own pull request announcements, as _handle_prompt writes them.
+_PR_ANNOUNCEMENT = re.compile(
+    r'^(?:Pull request|Updated the pull request) for '
+    r'\*\*(?P<repo>[^*]+)\*\*: (?P<url>https://\S+)$')
+
+
+def parse_pr_announcements(contents: list[str]) -> dict[str, str]:
+    """The pull request each repo has, read back out of the bot's own
+    messages in a thread (R3.3).
+
+    `contents` is the thread's messages in order, oldest first. The last
+    announcement for a repo wins — a conversation whose branch was merged
+    away opens a second pull request and announces that one too — and the
+    dict keeps announcement order, so its last entry is the thread's most
+    recent pull request.
+    """
+    urls: dict[str, str] = {}
+    for content in contents:
+        for line in content.splitlines():
+            match = _PR_ANNOUNCEMENT.match(line.strip())
+            if match is not None:
+                urls.pop(match['repo'], None)
+                urls[match['repo']] = match['url']
+    return urls
 
 
 def _collect_embed_image_urls(message: discord.Message) -> list[str]:
@@ -162,18 +196,50 @@ class Agent(commands.Cog):
 
     async def _starter_is_agent_request(self, thread: discord.Thread) -> bool:
         """Whether the message the thread grew from is an owner's ping."""
+        starter = await self._fetch_starter(thread)
+        if starter is None:
+            return False
+        return (self._strip_mention(starter.content) is not None
+                and await self.bot.is_owner(starter.author))
+
+    async def _fetch_starter(self, thread: discord.Thread):
+        """The message the thread grew from, or None if it is gone."""
         parent = thread.parent
         if parent is None:
             parent = await self.bot.fetch_channel(thread.parent_id)
         try:
-            starter = await parent.fetch_message(thread.id)
+            return await parent.fetch_message(thread.id)
         except discord.NotFound:
             # No starter message left, so nothing ties the thread to a
             # request of ours. The one genuine "no" among the ways this
             # fetch can fail; the rest are the caller's to report.
-            return False
-        return (self._strip_mention(starter.content) is not None
-                and await self.bot.is_owner(starter.author))
+            return None
+
+    async def _recover_conversation(self, thread: discord.Thread, key: int):
+        """Hand the service what Discord knows about a conversation it has
+        no record of, so the turn continues the thread's branch and pull
+        request instead of starting new ones (R3.3).
+
+        Costs a read of the thread once per host: the service keeps the
+        conversation afterwards, whether or not anything was found.
+        """
+        if self.service.has_conversation(key):
+            return
+        if not await self._is_agent_thread(thread):
+            # The owner pinged the bot in some unrelated thread: there is
+            # no conversation of ours to put back, and its history is
+            # none of our business.
+            return
+        assert self.bot.user is not None
+        announcements = [message.content
+                         async for message in thread.history(
+                             limit=None, oldest_first=True)
+                         if message.author.id == self.bot.user.id]
+        pr_urls = parse_pr_announcements(announcements)
+        starter = await self._fetch_starter(thread)
+        prompt = '' if starter is None else (
+            self._strip_mention(starter.content) or '')
+        await self.service.recover(key, prompt.strip(), pr_urls)
 
     def _strip_mention(self, content: str) -> str | None:
         """The rest of a message that leads with a ping of the bot, else None."""
@@ -256,6 +322,18 @@ class Agent(commands.Cog):
                                         image_data.append((filename, await resp.read()))
                             except Exception:
                                 pass
+                if isinstance(source, discord.Thread):
+                    try:
+                        await self._recover_conversation(source, key)
+                    except (discord.HTTPException, aiohttp.ClientError,
+                            asyncio.TimeoutError) as error:
+                        # Reading the thread is how its branch is found;
+                        # starting a fresh one instead would quietly
+                        # abandon the pull request it already has.
+                        await set_status(
+                            "I couldn't read this thread's history to pick "
+                            f'up where it left off: {error}')
+                        return
                 report = await self.service.run(key, prompt,
                                                 on_progress=send_in_thread,
                                                 images=image_data)
