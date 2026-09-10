@@ -82,18 +82,10 @@ JermaBot includes a minimal agent harness because it seems fun! These instructio
 # From `claude setup-token` (skippable on a dev machine already logged in to `claude`)
 CLAUDE_CODE_OAUTH_TOKEN=...
 # A fine-grained personal access token: read/write on Contents and Pull
-# requests for the target repos, plus read/write on Contents for the
-# backup repo below.
+# requests for the target repos.
 # https://github.com/settings/personal-access-tokens/new
 GITHUB_TOKEN=...
-# A private repo, as `owner/name` (not a URL or a path), that the agent
-# backs conversation transcripts and identity records up to, so a
-# conversation survives losing this host. Create it empty. It must be
-# private: a transcript holds everything the agent read.
-JERMABOT_AGENT_BACKUP_REPO=owner/name
 ```
-
-Without `JERMABOT_AGENT_BACKUP_REPO` the bot still runs and says so at startup, but a conversation is then only as durable as this machine. If the repo is set and can't be cloned, that's reported at startup instead of taking the bot down: conversations that never used the backup keep running from their local transcripts, and ones that did refuse to run until it's reachable rather than answering from a frozen copy. The clone is retried about once a minute as turns come in, so they pick up again on their own once GitHub is back.
 
 The agent's directories can be moved, but the defaults are usually fine:
 
@@ -102,8 +94,6 @@ The agent's directories can be moved, but the defaults are usually fine:
 JERMABOT_AGENT_REPOS_DIR=~/jermabot-agent/repos
 # Per-conversation checkouts and the conversation state file
 JERMABOT_AGENT_CONVERSATIONS_DIR=~/jermabot-agent/conversations
-# Local clone of the backup repo
-JERMABOT_AGENT_BACKUP_DIR=~/jermabot-agent/backup
 ```
 
 ##### How conversations persist
@@ -111,9 +101,9 @@ JERMABOT_AGENT_BACKUP_DIR=~/jermabot-agent/backup
 Ping the bot with a request and it replies in a thread; every later message the owner posts in that thread continues the same conversation, no ping needed, forever. Nothing expires one:
 
 - Agent threads are recognized from Discord itself, not from local state, so a thread keeps working across restarts, deleted checkouts, and a wiped host. Archived threads count — posting in one revives it.
-- With the backup repo set, each turn's transcript is written straight to it, and that's what the next turn resumes from, so the agent still remembers its own tool calls and file reads years later.
-- A conversation keeps one branch and at most one pull request per repo for its whole life. A recovered turn continues them, and the branch is caught up with its base branch before every turn so the PR stays mergeable. A branch GitHub has merged or deleted starts over, and the thread is told why.
-- With no transcript left — a conversation from before the backup existed, or one whose backup is gone — the history is rebuilt from the thread's own messages and images instead. That's lossy, and the thread says so.
+- While this machine still has the conversation's transcript, a turn resumes it, so the agent remembers its own tool calls and file reads however long the gap.
+- With no transcript left — a wiped host, a deleted one, or a thread from before the harness kept them — the history is rebuilt from the thread's own messages and images instead. That's lossy, and the thread says so. Nothing copies a transcript off this machine, so this is the fallback for every conversation whose transcript is gone.
+- A conversation keeps one branch and at most one pull request per repo for its whole life, and those live on GitHub rather than here. A recovered turn continues them — found again from the thread's pull request announcements, or by searching GitHub for the pull request naming the thread — and the branch is caught up with its base branch before every turn so the PR stays mergeable. A branch GitHub has merged or deleted starts over, and the thread is told why.
 - Messages posted while the bot was offline aren't lost: once it reconnects, a background job finds agent threads on Discord and runs whatever the owner said that never got an answer.
 
 Muted subtext lines (`-# _..._`) in a thread are the harness talking, never the agent:
@@ -121,7 +111,6 @@ Muted subtext lines (`-# _..._`) in a thread are the harness talking, never the 
 - `Reloading thread history. Some context might be lost.` — no transcript was available, so this turn's context came from the thread.
 - `Couldn't merge <base> into this branch: ...`, `Couldn't catch <repo> up with its branch on GitHub: ...`, or `Couldn't catch <repo> up: ...` — the turn ran on a stale branch. Resolve it on GitHub and the next turn picks the fix up.
 - `The pull request for <repo> was merged/was closed/is gone from GitHub; starting a fresh branch ...`, or `Couldn't check the pull request for <repo> (...); starting a fresh branch.` — the branch is gone from GitHub, so the next edit opens a new PR.
-- `Backup not pushed to GitHub: ...`, `The backup could not be read from GitHub: ...`, `The backup could not be merged with GitHub's copy: ...`, `Some of this turn never reached the transcript backup: ...`, `Part of this turn is missing from the transcript backup: ...`, `This conversation's identity record was not updated: ...` — the answer and its pull request stand, but the durable copy is behind, so it's worth fixing before the next turn needs it.
 - `Couldn't fetch the image link ...` — an image in the message couldn't be downloaded, so the agent didn't see it.
 
 ### Running JermaBot:

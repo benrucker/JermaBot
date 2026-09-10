@@ -27,8 +27,8 @@ turns them into a branch (R3.3). A thread with no announcements is looked
 up on GitHub by the message that started it.
 
 The thread is also the last resort for what the agent knew (R2c). When a
-conversation's transcript is gone from this host and from the backup, the
-service asks for build_thread_history(), which reads the whole thread back
+conversation's transcript is gone from this host, the service asks for
+build_thread_history(), which reads the whole thread back
 — the owner's messages, the agent's replies, and the images, re-downloaded
 — and hands it over as prior history for a new session. The bot's own
 fixed messages are not the agent's words and must not come back as them.
@@ -87,7 +87,7 @@ _PR_ANNOUNCEMENT = re.compile(
     .replace('\x01', r'(?P<repo>[^*]+)')
     .replace('\x02', r'(?P<url>https://\S+)') + '$')
 # A muted subtext line: everything the harness says about itself, from the
-# recovery line to a merge conflict to a backup that would not push.
+# recovery line to a merge conflict to an image it could not fetch.
 _MUTED_LINE = re.compile(r'^-# _(?P<text>.*)_$')
 
 # The rest of the bot's fixed messages, named so that reading a thread back
@@ -141,7 +141,7 @@ def _harness_message(content: str) -> str | None:
 
 def _all_muted(content: str) -> bool:
     """Whether a message of the bot's is nothing but muted harness lines —
-    the reloading note, a merge conflict, a backup that would not push.
+    the reloading note, a merge conflict, an unfetchable image.
     Such a message is news about the turn, not the turn's answer."""
     lines = [line.strip() for line in content.splitlines() if line.strip()]
     return bool(lines) and all(_MUTED_LINE.match(line) for line in lines)

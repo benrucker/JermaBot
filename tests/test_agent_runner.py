@@ -1,11 +1,5 @@
 """How one turn folds the SDK's message stream into its result, and what a
 resume the SDK cannot load comes back as.
-
-The interesting case is the mirror error: MirrorErrorMessage subclasses
-SystemMessage, so the obvious `isinstance(message, SystemMessage)` branch
-swallows it, and a backup that dropped a batch would pass in silence —
-which, once a session has resumed from the store, means a turn lost with
-nobody told (R2b.1).
 """
 import asyncio
 import os
@@ -16,7 +10,6 @@ import pytest
 from claude_agent_sdk import (
     AssistantMessage,
     ProcessError,
-    MirrorErrorMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -56,28 +49,7 @@ def result_message(text: str) -> ResultMessage:
                          result=text)
 
 
-def test_a_dropped_backup_batch_is_recorded():
-    result, _ = fold(MirrorErrorMessage(
-        subtype='mirror_error',
-        data={'type': 'system', 'subtype': 'mirror_error'},
-        key={'project_key': 'p', 'session_id': 's'},
-        error='boom:\n  the store refused the batch'))
-
-    assert result.mirror_errors == ['boom: the store refused the batch']
-
-
-def test_a_mirror_error_is_not_mistaken_for_an_init_message():
-    """It carries no session_id, and the id from init must survive it."""
-    result, _ = fold(
-        SystemMessage(subtype='init', data={'session_id': 'sess-1'}),
-        MirrorErrorMessage(subtype='mirror_error', data={}, error='boom'),
-    )
-
-    assert result.session_id == 'sess-1'
-    assert result.mirror_errors == ['boom']
-
-
-def test_a_clean_turn_records_no_mirror_error():
+def test_a_turn_folds_into_its_session_answer_and_narration():
     result, narration = fold(
         SystemMessage(subtype='init', data={'session_id': 'sess-1'}),
         assistant(TextBlock(text='looking now'),
@@ -86,7 +58,8 @@ def test_a_clean_turn_records_no_mirror_error():
         result_message('here you go'),
     )
 
-    assert result.mirror_errors == []
+    # The init message names the session up front, so a timeout that cut
+    # the run short of its ResultMessage would still know what to resume.
     assert result.session_id == 'sess-1'
     assert result.final_text == 'here you go'
     # Text alongside a tool call is narration, not the answer.
@@ -167,10 +140,9 @@ async def test_a_failure_with_nothing_to_resume_is_just_a_failure(
 
 async def test_a_resume_that_fails_before_the_process_fails_the_turn(
         tmp_path, monkeypatch):
-    """A store load that timed out never reaches the CLI, so it is not a
-    process failure and not a lost session. Answering it from a thread
-    rebuild would overwrite the session id the backup is filed under with
-    a new one, for a session that was never gone."""
+    """A load that fails before the CLI runs is not a process failure and
+    not a lost session. Answering it from a thread rebuild would overwrite
+    the session id with a new one, for a session that was never gone."""
     monkeypatch.setattr(agent_runner, 'ClaudeSDKClient',
                         refusing_client(RuntimeError('load timed out')))
 

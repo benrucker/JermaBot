@@ -5,6 +5,12 @@ behavior). Built on branch `durable-agent-conversations`, 2026-09-09; see
 "Implementation notes" at the end for where the build deviates from the
 wording below.
 
+R2b, the off-host transcript backup, was removed by decision on
+2026-09-09: not worth the machinery. Durability now rests on three things
+that outlive a materialization — the local transcript while this host has
+it, the Discord thread, and GitHub — and the requirement is struck from
+this document rather than left standing unbuilt.
+
 ## Problem
 
 Today a conversation is a local object: a checkout directory, an Agent SDK
@@ -27,17 +33,17 @@ use is not a concern.
 - **Agent thread**: a Discord thread the bot created to hold one
   conversation. Its id equals the id of the owner message that started it.
 - **Identity**: the durable facts about a conversation: thread id, branch
-  name, pull request URL per repo, SDK session id, and whether the
-  conversation has run with the transcript backup as its session store
-  (`backed_up`). Small, and kept forever.
+  name, pull request URL per repo, and SDK session id. Small, and kept
+  forever.
 - **Transcript**: the Agent SDK's session file for a conversation: every
   prompt, reply, tool call, and tool result, as the agent experienced them.
   The SDK writes it under its projects directory, keyed by the checkout
   path and session id, and resumes from it.
-- **Materialization**: the local, rebuildable parts: worktrees, the local
-  copy of the transcript, downloaded attachments. Disposable at any time.
-- **Recovery**: rebuilding a materialization from identity, the transcript
-  backup, GitHub, and the thread's own message history, so a turn can run.
+- **Materialization**: the local, rebuildable parts: worktrees, the
+  transcript, downloaded attachments. Disposable at any time, at the cost
+  of the transcript's losslessness.
+- **Recovery**: rebuilding a materialization from identity, GitHub, and
+  the thread's own message history, so a turn can run.
 
 ## Requirements
 
@@ -66,42 +72,16 @@ use is not a concern.
 2. Context comes from these sources, tried in order, and the first that
    works is used:
    1. The local transcript, when present and resumable.
-   2. The transcript backup (R2b), restored to the local path the SDK
-      expects for this conversation, then resumed.
-   3. Reconstruction from the thread's messages (R2c). This is lossy and
-      exists for v0 threads and for a backup that is missing or fails to
-      restore. When it is used, the recovery status line in the thread
-      says so (R4.3).
+   2. Reconstruction from the thread's messages (R2c). This is lossy and
+      is where every conversation whose transcript this host no longer
+      has ends up: v0 threads, a wiped host, a conversation recovered
+      from GitHub. When it is used, the recovery status line in the
+      thread says so (R4.3).
 3. Whichever source is used, the agent also gets the git context it would
    have had: the conversation's branch checked out at its current remote
    tip.
 4. If a higher-priority source is present but fails, fall through to the
    next rather than failing the turn. The failure is logged with its cause.
-
-### R2b. Transcript backup and restore
-
-1. At the end of every turn, after the SDK has finished writing, the
-   conversation's transcript is copied to durable storage that survives
-   loss of the host. The turn is not reported as complete until the copy
-   succeeds; if it fails, the thread is told (fail-fast), though the turn's
-   reply and PR still stand.
-2. Durable storage is outside the bot's host. A private GitHub repository
-   or gist written with the bot's existing token is the expected choice; a
-   transcript may exceed Discord's attachment limit, so the thread itself
-   is not suitable.
-3. Restore places the file exactly where the SDK will look for it. The
-   checkout path per conversation is already deterministic (the
-   conversations root plus the thread id), and the session id is part of
-   the identity record, so the restore location is computable without
-   local state. The implementation must confirm the SDK's transcript
-   layout on the production host rather than assuming it.
-4. Session id is therefore promoted to identity and is recoverable with
-   the rest of it (R3.3 sources plus the backup store's own index, keyed
-   by thread id). `backed_up` travels with it: it is what says whether a
-   turn may run at all while the store is unreachable (see the
-   implementation notes).
-5. Backups are never deleted by the eviction sweep. Local transcript
-   copies may be.
 
 ### R2c. Reconstruction from the thread (fallback)
 
@@ -122,8 +102,9 @@ use is not a concern.
    missing rather than dropped silently.
 3. Known losses, accepted for this path only: tool calls and results, the
    interleaving of narration with tool use, and harness-added prompt text.
-4. Once a reconstructed turn completes, its new transcript is backed up
-   per R2b, so the conversation is lossless from that turn on.
+4. Once a reconstructed turn completes, the session it started is the
+   conversation's, so the next turn resumes it from this host's
+   transcript rather than rebuilding the thread again.
 
 ### R3. Git and pull request continuity
 
@@ -179,8 +160,7 @@ use is not a concern.
    ```
 
    Use that exact wording when thread reconstruction (R2c) is the source.
-   A line for a successful backup restore, if shown at all, uses the same
-   style, e.g. `-# _Resuming from saved transcript._`
+   A resume from the local transcript loses nothing, so it says nothing.
 4. If recovery fails, the thread gets a message stating that it failed and
    why (per the project's fail-fast rule). The message is never ignored.
 
@@ -189,9 +169,10 @@ use is not a concern.
 1. The identity record is written to persistent storage on every change
    and is never dropped because a checkout directory is missing. (Today's
    startup loader drops such entries; that behavior goes away.)
-2. Loss of the identity store as a whole is survivable: R1, R2b.4, and
-   R3.3 make every conversation recoverable from Discord, GitHub, and the
-   backup store alone.
+2. Loss of the identity store as a whole is survivable: R1 and R3.3 make
+   every conversation recoverable from Discord and GitHub alone. What the
+   agent knew is not recoverable that way, so such a conversation
+   continues through R2c.
 3. Conversations started under v0 (including the 2026-08-16 thread) are
    covered. Nothing in the record format may be required that v0 threads
    lack.
@@ -219,8 +200,9 @@ use is not a concern.
 
 ## Non-requirements
 
-- Lossless context for v0 threads, which have no transcript backup. Thread
-  reconstruction is the best available for them.
+- Lossless context for a conversation whose transcript this host has lost,
+  v0 threads included. Thread reconstruction is the best available for
+  them, and nothing copies a transcript off the host.
 - Keeping worktrees or local transcript copies around. They are a cache.
 - Bounding disk, clone count, or GitHub API usage.
 - Conversations outside bot-created threads (DMs, pings in channels)
@@ -231,17 +213,15 @@ use is not a concern.
 Each must pass with no owner intervention beyond posting the message.
 
 1. **The original bug.** Start a conversation that opens a PR. Remove its
-   entry from the conversations table and delete its checkout, including
+   entry from the conversations table and delete its checkout, but leave
    the local transcript. Post a follow-up in the thread. The bot replies,
    references specifics from the earlier turns including a file it read
    but did not edit, and pushes further commits to the same PR.
 2. **Wiped host.** Same as 1, but delete the whole conversations directory,
-   the pristine clones, and the SDK projects directory. Still passes, via
-   the transcript backup.
-2b. **Lost backup.** Same as 1, but also delete the transcript backup. The
-   bot still replies with the thread's history, the thread shows the
-   muted "Reloading thread history" line from R4.3, and a fresh backup
-   exists after the turn.
+   the pristine clones, and the SDK projects directory. The bot still
+   replies with the thread's history, the thread shows the muted
+   "Reloading thread history" line from R4.3, and the branch and pull
+   request are the same ones, found again through R3.3.
 3. **Archived thread.** Let the thread auto-archive (or archive it by hand),
    then post. Still passes.
 4. **No PR yet.** A conversation whose turns were only questions. After
@@ -252,7 +232,7 @@ Each must pass with no owner intervention beyond posting the message.
 6. **Images.** Earlier turns included image attachments. After eviction the
    agent can still describe those images when asked.
 7. **v0 thread.** Post in the thread started 2026-08-16. Passes scenario
-   2b, since no backup exists for it.
+   2, since it has no transcript.
 8. **Recovery failure.** Make GitHub unreachable, then post in an evicted
    thread. The thread receives an error message naming the cause.
 9. **Concurrent messages.** Post two messages in quick succession into an
@@ -274,29 +254,13 @@ What the build settled that the requirements above left open, and where it
 deliberately differs from their wording. The requirements themselves stand
 as written.
 
-- **The backup is the SDK's session store, not a copy taken after the
-  turn.** R2b.1's "copied at the end of every turn" and R2b.3's "restore
-  places the file exactly where the SDK will look for it" are realized as
-  a store-backed resume: `ClaudeAgentOptions.session_store` writes each
-  batch into the backup repo as the turn runs, and a resume is rebuilt
-  from what the store returns rather than from a restored local file.
-- **Once the store holds a session, this host's transcript stops being
-  updated** (measured against SDK 0.2.110), so the store is the sole
-  record of that conversation rather than a mirror of one. The first
-  backup-enabled turn therefore seeds the store from the local transcript
-  first, so enabling the backup on an existing conversation continues it
-  instead of freezing or discarding what this host already had.
-- **A conversation that has run with the store refuses to run when the
-  backup repo is unavailable**, rather than falling through to a thread
-  rebuild. This is deliberate: R2.4's fall-through is for a transcript
-  that is missing, not for a store that is momentarily unreachable, and
-  falling through would let one transient failure permanently downgrade a
-  lossless conversation to a lossy summary and strand its backup under the
-  old session id. Conversations that never used the store still run from
-  their local transcript.
-- **Backup layout**, keyed by thread id, the one identifier Discord
-  guarantees: `<thread_id>/transcript/<session_id>.jsonl` and
-  `<thread_id>/identity.json`.
+- **The local transcript is found through the SDK, not a copy of its
+  naming rules**: `agent_runner.local_transcript_path` asks the SDK for
+  its projects directory and its project key, so a layout change is an
+  ImportError at startup rather than a conversation that quietly rebuilds
+  itself from its thread every turn. The path follows from the identity
+  alone (the conversations root plus the thread id, and the session id),
+  so no local state is needed to ask whether the transcript survived.
 - **Idle eviction is gone entirely**, taking R4.1's "or never". Nothing
   sweeps materializations; worktrees are simply rebuilt when a turn finds
   them missing.
@@ -323,14 +287,8 @@ as written.
   passed to the model. A turn rebuilt from the thread does see the
   announcements and the R3.4 line, as harness facts — which is how such a
   turn knows a pull request exists at all.
-- **A store the first backed-up turn cannot seed fails the turn**, for the
-  same reason `_require_backup` refuses a turn whose store is unreachable:
-  carrying on would rebuild from the thread and leave the local transcript
-  behind under an id nothing will resume again.
-- **The backup clone and the pristine repo clones are retried on the next
-  turn**, not only at startup. A clone that failed at boot, or a directory
-  deleted while the bot ran, is re-made by the readiness check every turn
-  passes through, so R4.2's "no action from the owner" survives a
-  transient GitHub failure without a restart. A backup clone that keeps
-  failing is tried at most once a minute, so an outage does not cost every
-  turn a network clone.
+- **The pristine repo clones are retried on the next turn**, not only at
+  startup. A clone that failed at boot, or a directory deleted while the
+  bot ran, is re-made by the readiness check every turn passes through, so
+  R4.2's "no action from the owner" survives a transient GitHub failure
+  without a restart.

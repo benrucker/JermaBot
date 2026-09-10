@@ -60,30 +60,6 @@ def get_conversations_root() -> Path:
                     '~/jermabot-agent/conversations')
 
 
-def get_backup_root() -> Path:
-    """Local clone of the transcript backup repo (see agent_backup)."""
-    return _env_dir('JERMABOT_AGENT_BACKUP_DIR', '~/jermabot-agent/backup')
-
-
-def get_backup_repo() -> str | None:
-    """owner/name of the private GitHub repo holding transcript backups.
-
-    Unset means conversations are only as durable as this host, so the
-    service says so at startup rather than quietly going without. A URL
-    or a path here would turn into a clone of something unintended, so
-    the shape is checked before anything is cloned.
-    """
-    slug = os.environ.get('JERMABOT_AGENT_BACKUP_REPO')
-    if not slug:
-        return None
-    owner, sep, name = slug.partition('/')
-    if not sep or not owner or not name or '/' in name or ':' in slug:
-        raise ValueError(
-            'JERMABOT_AGENT_BACKUP_REPO must be a GitHub repo as '
-            f'"owner/name", not {slug!r}.')
-    return slug
-
-
 def get_github_token() -> str | None:
     """Fine-grained PAT for GitHub access (git auth and pull requests)."""
     return os.environ.get('GITHUB_TOKEN')
