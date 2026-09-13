@@ -1,50 +1,50 @@
-"""Owner-only coding agent: ping JermaBot with a request, get answers or PRs.
+"""Owner-only coding agent. Ping JermaBot, get answers or pull requests.
 
 When the owner pings the bot with something that isn't a command, the
 message starts a coding-agent conversation. Replies live in a thread
 created just before the first one, and further owner messages in that
-thread continue the conversation — no ping needed, forever. Conversations
-run concurrently, each keeping one branch and at most one pull request per
-repo, updated turn by turn. This cog handles only the Discord side —
-recognition, threads, message chunking, and reporting; conversations
-execute behind AgentTaskService.
+thread continue the conversation with no ping needed, forever.
+Conversations run concurrently, each keeping one branch and at most one
+pull request per repo, updated turn by turn. This cog handles the Discord
+side only: recognition, threads, message chunking, and reporting.
+AgentTaskService runs the conversations themselves.
 
-Agent threads are recognized from Discord itself, never from local state,
-so a thread keeps working across restarts, evictions, and a wiped host: the
-bot owns the thread, and the thread's id is the id of its starter message,
-which is the owner's original ping. Checking that pair identifies an agent
-thread with nothing but Discord. The service's conversation table is
-consulted first as a fast path, and each answer is cached per thread.
-Threads Discord auto-archived count too — a message unarchives one, and
-that MESSAGE_CREATE can arrive before the thread is back in the library's
-cache, leaving a PartialMessageable to be fetched.
+This cog recognizes agent threads from Discord itself, never from local
+state, so a thread keeps working across restarts, evictions, and a wiped
+host. The bot owns the thread, and the thread's id is the id of its
+starter message, which is the owner's original ping. Checking that pair
+identifies an agent thread with nothing but Discord. The service's
+conversation table answers first as a fast path, and this cog caches each
+thread's answer. Threads Discord auto-archived count too. A message
+unarchives one, and that MESSAGE_CREATE can arrive before the thread is
+back in the library's cache, leaving a PartialMessageable to fetch.
 
 A recognized thread the service has never heard of is a conversation whose
-identity record this host lost. The thread itself remembers some of it:
-every pull request the bot opened was announced in it, and those
-announcements are parsed back out here and handed to the service, which
-turns them into a branch (R3.3). A thread with no announcements is looked
-up on GitHub by the message that started it.
+identity record this host lost. The thread itself remembers some of it.
+Every pull request the bot opened was announced in it, and this cog parses
+those announcements back out and hands them to the service, which turns
+them into a branch (R3.3). For a thread with no announcements, the service
+looks the conversation up on GitHub by the message that started it.
 
 The thread is also the last resort for what the agent knew (R2c). When a
 conversation's transcript is gone from this host, the service asks for
-build_thread_history(), which reads the whole thread back
-— the owner's messages, the agent's replies, and the images, re-downloaded
-— and hands it over as prior history for a new session. The bot's own
-fixed messages are not the agent's words and must not come back as them.
-The shapes this cog writes itself — pull request announcements, timeouts,
-error replies — are constants here, so rewording one cannot leave the old
-wording looking like an answer. Everything else it posts is relayed from
-the service and the workspace as a muted subtext line (`-# _..._`), and
-that shape, not any particular wording, is what reading a thread back
+build_thread_history(), which reads the whole thread back and hands it
+over as prior history for a new session. That is the owner's messages, the
+agent's replies, and the images, re-downloaded. The bot's own fixed
+messages are not the agent's words and must not come back as them. Pull
+request announcements, timeouts, and error replies are the shapes this cog
+writes itself, and they are constants here, so rewording one cannot leave
+the old wording looking like an answer. Everything else it posts comes
+from the service or the workspace as a muted subtext line (`-# _..._`),
+and that shape, not any particular wording, is what reading a thread back
 recognizes. Either way the line returns as a plain "[harness] ..." fact.
 
-Messages posted while the bot was down are not lost either (R6.4). Once
-the bot is connected, a background job reads every text channel it can
-see, active and archived threads alike, keeps the ones recognized as
+The bot does not lose messages posted while it was down either (R6.4).
+Once it is connected, a background job reads every text channel it can
+see, active and archived threads alike, keeps the ones it recognizes as
 ours, and runs whatever the owner said after the bot's last word in each
-as ordinary turns. It discovers those threads from Discord, so it works
-on a host that has never heard of any of them (R6.5).
+as ordinary turns. It finds those threads in Discord, so it works on a
+host that has never heard of any of them (R6.5).
 """
 import asyncio
 import functools
@@ -72,26 +72,29 @@ PR_UPDATED = 'Updated the pull request'
 
 
 def _pr_line(verb: str, repo: str, url: str) -> str:
-    """The bot's pull request announcement. Written through here by
-    _handle_prompt and read back through the pattern below, so rewording
-    it cannot leave old announcements looking like the agent's words."""
+    """The bot's pull request announcement.
+
+    _handle_prompt writes every one through here and the pattern below
+    reads them back, so rewording it cannot leave old announcements
+    looking like the agent's words.
+    """
     return f'{verb} for **{repo}**: {url}'
 
 
-# The same line with its three fields opened up, built from the writer
-# rather than typed out again.
+# The same line with its three fields turned into capture groups, built
+# from the writer above rather than typed out a second time.
 _PR_ANNOUNCEMENT = re.compile(
     '^' + re.escape(_pr_line('\x00', '\x01', '\x02'))
     .replace('\x00', f'(?P<verb>{re.escape(PR_OPENED)}'
                      f'|{re.escape(PR_UPDATED)})')
     .replace('\x01', r'(?P<repo>[^*]+)')
     .replace('\x02', r'(?P<url>https://\S+)') + '$')
-# A muted subtext line: everything the harness says about itself, from the
-# recovery line to a merge conflict to an image it could not fetch.
+# A muted subtext line. The harness says everything about itself this way:
+# the recovery note, a merge conflict, an image it could not fetch.
 _MUTED_LINE = re.compile(r'^-# _(?P<text>.*)_$')
 
-# The rest of the bot's fixed messages, named so that reading a thread back
-# recognizes exactly what writing one produces.
+# The rest of the bot's fixed messages, named so that reading a thread
+# back recognizes exactly what writing one produces.
 NO_THREAD_HERE = "I can't make a thread here :("
 UNREACHABLE_DISCORD = ("I couldn't reach Discord to work out where this "
                        'message lives: ')
@@ -108,8 +111,9 @@ def _timeout_notice(minutes) -> str:
 
 
 TIMEOUT_NOTICE = _timeout_notice(AGENT_TIMEOUT_SECONDS // 60)
-# The writer's own sentence with only the minute count left open: the
-# limit is configuration, so a thread holds notices naming other numbers.
+# The writer's own sentence with only the minute count left open. The
+# limit is configuration, so a thread can hold notices naming other
+# numbers.
 _TIMEOUT_NOTICE = re.compile(
     '^' + re.escape(_timeout_notice('\x00')).replace('\x00', r'\d+') + '$')
 
@@ -121,9 +125,11 @@ UNFETCHED_LINK = "-# _Couldn't fetch the image link {url}: {cause}._"
 
 
 def _harness_message(content: str) -> str | None:
-    """What a whole message of the bot's own means, if it is one of its
-    fixed shapes, so the agent hears it as something that happened rather
-    than as something it said (R2c.1b)."""
+    """What a whole message of the bot's own means, if it is a fixed shape.
+
+    The agent then hears it as something that happened rather than as
+    something it said (R2c.1b).
+    """
     if content.startswith(WORKSPACE_ERROR):
         rest = one_line(content[len(WORKSPACE_ERROR):])
         return f'The turn failed: {rest}'
@@ -140,9 +146,12 @@ def _harness_message(content: str) -> str | None:
 
 
 def _all_muted(content: str) -> bool:
-    """Whether a message of the bot's is nothing but muted harness lines —
-    the reloading note, a merge conflict, an unfetchable image.
-    Such a message is news about the turn, not the turn's answer."""
+    """Whether a message of the bot's is nothing but muted harness lines.
+
+    Those lines are the reloading note, a merge conflict, and an image the
+    bot could not fetch. A message of only those is news about the turn,
+    not its answer.
+    """
     lines = [line.strip() for line in content.splitlines() if line.strip()]
     return bool(lines) and all(_MUTED_LINE.match(line) for line in lines)
 
@@ -170,8 +179,9 @@ async def fetch_image_link(session, url: str) -> tuple[str, bytes]:
     Raises with the reason when the link is not an image this bot can
     have, so both callers can say why rather than dropping it in silence.
     """
-    # Bounded: a rebuild fetches every link in the thread under the
-    # conversation lock, and a stalled host must not hold it for long.
+    # The timeout is deliberate. A rebuild fetches every link in the
+    # thread under the conversation lock, and a stalled web server must
+    # not hold that lock for long.
     async with session.get(url, timeout=IMAGE_LINK_TIMEOUT) as response:
         content_type = response.headers.get('Content-Type', '')
         if response.status != 200:
@@ -181,10 +191,10 @@ async def fetch_image_link(session, url: str) -> tuple[str, bytes]:
         length = response.headers.get('Content-Length')
         if length is not None and int(length) > IMAGE_LINK_MAX_BYTES:
             raise ValueError(f'too large ({length} bytes)')
-        # Read the body chunk by chunk: read(n) returns only what has
+        # Read the body chunk by chunk. read(n) returns only what has
         # already been buffered, which silently truncates anything the
-        # server sends in pieces. Kept as pieces and joined once, so a
-        # 25MB picture is not copied a few hundred times on the way in.
+        # server sends in pieces. One join at the end keeps a 25MB
+        # picture from being copied a few hundred times on the way in.
         chunks: list[bytes] = []
         size = 0
         async for chunk in response.content.iter_chunked(65536):
@@ -206,11 +216,11 @@ async def _owner_block(message, fetch
                        ) -> tuple[list[str], list[tuple[str, bytes]]]:
     """One owner message as history, with its images re-downloaded.
 
-    Attachments come back from Discord; a pasted image link is an embed
+    Attachments come back from Discord. A pasted image link is an embed
     with nothing of ours behind it, so it goes through `fetch`, the
-    caller's downloader. Either kind that cannot be had is named as
-    missing rather than dropped, so the agent knows the message had a
-    picture in it (R2c.2).
+    caller's downloader. When either kind cannot be fetched, the block
+    names it as missing instead of dropping it, so the agent knows the
+    message had a picture in it (R2c.2).
     """
     lines = [message.content] if message.content else []
     images = []
@@ -234,7 +244,7 @@ async def _owner_block(message, fetch
         try:
             filename, data = await fetch(url)
         except Exception as error:
-            # Anything at all: this is somebody else's web server, and a
+            # Anything at all. This is somebody else's web server, and a
             # named gap is worth more to the agent than a lost picture.
             lines.append(f'[image link {url}: could not be fetched '
                          f'({one_line(error)})]')
@@ -258,8 +268,8 @@ async def build_thread_history(messages, bot_id: int, owner_id: int,
 
     `fetch` downloads one pasted image link (see fetch_image_link).
 
-    Losses are the spec's (R2c.3): tool calls, tool results, and how the
-    agent interleaved them with what it said.
+    The spec allows these losses (R2c.3): tool calls, tool results, and
+    how the agent mixed them into what it said.
     """
     blocks: list[str] = []
     images: list[tuple[str, bytes]] = []
@@ -271,7 +281,10 @@ async def build_thread_history(messages, bot_id: int, owner_id: int,
             if summary is None:
                 for line in message.content.splitlines():
                     fact = _harness_line(line.strip())
-                    (facts if fact else said).append(fact or line)
+                    if fact is None:
+                        said.append(line)
+                    else:
+                        facts.append(fact)
             if '\n'.join(said).strip():
                 blocks.append(f'[{stamp}] You (agent):\n'
                               + '\n'.join(said).strip())
@@ -293,10 +306,10 @@ def parse_pr_announcements(contents: list[str]) -> dict[str, str]:
     messages in a thread (R3.3).
 
     `contents` is the thread's messages in order, oldest first. The last
-    announcement for a repo wins — a conversation whose branch was merged
-    away opens a second pull request and announces that one too — and the
-    dict keeps announcement order, so its last entry is the thread's most
-    recent pull request.
+    announcement for a repo wins, because a conversation whose branch was
+    merged away opens a second pull request and announces that one too.
+    The dict keeps announcement order, so its last entry is the thread's
+    most recent pull request.
     """
     urls: dict[str, str] = {}
     for content in contents:
@@ -309,7 +322,7 @@ def parse_pr_announcements(contents: list[str]) -> dict[str, str]:
 
 
 def _collect_embed_image_urls(message: discord.Message) -> list[str]:
-    """Return image URLs from Discord embeds created for pasted image links."""
+    """The image URLs of the embeds Discord makes for pasted image links."""
     urls: list[str] = []
     seen: set[str] = set()
     for embed in message.embeds:
@@ -343,8 +356,8 @@ class Agent(commands.Cog):
         # dies with the cog.
         self._catch_up_task: asyncio.Task | None = None
         # Messages this path has taken, so the catch-up cannot take them
-        # again. Only the owner's own turns land here, and the catch-up
-        # empties the set when it finishes.
+        # again. Only the owner's own turns land here, and they stay for
+        # the life of the process (see the end of _catch_up).
         self._live_ids: set[int] = set()
 
     async def cog_load(self):
@@ -361,15 +374,15 @@ class Agent(commands.Cog):
             return
 
         # A conversation in a thread the bot created hears every owner
-        # message; anywhere else — channels, DMs, other people's threads —
-        # it takes a ping to start or continue one.
+        # message. Anywhere else, in channels, DMs, and other people's
+        # threads, it takes a ping to start or continue one.
         stripped = self._strip_mention(message.content)
         if stripped is None and not self._maybe_thread(message.channel):
             return
 
         try:
-            # Everything past here can cost an API call, and nobody but the
-            # owner is answered anyway.
+            # Everything past here can cost an API call, and the bot
+            # answers nobody but the owner anyway.
             if not await self.bot.is_owner(message.author):
                 return
             channel = await self._resolve_channel(message)
@@ -382,14 +395,14 @@ class Agent(commands.Cog):
                 return
         except (discord.HTTPException, aiohttp.ClientError,
                 asyncio.TimeoutError) as error:
-            # Recognition needs Discord, and Discord can be down, forbid the
-            # fetch, or time out. None of that may swallow the owner's
-            # message: say what happened, and cache nothing, so the next
+            # Recognition needs Discord, and Discord can be down, forbid
+            # the fetch, or time out. None of that may swallow the owner's
+            # message. Say what happened and cache nothing, so the next
             # message tries again.
             await message.reply(f'{UNREACHABLE_DISCORD}{error}')
             return
 
-        # Recorded before the turn rather than after it: a catch-up
+        # Recorded before the turn rather than after it. A catch-up
         # running right now must not replay a message this path has
         # already taken (R6.4).
         self._live_ids.add(message.id)
@@ -423,10 +436,10 @@ class Agent(commands.Cog):
     async def on_ready(self):
         """Start the catch-up for whatever arrived while the bot was down.
 
-        on_ready fires on every fresh IDENTIFY, never on a RESUME — where
-        the gateway replays the events of the gap itself — so a second one
-        is exactly the case where messages were missed, and it gets its
-        own catch-up. Only one runs at a time.
+        on_ready fires on every fresh IDENTIFY, never on a RESUME, where
+        the gateway replays the events of the gap itself. So a second
+        on_ready is exactly the case where messages went missing, and it
+        gets its own catch-up. Only one runs at a time.
         """
         if self._catch_up_task is None or self._catch_up_task.done():
             self._catch_up_task = asyncio.create_task(self._catch_up())
@@ -434,34 +447,35 @@ class Agent(commands.Cog):
     async def _catch_up(self):
         """Answer the messages the bot was not running to hear (R6.4).
 
-        Nothing waits for this — the bot is online and answering live
-        messages throughout — so it is also the only thing that reports
-        its own failures.
+        Nothing waits for this. The bot is online and answering live
+        messages throughout, so this job is also the only thing that
+        reports its own failures.
 
-        Threads are done one at a time: a turn is minutes of git and agent
-        work, and a restart with a backlog has no reason to start a dozen
-        recoveries at once. A failure in one is reported in that thread by
-        the turn itself and never reaches the next one.
+        Threads go one at a time. A turn is minutes of git and agent work,
+        and a restart with a backlog has no reason to start a dozen
+        recoveries at once. The turn itself reports a failure in its own
+        thread, and that failure never reaches the next thread.
 
-        A message on_message has taken is never replayed here: the live
+        This job never replays a message on_message has taken. The live
         path records its id, and this one skips both those ids and
         anything posted since it started. Recording rather than inferring
-        is the point — on_ready arrives seconds after the gateway starts
+        is the point. on_ready arrives seconds after the gateway starts
         delivering messages, so timing alone would replay what the bot
         already answered while it was booting. The conversation lock then
         orders whatever the two paths hand over.
 
-        Guild threads only, which is where conversations live; the spec
-        asks for no more (a ping in a channel with no thread, or a DM,
-        keeps the durability it always had).
+        Guild threads only, which is where conversations live, and the
+        spec asks for no more. A ping in a channel with no thread, or a
+        DM, keeps the durability it always had.
         """
         started_at = discord.utils.utcnow()
         try:
             try:
                 threads = await self._discover_agent_threads()
             except Exception:
-                # Said plainly: a summary of nothing scanned would read
-                # as a bot with nothing to catch up on.
+                # Said out loud. The usual summary would report zero
+                # threads scanned, which reads as a bot that had nothing
+                # to catch up on.
                 traceback.print_exc()
                 print('Agent catch-up: could not work out which threads to '
                       'scan, so nothing was caught up on.')
@@ -483,7 +497,7 @@ class Agent(commands.Cog):
                         thread, f'{UNREADABLE_THREAD}{error}')
                     continue
                 for message in messages:
-                    # Checked again here: a message can sit behind
+                    # Checked again here. A message can sit behind
                     # minutes of earlier turns, and on_message may have
                     # taken it in the meantime.
                     if self._is_live(message, started_at):
@@ -499,15 +513,17 @@ class Agent(commands.Cog):
                   f'replayed {replayed} message(s).')
         except Exception:
             traceback.print_exc()
-        # The ids stay: a turn taken during this run may still be going
-        # when a later catch-up scans its thread, and would be replayed
-        # if forgotten. A process sees a handful of owner messages a
-        # day, so the set never amounts to anything.
+        # The ids stay. A turn taken during this run may still be going
+        # when a later catch-up scans its thread, and forgetting its id
+        # would replay it. A process sees a handful of owner messages a
+        # day, so the set stays small.
 
     async def _say_in_thread(self, thread: discord.Thread, text: str):
-        """Tell a thread what went wrong in it, if it will still take a
-        message; a thread the bot cannot write to is not a reason to lose
-        the rest of the catch-up."""
+        """Tell a thread what went wrong in it, if it will still take one.
+
+        A thread the bot cannot write to is no reason to lose the rest of
+        the catch-up.
+        """
         try:
             await thread.send(text[:MESSAGE_LIMIT])
         except (discord.HTTPException, aiohttp.ClientError,
@@ -518,10 +534,10 @@ class Agent(commands.Cog):
     async def _discover_agent_threads(self) -> list[discord.Thread]:
         """Every agent thread the bot can see, active or archived (R6.5).
 
-        Discovered from Discord, so a host that has lost its conversations
-        table still finds them all; the table only shortcuts recognizing
-        one (see _is_agent_thread). A channel that cannot be read is said
-        out loud and skipped, because it must not cost the other channels
+        This scans Discord, so a host that has lost its conversations
+        table still finds them all. The table only shortcuts recognizing
+        one (see _is_agent_thread). A channel the bot cannot read is
+        printed and skipped, because it must not cost the other channels
         their catch-up.
         """
         found: list[discord.Thread] = []
@@ -535,9 +551,10 @@ class Agent(commands.Cog):
                         candidates.append(thread)
                 except (discord.HTTPException, aiohttp.ClientError,
                         asyncio.TimeoutError) as error:
-                    # Forbidden included: the bot loses history permission
-                    # in a channel now and then. Whatever was already
-                    # cached as active is still worth looking at.
+                    # Forbidden included. The bot loses history
+                    # permission in a channel now and then, and whatever
+                    # the library already cached as active is still worth
+                    # looking at.
                     print(f'Agent catch-up: could not list the archived '
                           f'threads of #{channel} in {guild}: {error}')
                 for thread in candidates:
@@ -558,12 +575,12 @@ class Agent(commands.Cog):
         """The owner's messages this thread never got an answer to, oldest
         first (R6.4).
 
-        Read from the newest end back to the bot's last message: whatever
+        Read from the newest end back to the bot's last message. Whatever
         the owner said after it is what went unanswered. A pull request
-        announcement or an error notice is the bot having spoken, and it
-        is the owner's reply to one that still needs running. A message
-        of nothing but muted harness lines is not — it is news about a
-        turn, and a turn that posted one and then died left the request
+        announcement or an error notice is the bot having spoken, and the
+        owner's reply to one still needs running. A message of nothing but
+        muted harness lines is not the bot having spoken. It is news about
+        a turn, and a turn that posted one and then died left the request
         before it unanswered. Anything the bot narrated on its own way to
         an answer is indistinguishable from the answer, so a turn
         interrupted after it started talking stays lost (R6.3). Anyone
@@ -589,9 +606,9 @@ class Agent(commands.Cog):
             # The message a thread grew from lives in the parent channel,
             # so the loop above never sees it. A thread the bot never got
             # a word into is one whose first turn died with the bot, and
-            # that starter is the message to run — unless the thread was
-            # made after this job started, in which case the turn that
-            # made it is running right now.
+            # that starter is the message to run. The exception is a
+            # thread made after this job started, where the turn that made
+            # it is running right now.
             starter = await self._fetch_starter(thread)
             if starter is not None and not self._is_live(starter, started_at):
                 unanswered.append(starter)
@@ -636,11 +653,11 @@ class Agent(commands.Cog):
     async def _is_agent_thread(self, thread: discord.Thread) -> bool:
         """Whether this thread holds one of our conversations.
 
-        The durable answer lives in Discord: the bot created the thread,
-        and the thread's id is the id of the owner's ping that started it
-        (a thread takes the id of the message it grew from). That holds
-        with no local state at all, so a conversation survives anything
-        that happens to this host.
+        The durable answer lives in Discord. The bot created the thread,
+        and the thread's id is the id of the owner's ping that started it,
+        because a thread takes the id of the message it grew from. That
+        holds with no local state at all, so a conversation survives
+        anything that happens to this host.
         """
         assert self.bot.user is not None
         if thread.owner_id != self.bot.user.id:
@@ -650,8 +667,8 @@ class Agent(commands.Cog):
 
         cached = self._agent_threads.get(thread.id)
         if cached is None:
-            # Only a definite answer is cached; a failed fetch raises out
-            # of here rather than being remembered as a "no".
+            # Only a definite answer goes in the cache. A failed fetch
+            # raises out of here rather than landing there as a "no".
             cached = await self._starter_is_agent_request(thread)
             self._agent_threads[thread.id] = cached
         return cached
@@ -673,8 +690,8 @@ class Agent(commands.Cog):
             return await parent.fetch_message(thread.id)
         except discord.NotFound:
             # No starter message left, so nothing ties the thread to a
-            # request of ours. The one genuine "no" among the ways this
-            # fetch can fail; the rest are the caller's to report.
+            # request of ours. This is the one genuine "no" among the ways
+            # the fetch can fail. The rest are the caller's to report.
             return None
 
     async def _recover_conversation(self, thread: discord.Thread, key: int):
@@ -682,13 +699,13 @@ class Agent(commands.Cog):
         no record of, so the turn continues the thread's branch and pull
         request instead of starting new ones (R3.3).
 
-        Costs a read of the thread once per host: the service keeps the
-        conversation afterwards, whether or not anything was found.
+        Costs a read of the thread once per host. The service keeps the
+        conversation afterwards, whether or not it found anything.
         """
         if self.service.has_conversation(key):
             return
         if not await self._is_agent_thread(thread):
-            # The owner pinged the bot in some unrelated thread: there is
+            # The owner pinged the bot in some unrelated thread. There is
             # no conversation of ours to put back, and its history is
             # none of our business.
             return
@@ -710,15 +727,16 @@ class Agent(commands.Cog):
         has no transcript left to resume (R2c).
 
         The message that starts an agent thread lives in the parent
-        channel rather than in the thread, so it is fetched separately and
-        put in front; `upto` is the message being answered, which belongs
-        at the end of the prompt as the new request, not in the history.
+        channel rather than in the thread, so this fetches it separately
+        and puts it in front. `upto` is the message being answered, which
+        belongs at the end of the prompt as the new request, not in the
+        history.
         """
         assert self.bot.user is not None
         starter = await self._fetch_starter(thread)
         # The starter is the first thing said in the conversation, except
-        # when it is the message being answered — a first turn replayed
-        # at startup — and then there is no prior history at all.
+        # when it is the message being answered, which is a first turn
+        # replayed at startup. Then there is no prior history at all.
         messages = ([] if starter is None or starter.id == upto.id
                     else [starter])
         messages += [message async for message in thread.history(
@@ -729,7 +747,7 @@ class Agent(commands.Cog):
                 fetch=functools.partial(fetch_image_link, session))
 
     def _strip_mention(self, content: str) -> str | None:
-        """The rest of a message that leads with a ping of the bot, else None."""
+        """What a message says after a leading ping of the bot, else None."""
         assert self.bot.user is not None
 
         for mention in (f'<@{self.bot.user.id}>', f'<@!{self.bot.user.id}>'):
@@ -742,15 +760,18 @@ class Agent(commands.Cog):
                              prompt: str,
                              images: list[discord.Attachment] = (),
                              inline_urls: list[str] = ()):
-        """Run one turn: a typing indicator shows the agent working, and a
-        thread is created right before the first reply so the whole
-        conversation — including any follow-ups — lives inside it.
+        """Run one turn of a conversation.
 
-        `source` is the message's channel, resolved to a real channel
-        object by the caller.
+        A typing indicator shows the agent working, and the bot creates a
+        thread right before the first reply so the whole conversation,
+        follow-ups included, lives inside it.
+
+        `source` is the message's channel, which the caller has already
+        resolved to a real channel object.
         """
-        # In a thread or DM the conversation is already contained; elsewhere
-        # a thread is created when the first message needs a home.
+        # In a thread or DM the conversation is already contained.
+        # Elsewhere the bot creates a thread when the first message needs
+        # a home.
         contained = isinstance(source, (discord.Thread, discord.DMChannel))
         if not contained and not self._can_create_thread(source):
             await message.reply(NO_THREAD_HERE)
@@ -760,9 +781,9 @@ class Agent(commands.Cog):
         # until a thread exists, the thread once it does.
         typing = _TypingIndicator(source)
 
-        # The conversation is keyed by the channel its replies live in. A
-        # thread created from a message shares that message's id, so the
-        # key is known before the thread exists.
+        # The channel its replies live in keys the conversation. A thread
+        # created from a message shares that message's id, so the key
+        # exists before the thread does.
         key = source.id if contained else message.id
 
         channel = source if contained else None
@@ -816,16 +837,16 @@ class Agent(commands.Cog):
                         if await self._is_agent_thread(source):
                             await self._recover_conversation(source, key)
                             # Only ever called for a turn whose transcript
-                            # is gone, and only in a thread of ours: any
+                            # is gone, and only in a thread of ours. Any
                             # other thread's history is none of our
                             # business.
                             reconstruct = functools.partial(
                                 self._thread_history, source, message)
                     except (discord.HTTPException, aiohttp.ClientError,
                             asyncio.TimeoutError) as error:
-                        # Reading the thread is how its branch is found;
-                        # starting a fresh one instead would quietly
-                        # abandon the pull request it already has.
+                        # Reading the thread is how the bot finds its
+                        # branch. Starting a fresh one instead would
+                        # quietly abandon the pull request it already has.
                         await set_status(
                             f'{UNREADABLE_THREAD}{error}')
                         return
@@ -858,7 +879,7 @@ class Agent(commands.Cog):
                     pull_request.repo_name, pull_request.url))
 
     def _can_create_thread(self, channel) -> bool:
-        """Whether a response thread could be made, should the task need one."""
+        """Whether the bot could make a thread here, should a turn need one."""
         return (isinstance(channel, discord.TextChannel)
                 and channel.permissions_for(
                     channel.guild.me).create_public_threads)
@@ -869,10 +890,12 @@ class Agent(commands.Cog):
 
 
 class _TypingIndicator:
-    """A "typing…" indicator lit for the duration of an `async with` block —
-    in the channel given here until move_to points it somewhere else. Dead
-    once the block exits, so callers may move_to at any time without caring
-    whether the run is still going."""
+    """Discord's typing indicator, lit for an `async with` block.
+
+    It shows in the channel given here until move_to points it somewhere
+    else. It is dead once the block exits, so callers may move_to at any
+    time without caring whether the run is still going.
+    """
 
     def __init__(self, channel: discord.abc.Messageable):
         self._channel = channel

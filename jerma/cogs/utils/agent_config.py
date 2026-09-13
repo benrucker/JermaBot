@@ -13,7 +13,8 @@ class AgentRepo:
     """A repository the coding agent may work in.
 
     Its key in AGENT_REPOS is the repo's directory name inside the
-    workspace; see agent_workspace for how the workspace is managed.
+    workspace. See agent_workspace for how the harness manages that
+    workspace.
     """
     slug: str  # "owner/name" on GitHub
     base_branch: str
@@ -28,21 +29,15 @@ AGENT_REPOS: dict[str, AgentRepo] = {
 AGENT_BRANCH_PREFIX = 'jermabot'
 AGENT_COMMIT_NAME = 'JermaBot'
 # Deliberately non-resolving (RFC 2606 reserved TLD). A bare
-# <username>@users.noreply.github.com address links commits to whoever owns that
-# GitHub username -- github.com/Jermabot is a real, unrelated account.
+# <username>@users.noreply.github.com address links commits to whoever owns
+# that GitHub username, and github.com/Jermabot is a real, unrelated account.
 AGENT_COMMIT_EMAIL = 'jermabot@jermabot.invalid'
 AGENT_REQUEST_SOURCE = 'Discord'
-# The last lines of every pull request the agent opens. The footer marks a
-# pull request as ours when the identity record is gone and GitHub is all
-# that is left to search (R3.3); the thread line then says which
-# conversation it belongs to.
+# The last line of every pull request the agent opens. It marks a pull
+# request as the agent's when the identity record is gone and GitHub is
+# all that is left to search (R3.3).
 AGENT_PR_FOOTER = ("Opened by the JermaBot coding agent at the owner's "
                    f'request via {AGENT_REQUEST_SOURCE}.')
-
-
-def pr_thread_line(thread_id: int) -> str:
-    """The line in a pull request body naming the thread it came from."""
-    return f'{AGENT_REQUEST_SOURCE} thread: {thread_id}'
 
 
 def _env_dir(var: str, default: str) -> Path:

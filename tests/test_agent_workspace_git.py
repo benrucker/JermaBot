@@ -1,6 +1,6 @@
 """Lazy materialization and per-turn git continuity, against real git repos.
 
-A local bare repo stands in for GitHub: the point of these tests is that a
+A local bare repo stands in for GitHub. The point of these tests is that a
 conversation's worktrees can be thrown away and rebuilt from its branch,
 which is what makes a conversation survive losing its host. The one thing
 these repos cannot play is a pull request, so the two prepare_for_turn
@@ -95,8 +95,9 @@ def make_workspace(tmp_path, origin, *names) -> AgentWorkspace:
         root=tmp_path / 'repos',
         repos={name: AgentRepo(f'local/{name}', 'main') for name in names},
         github_token=None)
-    # A file:// URL, not a plain path: git quietly ignores clone flags on a
-    # local path, and these tests exist to exercise the real clone.
+    # A file:// URL, not a plain path. git ignores clone flags on a local
+    # path without saying so, and these tests exist to exercise the real
+    # clone.
     workspace._clone_url = lambda name: origin.as_uri()
     return workspace
 
@@ -125,7 +126,7 @@ def commit_and_push(repo, filename: str, text: str, ref: str):
 
 
 def clone_of_the_branch(tmp_path, origin, name: str = 'elsewhere'):
-    """Someone else's checkout of the conversation's branch — the owner
+    """Someone else's checkout of the conversation's branch: the owner
     resolving a conflict on GitHub, another host, a manual push."""
     clone = tmp_path / name
     git(tmp_path, 'clone', str(origin), str(clone))
@@ -135,8 +136,8 @@ def clone_of_the_branch(tmp_path, origin, name: str = 'elsewhere'):
 
 async def test_a_command_that_never_starts_names_its_cause(tmp_path):
     """A worktree deleted under a running turn takes the working directory
-    with it, and the process then never starts — no exit code to report.
-    The owner still gets a cause rather than a raw OSError."""
+    with it, and the process then never starts, so there is no exit code to
+    report. The owner still gets a cause rather than a raw OSError."""
     with pytest.raises(WorkspaceError, match='`git` could not be run'):
         await _run(['git', 'status'], cwd=tmp_path / 'not-a-directory')
 
@@ -158,9 +159,9 @@ async def test_materialize_starts_a_new_branch_from_the_base(workspace,
 
 async def test_materialize_resumes_the_conversations_own_branch(workspace,
                                                                 tmp_path):
-    """The scenario this feature exists for: the checkout is gone, the
-    branch is not. The rebuilt worktree must carry the earlier turn's work
-    rather than starting over from the base."""
+    """The scenario this feature exists for. The checkout is gone, the
+    branch is not, and the rebuilt worktree must carry the earlier turn's
+    work rather than starting over from the base."""
     await workspace.ensure_repos()
     checkout = workspace.new_checkout(tmp_path / 'conv' / '1', 'do a thing')
     await checkout.ensure_materialized()
@@ -200,7 +201,7 @@ async def test_a_branch_gone_from_origin_falls_back_to_the_base(workspace,
                                                                 tmp_path,
                                                                 origin):
     """Nothing was ever pushed for this branch (a conversation of questions
-    only, or a merged-and-deleted branch), so the base is the start point —
+    only, or a merged-and-deleted branch), so the base is the start point,
     including commits landed since."""
     await workspace.ensure_repos()
     checkout = workspace.new_checkout(tmp_path / 'conv' / '1', 'do a thing')
@@ -215,8 +216,8 @@ async def test_a_branch_gone_from_origin_falls_back_to_the_base(workspace,
 
 async def test_materialize_is_a_no_op_when_the_worktrees_are_there(workspace,
                                                                    tmp_path):
-    """A live conversation's uncommitted edits are not blown away by the
-    next turn."""
+    """The next turn does not blow away a live conversation's uncommitted
+    edits."""
     await workspace.ensure_repos()
     checkout = workspace.new_checkout(tmp_path / 'conv' / '1', 'do a thing')
     await checkout.ensure_materialized()
@@ -233,8 +234,8 @@ async def test_the_base_merges_into_a_recovered_branch(workspace, tmp_path,
     """What every turn does before running (R3.5), in the shape recovery
     hands it: a branch pushed by a host that is gone, a base that moved on
     since, and a clone made after both. A shallow pristine clone made this
-    impossible — its base tip is grafted to no parents, so the branch and
-    the base share no ancestor git can see and the merge is refused as
+    impossible. Its base tip is grafted to no parents, so the branch and
+    the base share no ancestor git can see, and git refuses the merge as
     unrelated histories."""
     checkout = workspace.new_checkout(tmp_path / 'conv' / '1', 'do a thing')
 
@@ -260,7 +261,7 @@ async def test_the_base_merges_into_a_recovered_branch(workspace, tmp_path,
 async def test_only_the_missing_repos_are_rebuilt(two_repo_workspace,
                                                   tmp_path):
     """A repo that needs rebuilding must not cost the others the work they
-    are holding: gather does not cancel its siblings, so half-built
+    are holding. gather does not cancel its siblings, so half-built
     checkouts happen."""
     workspace = two_repo_workspace
     await workspace.ensure_repos()
@@ -304,7 +305,7 @@ async def test_the_base_is_merged_into_the_branch_and_pushed(workspace,
     mergeable rather than waiting for the turn to edit something."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'turn.txt', 'turn one\n', f'refs/heads/{BRANCH}')
@@ -327,7 +328,7 @@ async def test_a_merge_is_not_pushed_before_the_branch_exists(workspace,
     and its first push is the publish step's to make."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     # Work only this host has: a publish that failed after committing.
@@ -337,7 +338,7 @@ async def test_a_merge_is_not_pushed_before_the_branch_exists(workspace,
     preparation = await checkout.prepare_for_turn({})
 
     assert preparation.notes == []
-    # The base really was merged — this is a push that chose not to happen.
+    # The base really was merged. This is a push that chose not to happen.
     parents = git(repo, 'rev-list', '--parents', '-n', '1', 'HEAD').split()
     assert len(parents) == 3
     assert (repo / 'later.txt').exists()
@@ -347,11 +348,11 @@ async def test_a_merge_is_not_pushed_before_the_branch_exists(workspace,
 async def test_a_conflicting_base_is_noted_and_abandoned(workspace, tmp_path,
                                                          origin):
     """R3.6: the turn goes ahead on the stale branch, the thread gets one
-    muted line, and no half-finished merge is left for the agent to trip
-    over."""
+    muted line, and prepare_for_turn leaves no half-finished merge for the
+    agent to trip over."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'README.md', 'the branch version\n',
@@ -377,11 +378,11 @@ async def test_a_conflicting_base_is_noted_and_abandoned(workspace, tmp_path,
 async def test_a_merged_away_branch_starts_over(workspace, tmp_path, origin,
                                                 monkeypatch):
     """R3.4: GitHub merged the pull request and deleted the branch with it,
-    so the turn continues on a fresh branch off the base and the thread is
-    told a new pull request is coming."""
+    so the turn continues on a fresh branch off the base and the thread
+    hears that a new pull request is coming."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'turn.txt', 'turn one\n', f'refs/heads/{BRANCH}')
@@ -396,7 +397,7 @@ async def test_a_merged_away_branch_starts_over(workspace, tmp_path, origin,
         'branch, and a new pull request with the next edit._']
     assert checkout.branch != BRANCH
     assert checkout.branch.startswith('jermabot/do-a-thing-')
-    # A fresh branch off the base: the merged work is not carried over.
+    # The fresh branch starts at the base, without the merged work.
     assert not (repo / 'turn.txt').exists()
     assert git(repo, 'rev-parse', '--abbrev-ref', 'HEAD').strip() \
         == checkout.branch
@@ -415,7 +416,7 @@ async def test_a_branch_gone_from_one_repo_keeps_its_name(tmp_path):
     workspace._clone_url = lambda name: origins[name].as_uri()
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     for name in origins:
         commit_and_push(checkout.root / name, 'turn.txt', f'{name}\n',
@@ -436,12 +437,13 @@ async def test_a_branch_gone_from_one_repo_keeps_its_name(tmp_path):
 async def test_the_branch_catches_up_with_origin_before_the_turn(workspace,
                                                                  tmp_path,
                                                                  origin):
-    """R3.5: whatever origin has on the branch that this host does not —
-    the owner resolving a conflict on GitHub, an "Update branch" click —
-    is taken in before the agent runs, or every later push is rejected."""
+    """R3.5: whatever origin has on the branch that this host does not,
+    such as the owner resolving a conflict on GitHub or an "Update branch"
+    click, comes in before the agent runs. Otherwise origin rejects every
+    later push."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'turn.txt', 'turn one\n', f'refs/heads/{BRANCH}')
@@ -454,7 +456,8 @@ async def test_the_branch_catches_up_with_origin_before_the_turn(workspace,
     assert preparation.notes == []
     assert (repo / 'owner-fix.txt').exists()
 
-    # And the next publish lands, rather than being told to fetch first.
+    # And the next publish lands, rather than origin telling it to fetch
+    # first.
     (repo / 'agent.txt').write_text('turn two\n', encoding='utf-8')
     await checkout.publish_turn('do a thing', 'Do a thing', 'body',
                                 {'demo': PR_URL})
@@ -465,11 +468,11 @@ async def test_the_branch_catches_up_with_origin_before_the_turn(workspace,
 
 async def test_a_diverged_branch_is_merged_not_reset(workspace, tmp_path,
                                                      origin):
-    """Both sides moved: the remote's commits come in as a merge, and the
+    """Both sides moved. The remote's commits come in as a merge, and the
     host's own work is still there."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'turn.txt', 'turn one\n', f'refs/heads/{BRANCH}')
@@ -494,7 +497,7 @@ async def test_uncommitted_edits_survive_preparation(workspace, tmp_path,
     owes them to the pull request, so nothing here may reset them away."""
     await workspace.ensure_repos()
     checkout = ConversationCheckout(tmp_path / 'conv' / '1', BRANCH,
-                                    workspace, 1)
+                                    workspace)
     await checkout.ensure_materialized()
     repo = checkout.root / 'demo'
     commit_and_push(repo, 'turn.txt', 'turn one\n', f'refs/heads/{BRANCH}')

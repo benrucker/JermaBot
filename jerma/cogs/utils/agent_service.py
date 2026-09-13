@@ -1,35 +1,33 @@
 """Orchestration for coding-agent conversations.
 
-This is the seam between Discord and the machinery: the agent cog only
-knows this module's interface (has_conversation / run / start / close), so
-changes to how conversations execute stay behind it. A conversation is
-keyed by the Discord channel its replies live in and owns a branch, an
-agent session, and at most one pull request per repo, updated turn by turn.
-Conversations run concurrently; turns of the same conversation queue on its
-lock.
+The agent cog knows only this module's interface (has_conversation / run /
+start / close), so changes to how conversations execute stay behind it. A
+conversation is keyed by the Discord channel its replies live in, and it
+owns a branch, an agent session, and at most one pull request per repo,
+updated turn by turn. Conversations run concurrently; turns of the same
+conversation queue on its lock.
 
-A conversation is its identity — thread id, branch, session id, pull
-request urls — and that is what state.json holds. The worktrees are a
-cache, rebuilt from the branch on origin at the start of any turn that
-finds them missing (see agent_workspace), so an entry is never dropped
-because its directory went away and the code side of a conversation
-continues on its own branch however long the gap. Nothing evicts
-identities.
+A conversation is its identity, meaning its thread id, branch, session id,
+and pull request urls, and state.json holds exactly that. The worktrees
+are a cache. Any turn that finds them missing rebuilds them from the
+branch on origin (see agent_workspace), so nothing drops an entry because
+its directory went away, and the code side of a conversation continues on
+its own branch however long the gap. Nothing evicts identities.
 
 When even state.json is gone, recover() puts an identity back from what
 Discord and GitHub still know: the pull requests a thread announced, or a
 search of the agent's pull requests for the one that names the thread
 (R3.3). The cog supplies the Discord half; everything after it is here.
 
-What the agent remembers of the conversation — the SDK's transcript —
-lives only where the SDK wrote it, so every turn begins by deciding where
-its context comes from (R2.2): resume the session when this host still
-has its transcript, and otherwise run a new session with the
-conversation's history rebuilt from its Discord thread. The rebuilding is
-the caller's job (only the cog knows Discord); this module decides when
-it is needed, says so in the thread in the one muted line R4.3 allows,
-and, when a resume that should have worked fails at the SDK's door, falls
-through to the same rebuild inside the same turn (R2.4).
+What the agent remembers of a conversation is the SDK's transcript, and
+that lives only where the SDK wrote it. So every turn starts by deciding
+where its context comes from (R2.2). Resume the session when this host
+still has the transcript. Otherwise run a new session with the
+conversation's history rebuilt from its Discord thread. Rebuilding is the
+caller's job, since only the cog knows Discord. This module decides when a
+rebuild is needed and says so in the thread, in the one muted line R4.3
+allows. When a resume that should have worked fails inside the SDK, the
+same turn falls through to that rebuild (R2.4).
 """
 import asyncio
 import json
@@ -55,7 +53,7 @@ from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
     PullRequestUpdate,
-    WorkspaceError,  # noqa: F401 — re-exported for callers
+    WorkspaceError,  # noqa: F401. Re-exported for callers.
     one_line,
 )
 
@@ -70,12 +68,13 @@ RELOADING_NOTE = '-# _Reloading thread history. Some context might be lost._'
 class ReconstructedHistory:
     """A conversation's history as its thread remembers it (R2c).
 
-    Built by the caller — only the cog knows Discord — and prepended to
-    the prompt of a turn that has no transcript to resume. `text` is the
-    whole prior-history block, already labelled as prior history; `images`
-    are attachments from earlier messages, re-downloaded so the agent can
-    still see them, as (filename, bytes) for the turn to save beside its
-    own. Empty text means the thread had nothing to rebuild from.
+    The caller builds this, since only the cog knows Discord, and a turn
+    with no transcript to resume gets it in front of its prompt. `text` is
+    the whole prior-history block, already labelled as prior history.
+    `images` are attachments from earlier messages, re-downloaded as
+    (filename, bytes) so the turn can save them beside its own and the
+    agent can still see them. Empty text means the thread had nothing to
+    rebuild from.
     """
     text: str
     images: list[tuple[str, bytes]] = field(default_factory=list)
@@ -97,14 +96,14 @@ class TaskReport:
 class Conversation:
     """One channel's ongoing work: its branch, session, and pull requests.
 
-    The checkout names the branch and where its worktrees go; they may or
-    may not be on disk at any moment, and the conversation is complete
-    without them.
+    The checkout names the branch and where its worktrees go. Those
+    worktrees may or may not be on disk at any moment, and the
+    conversation is complete without them.
     """
     checkout: ConversationCheckout
     session_id: str | None = None
     pr_urls: dict[str, str] = field(default_factory=dict)  # repo -> PR url
-    # Kept for the state file's shape only; nothing reads it since
+    # to_state still writes this, and nothing reads it back since
     # eviction went away.
     last_active: datetime = field(default_factory=datetime.now)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -119,15 +118,17 @@ class Conversation:
         }
 
     @classmethod
-    def from_state(cls, entry: dict, root: Path, workspace: AgentWorkspace,
-                   thread_id: int | None = None) -> 'Conversation':
-        """Rebuild from a persisted entry. Every field but the branch is
-        optional so that entries written by older versions — and by later
-        ones, which may add fields — still load."""
+    def from_state(cls, entry: dict, root: Path,
+                   workspace: AgentWorkspace) -> 'Conversation':
+        """Rebuild from a persisted entry.
+
+        Every field but the branch is optional, so entries written by
+        older versions still load, and so do entries from later versions
+        that may have added fields.
+        """
         last_active = entry.get('last_active')
         return cls(
-            checkout=ConversationCheckout(root, entry['branch'], workspace,
-                                          thread_id),
+            checkout=ConversationCheckout(root, entry['branch'], workspace),
             session_id=entry.get('session_id'),
             pr_urls=entry.get('pr_urls') or {},
             last_active=(datetime.fromisoformat(last_active) if last_active
@@ -157,7 +158,7 @@ class AgentTaskService:
         return key in self.conversations
 
     def start(self):
-        """Load conversation state and begin readying repos in the background."""
+        """Load saved conversations and start readying the repos."""
         self._load_state()
         self._ensure_task = asyncio.create_task(self._startup())
 
@@ -172,38 +173,39 @@ class AgentTaskService:
         """Run one turn of the keyed conversation, creating it if new.
 
         Turns of the same conversation queue on its lock; different
-        conversations run in parallel. Everything about the turn — which
-        source its context comes from included — is decided under that
-        lock, so a second message arriving during a rebuild waits for it
-        and then resumes the session the first one made (R6.2).
+        conversations run in parallel. The lock covers every decision
+        about the turn, including which source its context comes from, so
+        a second message arriving during a rebuild waits and then resumes
+        the session the first one made (R6.2).
 
         `reconstruct` builds the conversation's history from its thread
-        for a turn that has no transcript to resume (R2c); a conversation
-        with no thread to read passes none and simply starts fresh.
+        for a turn that has no transcript to resume (R2c). A conversation
+        with no thread to read passes none and starts fresh.
         """
         conversation = self._get_or_create(key, prompt)
         async with conversation.lock:
             conversation.last_active = datetime.now()
             await self._ready()
-            # Git continuity (R3): the worktrees are a cache, so a turn
-            # that comes after a restart, a sweep, or a lost disk gets them
-            # back here, on a branch that starts over if GitHub finished
-            # with it and that catches up with its base either way. A
-            # catch-up that went wrong is a note for the thread, not a
-            # failed turn (R3.7); a checkout that cannot be built at all
-            # raises, since there would be nothing for the agent to edit.
+            # Git continuity (R3). The worktrees are a cache, so a turn
+            # that comes after a restart, a sweep, or a lost disk gets
+            # them back here, on a branch that starts over if GitHub
+            # finished with it and that catches up with its base either
+            # way. A catch-up that went wrong is a note for the thread,
+            # not a failed turn (R3.7). A checkout that cannot be built at
+            # all raises, since there would be nothing for the agent to
+            # edit.
             preparation = await conversation.checkout.prepare_for_turn(
                 conversation.pr_urls)
             for name in preparation.finished_repos:
                 conversation.pr_urls.pop(name, None)
             # The branch and its pull requests may have moved.
             self._save_state()
-            # Straight out to the thread, ahead of the answer: these are
-            # already true, and the turn can still fail on its way to a
-            # report the owner would never see (R3.7).
+            # Straight out to the thread, ahead of the answer. These notes
+            # are already true, and the turn can still fail on its way to
+            # a report the owner would never see (R3.7).
             for note in preparation.notes:
                 await on_progress(note)
-            # Where this turn's context comes from (R2.2). Decided here,
+            # Where this turn's context comes from (R2.2). Choose it
             # inside the lock, so the answer holds for the whole turn.
             resume = (conversation.session_id
                       if self._can_resume(conversation) else None)
@@ -215,9 +217,9 @@ class AgentTaskService:
                                               history, resume, on_progress)
             except SessionResumeError as error:
                 # The transcript was there a moment ago and the SDK could
-                # not load it anyway. Loudly, and then the same turn runs
-                # again from the thread (R2.4) — nothing has happened yet
-                # that a second attempt would repeat.
+                # not load it anyway. Say so on the console, then run the
+                # same turn again from the thread (R2.4). Nothing has
+                # happened yet that a second attempt would repeat.
                 print(f'Agent service: resuming session '
                       f'{conversation.session_id} for {key} failed, so this '
                       f'turn falls back to its thread: {error}')
@@ -227,7 +229,7 @@ class AgentTaskService:
                                               history, None, on_progress)
             if result.session_id is not None:
                 conversation.session_id = result.session_id
-                # Saved the moment it changes: a publish that blows up
+                # Save the moment the id changes. A publish that fails
                 # below must not cost the id the next turn resumes from.
                 self._save_state()
 
@@ -248,7 +250,7 @@ class AgentTaskService:
         """One attempt at the turn, with the context source already chosen.
 
         A rebuilt history goes in front of the owner's message, labelled
-        as what it is, and its images are saved beside this turn's own so
+        as what it is, and this turn saves its images beside its own so
         the agent reads them all the same way (R2c.2).
         """
         request = prompt
@@ -268,11 +270,11 @@ class AgentTaskService:
         )
 
     def _can_resume(self, conversation: Conversation) -> bool:
-        """Whether this conversation's transcript is still on this host
-        to resume from — the lossless source of R2.2.
+        """Whether this host still has the transcript to resume from.
 
-        Nothing copies it off the host, so a host that lost it has only
-        the thread left to rebuild from (R2c).
+        That transcript is the lossless context source of R2.2. Nothing
+        copies it off the host, so a host that lost it has only the thread
+        left to rebuild from (R2c).
         """
         session_id = conversation.session_id
         if session_id is None:
@@ -284,17 +286,15 @@ class AgentTaskService:
                        reconstruct: Reconstruct | None,
                        on_progress: OnProgress
                        ) -> ReconstructedHistory | None:
-        """The conversation's history rebuilt from its thread, and the one
-        muted line that says so (R2c, R4.3).
+        """Rebuild the conversation's history from its thread (R2c).
 
-        The line is posted for anything the owner lost: a rebuilt history,
-        which is lossy by definition, or a session that existed and could
-        not be continued. That second half fires with no callback at all —
-        a conversation with no thread to read, such as a DM, rebuilds
-        nothing but has still lost everything it knew, and saying so is
-        the difference between a fresh start and a silent one. A
-        conversation with neither — a brand new one — has lost nothing and
-        hears nothing.
+        The muted line goes out for anything the owner lost (R4.3): a
+        rebuilt history, which is lossy by definition, or a session that
+        existed and could not be continued. That second case fires with no
+        callback at all. A conversation with no thread to read, a DM say,
+        rebuilds nothing but has still lost everything it knew, and saying
+        so is the difference between a fresh start and a silent one. A
+        brand new conversation has lost nothing and hears nothing.
         """
         history = None
         if reconstruct is not None:
@@ -327,14 +327,17 @@ class AgentTaskService:
         return paths
 
     def _get_or_create(self, key: int, prompt: str) -> Conversation:
-        """Deliberately synchronous: with no await between the lookup and
-        the insert, two turns arriving together cannot both create one."""
+        """Deliberately synchronous.
+
+        With no await between the lookup and the insert, two turns
+        arriving together cannot both create one.
+        """
         conversation = self.conversations.get(key)
         if conversation is not None:
             return conversation
 
         checkout = self.workspace.new_checkout(
-            self.conversations_root / str(key), prompt, thread_id=key)
+            self.conversations_root / str(key), prompt)
         conversation = Conversation(checkout=checkout)
         self.conversations[key] = conversation
         self._save_state()
@@ -344,14 +347,14 @@ class AgentTaskService:
                       pr_urls: dict[str, str]) -> bool:
         """Put back a conversation this host has no record of (R3.3).
 
-        Sources in order: what the caller says Discord knows — the pull
-        requests the thread announced, most recently announced last, and
-        the message that started the thread — which gives the branch;
-        then, for a thread that announced none, a search of the agent's
-        pull requests on GitHub for one that names this thread. Returns
-        whether anything was found — a conversation whose turns never
-        touched code has nothing to recover and simply starts fresh on
-        its next edit.
+        Two sources, in order. First, what the caller says Discord
+        knows: the pull requests the thread announced, most recently
+        announced last, plus the message that started the thread. The
+        latest of those pull requests gives the branch. Second, for a
+        thread that announced none, a search of the agent's pull requests
+        on GitHub for one that names this thread. Returns whether anything
+        was found. A conversation whose turns never touched code has
+        nothing to recover and starts fresh on its next edit.
 
         GitHub knows the code side and nothing else, so a conversation
         recovered here has no session id, and its next turn rebuilds what
@@ -360,9 +363,9 @@ class AgentTaskService:
         if self.has_conversation(key):
             return False
         async with self._recovery_lock:
-            # The lock is held across the GitHub round-trip below, so a
-            # second caller waits here and finds the conversation on this
-            # second look rather than building one of its own.
+            # recover() holds the lock across the GitHub round-trip below,
+            # so a second caller waits here and finds the conversation on
+            # this second look rather than building one of its own.
             if self.has_conversation(key):
                 return False
             if pr_urls:
@@ -370,7 +373,7 @@ class AgentTaskService:
                 branch = await self.workspace.branch_for_pull_request(latest)
             else:
                 found = await self.workspace.find_conversation_on_github(
-                    key, starter_prompt)
+                    starter_prompt)
                 if found is None:
                     return False
                 branch, pr_urls = found
@@ -378,8 +381,7 @@ class AgentTaskService:
                 return False
 
             checkout = ConversationCheckout(
-                self.conversations_root / str(key), branch, self.workspace,
-                key)
+                self.conversations_root / str(key), branch, self.workspace)
             self.conversations[key] = Conversation(checkout=checkout,
                                                    pr_urls=dict(pr_urls))
             self._save_state()
@@ -392,15 +394,14 @@ class AgentTaskService:
                   f'into {self.workspace.root}')
 
     async def _ready(self):
-        """Wait for the startup task, restarting it when what it readied
-        is no longer there.
+        """Wait for the startup task, and restart it if its repos vanished.
 
-        A task that finished cleanly is not proof of anything: a pristine
-        clone can be deleted long after startup, leaving every later turn
-        without a repo to work in until someone restarted the bot, which
-        R4.2 says must not be necessary. Retrying is nearly free when the
-        directories are in place: ensure_repos then does nothing. One task
-        at a time, so two turns cannot clone at once.
+        A task that finished cleanly proves nothing later on. Someone can
+        delete a pristine clone long after startup, and then every turn
+        has no repo to work in until the bot restarts, which R4.2 says
+        must not be necessary. Retrying costs almost nothing when the
+        directories are in place, since ensure_repos then does nothing.
+        One task at a time, so two turns cannot clone at once.
         """
         task = self._ensure_task
         if task is None or task.cancelled() or (task.done() and (
@@ -417,13 +418,12 @@ class AgentTaskService:
         path = self._state_path()
         if not path.exists():
             return
-        # Entries are kept whatever the disk looks like: the checkout is
-        # rebuilt on demand, and an identity is the one thing that cannot
-        # be recreated locally.
+        # Load every entry whatever the disk looks like. A later turn
+        # rebuilds the checkout on demand, and an identity is the one
+        # thing this host cannot recreate on its own.
         for key, entry in json.loads(path.read_text(encoding='utf-8')).items():
             self.conversations[int(key)] = Conversation.from_state(
-                entry, self.conversations_root / key, self.workspace,
-                int(key))
+                entry, self.conversations_root / key, self.workspace)
 
     def _save_state(self):
         self.conversations_root.mkdir(parents=True, exist_ok=True)

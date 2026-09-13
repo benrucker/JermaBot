@@ -1,5 +1,5 @@
-"""Thread recognition and recovery: derived from Discord, never from local
-state.
+"""Thread recognition and recovery, derived from Discord, never from
+local state.
 
 Discord objects are mocked at the boundary only (spec'd so the cog's
 isinstance checks are the real ones); nothing here talks to Discord.
@@ -108,7 +108,7 @@ async def test_a_bot_thread_started_by_an_owner_ping_is_recognized(cog):
     thread = make_thread(cog.bot)
 
     assert await cog._is_agent_thread(thread)
-    # With no conversation on this host at all: recognition came from
+    # This host holds no conversation at all, so recognition came from
     # Discord alone, which is the whole requirement.
     assert not cog.service.has_conversation(THREAD_ID)
     thread.parent.fetch_message.assert_awaited_once_with(THREAD_ID)
@@ -141,7 +141,7 @@ async def test_someone_elses_thread_is_not_ours(cog):
 
 
 async def test_a_thread_the_bot_made_for_something_else_is_not_ours(cog):
-    """The bot's own threads that did not grow from an owner's ping — the
+    """The bot's own threads that did not grow from an owner's ping. The
     starter has to be the request itself."""
     thread = make_thread(cog.bot,
                          starter=make_starter('welcome to the thread'))
@@ -277,8 +277,8 @@ async def test_a_discord_failure_is_reported_not_swallowed(cog, handled):
     assert handled == []
     message.reply.assert_awaited_once()
     assert 'nope' in message.reply.await_args.args[0]
-    # Nothing was learned, so nothing is remembered: the next message in
-    # this thread asks Discord again.
+    # The cog learned nothing, so it remembers nothing. The next message
+    # in this thread asks Discord again.
     assert THREAD_ID not in cog._agent_threads
 
 
@@ -297,8 +297,8 @@ async def test_a_failure_resolving_the_channel_is_reported(cog, handled):
 
 
 async def test_a_new_thread_gets_the_longest_archive(cog, monkeypatch):
-    """R1.4: the bot sets the longest auto-archive Discord allows, and the
-    thread it just made is known to be ours without a fetch."""
+    """R1.4: the bot sets the longest auto-archive Discord allows, and
+    the cog knows the thread it just made is ours without a fetch."""
     channel = make_text_channel()
     message = make_message(channel, f'<@{BOT_ID}> fix the thing')
     thread = MagicMock(spec=discord.Thread)
@@ -408,8 +408,8 @@ async def test_a_threads_own_announcements_recover_its_pull_requests(
 
 async def test_a_thread_without_announcements_is_looked_up_by_its_starter(
         cog, recovered):
-    """Nothing was ever announced, so the request that started the thread
-    is all GitHub can be searched by."""
+    """The thread announced no pull request, so the request that started
+    it is all the service can search GitHub by."""
     thread = make_thread(cog.bot)
     make_history(thread, 'Here is your answer.')
 
@@ -429,8 +429,8 @@ async def test_a_known_conversation_is_not_recovered_again(cog, recovered):
 
 
 async def test_an_unrelated_thread_is_not_recovered(cog, recovered):
-    """A ping in someone else's thread: no conversation of ours to put
-    back, and its history is none of our business."""
+    """A ping in someone else's thread has no conversation of ours to
+    put back, and its history is none of our business."""
     thread = make_thread(cog.bot, owner_id=STRANGER_ID)
     make_history(thread, f'Pull request for **jermabot**: {DEMO_PR}')
 
@@ -441,8 +441,9 @@ async def test_an_unrelated_thread_is_not_recovered(cog, recovered):
 
 async def test_an_unreadable_thread_says_so_instead_of_starting_over(
         cog, monkeypatch, recovered):
-    """Reading the thread is how its branch is found; running anyway would
-    quietly abandon the pull request the conversation already has."""
+    """The thread's history is where the branch comes from. Running
+    anyway would abandon the pull request the conversation already
+    has."""
     thread = make_thread(cog.bot)
     thread.typing = MagicMock(side_effect=_NoTyping)
     thread.send = AsyncMock()
@@ -500,7 +501,7 @@ def make_history_message(content: str, author_id: int = OWNER_ID,
 
 
 async def refuse_fetch(url):
-    """A link that will not come back: somebody else's web server."""
+    """A link that will not come back, on somebody else's web server."""
     raise ValueError('HTTP 404')
 
 
@@ -568,9 +569,9 @@ async def test_an_answer_with_an_announcement_keeps_both_apart():
 
 
 async def test_images_come_back_downloaded_and_lost_ones_are_named():
-    """R2c.2: the agent saw these, so they are fetched again; one Discord
-    has stopped serving is a gap the agent should know about rather than a
-    message that silently changed."""
+    """R2c.2: the agent saw these, so the rebuild downloads them again.
+    One Discord has stopped serving is a gap the agent should know about,
+    not a message that changed behind its back."""
     history = await build(make_history_message(
         'what is wrong with this?',
         attachments=[make_attachment('shot.png', b'PNG'),
@@ -585,9 +586,7 @@ async def test_images_come_back_downloaded_and_lost_ones_are_named():
         'what is wrong with this?',
         f'[image attachment: {MESSAGE_ID}-shot.png]',
     ]
-    # The text file is not an image and no business of the agent's; the
-    # image Discord has stopped serving is a named gap, not a message that
-    # quietly changed.
+    # The text file is not an image, so it gets no line of its own.
     assert len(lines) == 4
     assert lines[3].startswith('[image attachment gone.png: Discord no '
                                'longer has this file (')
@@ -610,10 +609,10 @@ async def test_an_empty_thread_rebuilds_nothing():
 
 async def test_the_starter_leads_and_the_new_message_is_left_out(cog):
     """The message an agent thread grew from lives in the parent channel,
-    and the one being answered belongs at the end of the prompt, not in
-    the history."""
+    and the one this turn answers belongs at the end of the prompt, not
+    in the history."""
     # A starter carries the id of the thread it grew from; the message
-    # being answered is a later one.
+    # this turn answers is a later one.
     starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1,
                                    message_id=THREAD_ID)
     thread = make_thread(cog.bot, starter=starter)
@@ -640,7 +639,7 @@ async def test_the_starter_leads_and_the_new_message_is_left_out(cog):
 
 
 async def test_a_thread_turn_offers_the_service_its_history(cog, monkeypatch):
-    """The service decides whether the history is needed; the cog only
+    """The service decides whether it needs the history; the cog only
     hands over the way to build it (R2c)."""
     thread = make_thread(cog.bot)
     thread.typing = MagicMock(side_effect=_NoTyping)
@@ -664,8 +663,8 @@ async def test_a_thread_turn_offers_the_service_its_history(cog, monkeypatch):
 
 async def test_a_pasted_image_link_is_downloaded_again():
     """A link arrives as an embed rather than an attachment, so there is
-    nothing of ours to read it from; it is fetched from the web the way
-    the live turn fetches it, so the picture is really in the rebuilt
+    nothing of ours to read it from. The rebuild fetches it from the web
+    the way the live turn does, which puts the picture back in the
     history (R2c.2)."""
     async def fetch(url):
         assert url == 'https://example.com/a.png'
@@ -682,8 +681,8 @@ async def test_a_pasted_image_link_is_downloaded_again():
 
 
 async def test_a_pasted_image_link_that_will_not_come_back_says_why():
-    """A message that quietly lost its picture is worse than one that says
-    where it was and what happened to it (R2c.2)."""
+    """A message that lost its picture without a word is worse than one
+    that says where it was and what happened to it (R2c.2)."""
     history = await build(make_history_message(
         'look at this', embeds=[make_embed('https://example.com/a.png')]))
 
@@ -730,9 +729,9 @@ async def test_an_image_link_comes_back_as_a_file():
 
 
 async def test_an_image_bigger_than_one_chunk_comes_back_whole():
-    """A body arrives in pieces, and only the first is buffered when the
-    download starts; an image cut off at that boundary would reach the
-    agent as a broken file."""
+    """A body arrives in pieces, and read() hands back only the piece
+    aiohttp has buffered so far. An image cut off at that boundary would
+    reach the agent as a broken file."""
     body = bytes(range(256)) * 1024  # 256 KiB, several chunks
 
     name, data = await fetch_image_link(
@@ -913,9 +912,9 @@ async def test_a_thread_answered_last_has_nothing_to_catch_up_on(cog):
 
 async def test_every_owner_message_after_the_bots_last_word_is_unanswered(
         cog):
-    """Two messages posted while the bot was down, in the order they were
-    posted (R6.1). The bot's harness lines are the bot talking, so it is
-    what the owner said after them that still needs an answer."""
+    """Two messages posted while the bot was down, in the order the owner
+    posted them (R6.1). The bot's harness lines are the bot talking, so
+    what the owner said after them still needs an answer."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
     first = missed_message('and also fix that', minutes=-10, message_id=11)
@@ -934,9 +933,9 @@ async def test_every_owner_message_after_the_bots_last_word_is_unanswered(
 
 
 async def test_a_thread_the_bot_never_answered_replays_its_starter(cog):
-    """The first turn died with the bot: the thread holds nothing of ours,
-    and the message it grew from — which lives in the parent channel — is
-    the one that went unanswered."""
+    """The first turn died with the bot, so the thread holds nothing of
+    ours. The message it grew from, which lives in the parent channel,
+    went unanswered."""
     starter = starter_for(THREAD_ID)
     parent = make_parent_channel(PARENT_ID, {THREAD_ID: starter})
     thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[])
@@ -960,7 +959,7 @@ async def test_a_message_that_arrived_live_is_left_to_on_message(cog):
 
 
 async def test_a_turn_that_only_posted_a_muted_line_never_answered(cog):
-    """A muted subtext line is harness news, not an answer: a turn that
+    """A muted subtext line is harness news, not an answer. A turn that
     posted one and then died with the bot leaves the request in front of
     it unanswered."""
     parent = make_parent_channel(
@@ -977,10 +976,10 @@ async def test_a_turn_that_only_posted_a_muted_line_never_answered(cog):
 
 
 async def test_a_message_on_message_already_took_is_not_replayed(cog):
-    """The gateway delivers messages for seconds before on_ready fires, so
-    a message posted while the bot boots is answered live; its timestamp
-    is older than the catch-up, and only the recorded id keeps it from
-    being answered a second time."""
+    """The gateway delivers messages for seconds before on_ready fires,
+    so on_message answers one posted while the bot boots. Its timestamp
+    is older than the catch-up, and only the recorded id keeps the
+    catch-up from answering it a second time."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
     thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
@@ -993,7 +992,7 @@ async def test_a_message_on_message_already_took_is_not_replayed(cog):
 
 
 async def test_a_thread_made_during_the_catch_up_is_left_alone(cog):
-    """Its first turn is running right now, in the live path: the starter
+    """Its first turn is running right now, in the live path. The starter
     of a thread younger than the catch-up is nobody's backlog."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID, minutes=1)})
@@ -1003,7 +1002,7 @@ async def test_a_thread_made_during_the_catch_up_is_left_alone(cog):
 
 
 async def test_a_starter_on_message_took_while_booting_is_left_alone(cog):
-    """The same thread a moment earlier: the ping that made it arrived
+    """The same thread a moment earlier. The ping that made it arrived
     before the catch-up started, and the live path has it."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID, minutes=-1)})
@@ -1095,7 +1094,7 @@ async def test_a_thread_that_stops_being_readable_is_skipped(
     await cog._catch_up()
 
     assert handled == [(second, 'and this')]
-    # R6.4: the failure is reported in the thread it happened in.
+    # R6.4: the cog reports the failure in the thread it happened in.
     first.send.assert_awaited_once()
     assert first.send.await_args.args[0].startswith(UNREADABLE_THREAD)
 
@@ -1103,9 +1102,10 @@ async def test_a_thread_that_stops_being_readable_is_skipped(
 async def test_the_live_path_and_the_catch_up_never_share_a_message(
         cog, handled, frozen_now):
     """The message arrived while the bot was booting, so on_message
-    answered it and recorded its id; the catch-up leaves it alone, and
-    keeps the id: its turn may still be running when a later catch-up
-    (a reconnect that lost the session) scans this thread again."""
+    answered it and recorded its id. The catch-up leaves it alone and
+    keeps the id, because that turn may still be running when a later
+    catch-up (a reconnect that lost the session) scans this thread
+    again."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
     thread = make_agent_thread(cog.bot, THREAD_ID, parent, messages=[
@@ -1124,7 +1124,7 @@ async def test_the_live_path_and_the_catch_up_never_share_a_message(
 
 async def test_a_replayed_message_is_not_replayed_by_the_next_catch_up(
         cog, handled, frozen_now):
-    """A replay is a live turn from then on: a second catch-up that
+    """A replay is a live turn from then on. A second catch-up that
     scans the thread before the reply lands leaves it alone."""
     parent = make_parent_channel(
         PARENT_ID, {THREAD_ID: starter_for(THREAD_ID)})
@@ -1152,8 +1152,8 @@ async def test_on_message_records_what_it_takes(cog, handled):
 
 async def test_a_replayed_starter_is_not_its_own_prior_history(cog):
     """A first turn replayed at startup is answering the starter itself,
-    so there is nothing in front of it; a conversation handed its own
-    request as prior history would be told it had lost some."""
+    so there is nothing in front of it. Handing a conversation its own
+    request as prior history would tell it that it had lost some."""
     starter = make_history_message(f'<@{BOT_ID}> fix the thing', minute=1,
                                    message_id=THREAD_ID)
     thread = make_thread(cog.bot, starter=starter)

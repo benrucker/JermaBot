@@ -1,50 +1,51 @@
 """Git and GitHub plumbing for the coding agent.
 
-The agent itself has no Bash or network access; this module owns every git
-operation. Pristine clones live in a persistent workspace directory and are
-cloned automatically on first use; they are never worked in directly. Each
-conversation instead gets its own checkout of every repo — a git worktree
-on a branch dedicated to that conversation — so conversations can run
-concurrently and edits accumulate across turns. Each turn's changes become
-a commit pushed to the conversation's branch, which opens a pull request
-the first time and updates it every time after.
+The agent itself has no Bash or network access, so this module owns every
+git operation. Pristine clones live in a persistent workspace directory,
+and ensure_repos() creates any that are missing. No conversation edits
+those clones directly. Each one gets its own checkout of every repo
+instead, a git worktree on a branch dedicated to that conversation, so
+conversations can run concurrently and edits accumulate across turns.
+Each turn's changes become a commit pushed to the conversation's branch,
+which opens a pull request the first time and updates it every time after.
 
-Checkouts are disposable: naming a conversation's branch is separate from
+Checkouts are disposable. Naming a conversation's branch is separate from
 putting worktrees on disk, and materialize() rebuilds them at any later
 time. Materializing starts from the conversation's branch whenever origin
 still has it, and falls back to the repo's base branch when it does not (a
 brand new conversation, or one starting over because GitHub finished with
 its branch).
 
-prepare_for_turn() runs before every turn and is where git continuity
-lives (R3): a branch GitHub no longer has is restarted from the base, the
-worktrees are rebuilt, whatever origin has on the branch that this host
-does not is taken in (the owner resolving a conflict on GitHub, an "Update
-branch" click, a push from anywhere else), and each repo's base branch is
-merged in so the agent edits current code and the pull request stays
-mergeable. The catching up never fails a turn: a branch that would not
-fetch, merge, or push comes back as a muted note for the thread (R3.7).
-Building the checkout is not so forgiving — a worktree that cannot be put
-on disk raises, since there is then nothing for the agent to edit.
+prepare_for_turn() runs before every turn and holds the git continuity
+rules (R3). It restarts a branch GitHub no longer has from the base,
+rebuilds the worktrees, takes in whatever origin has on the branch that
+this host does not (the owner resolving a conflict on GitHub, an "Update
+branch" click, a push from anywhere else), and merges each repo's base
+branch in so the agent edits current code and the pull request stays
+mergeable. Catching up never fails a turn. A branch that will not fetch,
+merge, or push comes back as a muted note for the thread (R3.7). Building
+the checkout is stricter. A worktree that cannot be put on disk raises,
+since there is then nothing for the agent to edit.
 
 A conversation has one branch name across every repo but a pull request
 per repo, so "the branch is gone" is ambiguous when repos disagree. The
-rule: the conversation only takes a new branch name when no repo has the
-branch any more. When some repos still have it the name stands, and only
-the repos that lost it start over from their base — their next push
-recreates the branch there and opens a new pull request, while the repos
-still carrying work keep theirs.
+conversation only takes a new branch name when no repo has the branch any
+more. When some repos still have it the name stands, and only the repos
+that lost it start over from their base. Their next push recreates the
+branch there and opens a new pull request, while the repos still carrying
+work keep theirs.
 
-Recovering a conversation whose identity record was lost goes the other
-way, through find_conversation_on_github(): the agent's pull requests
-carry a fixed footer and, since this version, the id of the thread they
-came from, so a thread can find its own branch with nothing but GitHub.
+find_conversation_on_github() goes the other way, for a conversation whose
+identity record this host no longer holds. The agent's pull requests carry
+a fixed footer, and its first commit on a branch quotes the request that
+started the thread, so a thread can find its own branch with nothing but
+GitHub.
 
 GitHub access goes through the gh CLI, which reads GITHUB_TOKEN from the
-environment: git authenticates via `gh auth git-credential` plugged in as a
-per-command credential helper, and pull requests are opened with
-`gh pr create`. The token is never written into the workspace (which the
-agent can read). Without a token, git and gh fall back to whatever ambient
+environment. Git authenticates with `gh auth git-credential` plugged in as
+a per-command credential helper, and `gh pr create` opens the pull
+requests. Nothing writes the token into the workspace, which the agent can
+read. Without a token, git and gh fall back to whatever ambient
 credentials the machine has (e.g. Git Credential Manager or a `gh auth
 login` session on a dev box).
 """
@@ -64,7 +65,6 @@ from .agent_config import (
     AGENT_PR_FOOTER,
     AGENT_REQUEST_SOURCE,
     AgentRepo,
-    pr_thread_line,
 )
 
 _CREDENTIAL_HELPER = '!gh auth git-credential'
@@ -109,9 +109,9 @@ async def _run(argv: list[str], cwd: Path,
             env=env,
         )
     except OSError as error:
-        # A directory that went away under us, or a missing executable:
-        # the process never started, so there is no exit code to report.
-        # Named here rather than left to surface as a bare traceback.
+        # A directory that went away under us, or a missing executable.
+        # The process never started, so there is no exit code to report.
+        # Wrapping it here keeps the cause out of a bare traceback.
         raise WorkspaceError(
             f'`{argv[0]}` could not be run in {cwd}: '
             f'{one_line(error)}') from error
@@ -147,13 +147,16 @@ def _worktree_is_live(path: Path) -> bool:
 
 
 def one_line(error: object) -> str:
-    """An error as one short line: notes are Discord subtext, and git
-    likes to answer in paragraphs."""
+    """An error as one short line.
+
+    Notes go out as Discord subtext, and git likes to answer in
+    paragraphs.
+    """
     return ' '.join(str(error).split())[:300]
 
 
 async def _merge_in_progress(repo_dir: Path) -> bool:
-    """Whether a merge is half-finished here (MERGE_HEAD is written)."""
+    """Whether a merge is half-finished here (git left MERGE_HEAD)."""
     try:
         await _run_git(repo_dir, 'rev-parse', '-q', '--verify', 'MERGE_HEAD')
     except WorkspaceError:
@@ -175,12 +178,12 @@ def _timestamp() -> str:
 
 
 def _quotes_prompt(commits: list[dict], prompt: str) -> bool:
-    """Whether a branch's commits say it was started for this prompt.
+    """Whether the branch's first commit quotes this prompt.
 
     Every turn commits the request that caused it (`Requested via
     Discord:`), so the first commit on the branch carries the message that
-    started the thread — the only tie to the thread that pull requests
-    opened before the thread line have.
+    started the thread. For pull requests opened before the thread line,
+    that is the only tie back to the thread.
     """
     if not commits:
         return False
@@ -201,12 +204,12 @@ class AgentWorkspace:
         self.repos = repos
         self.github_token = github_token
         # Serializes clone-mutating operations (fetch, worktree add)
-        # per repo; conversations otherwise run fully in parallel.
+        # per repo; conversations otherwise run in parallel.
         self._repo_locks = {name: asyncio.Lock() for name in repos}
         if github_token:
-            # The empty helper first clears any configured helpers (e.g. a
-            # credential manager) so gh, holding our token, is the only one
-            # consulted.
+            # The empty helper clears any helpers already configured
+            # (e.g. a credential manager) so git asks only gh, which
+            # holds the token.
             self._auth_flags = ['-c', 'credential.helper=',
                                 '-c', f'credential.helper={_CREDENTIAL_HELPER}']
             self._auth_env = {**os.environ,
@@ -220,7 +223,7 @@ class AgentWorkspace:
 
     async def run_authed(self, argv: list[str], cwd: Path,
                          stdin_data: str | None = None) -> str:
-        """Run a command that talks to GitHub, adding a hint on auth trouble."""
+        """Run a command that talks to GitHub, with a hint on auth trouble."""
         try:
             return await _run(argv, cwd=cwd, env=self._auth_env,
                               stdin_data=stdin_data)
@@ -228,7 +231,7 @@ class AgentWorkspace:
             if self.github_token:
                 raise
             raise WorkspaceError(
-                f'{e} (GITHUB_TOKEN is not set — set it, or run '
+                f'{e} (GITHUB_TOKEN is not set. Set it, or run '
                 '`gh auth login` on this machine.)'
             ) from e
 
@@ -249,16 +252,22 @@ class AgentWorkspace:
             await self.run_git_authed(cwd, 'fetch', 'origin', *refspecs)
 
     async def branch_on_origin(self, name: str, branch: str) -> bool:
-        """Whether origin still has this branch — the question behind both
-        resuming a conversation and noticing it was merged away."""
+        """Whether origin still has this branch.
+
+        Both resuming a conversation and noticing that GitHub merged it
+        away come down to this question.
+        """
         heads = await self.run_git_authed(
             self.root / name, 'ls-remote', '--heads', 'origin',
             f'refs/heads/{branch}')
         return bool(heads.strip())
 
     async def pull_request_state(self, url: str) -> dict:
-        """A pull request's state, as gh reports it: mergedAt is set once
-        it is merged, state is OPEN, CLOSED or MERGED."""
+        """A pull request's state, as gh reports it.
+
+        mergedAt holds a time once GitHub merges it; state is OPEN,
+        CLOSED or MERGED.
+        """
         self.root.mkdir(parents=True, exist_ok=True)
         output = await self.run_authed(
             ['gh', 'pr', 'view', url, '--json', 'state,mergedAt'],
@@ -266,8 +275,11 @@ class AgentWorkspace:
         return json.loads(output)
 
     async def branch_for_pull_request(self, url: str) -> str:
-        """The head branch of a pull request: how a conversation recovers
-        its branch from a pull request announced in its thread (R3.3)."""
+        """The head branch of a pull request.
+
+        A conversation recovers its branch this way, from a pull request
+        announced in its thread (R3.3).
+        """
         self.root.mkdir(parents=True, exist_ok=True)
         output = await self.run_authed(
             ['gh', 'pr', 'view', url, '--json', 'headRefName'],
@@ -275,34 +287,36 @@ class AgentWorkspace:
         return json.loads(output).get('headRefName') or ''
 
     async def pull_request_commits(self, url: str) -> list[dict]:
-        """The commits on a pull request's branch, newest last. Asked for
-        one pull request at a time on purpose: `gh pr list` can return
+        """The commits on a pull request's branch, newest last.
+
+        One pull request at a time, on purpose. `gh pr list` can return
         commits too, but GitHub prices that per pull request listed and
-        refuses the query long before the hundred the search asks for."""
+        refuses the query long before the hundred the search asks for.
+        """
         self.root.mkdir(parents=True, exist_ok=True)
         output = await self.run_authed(
             ['gh', 'pr', 'view', url, '--json', 'commits'], cwd=self.root)
         return json.loads(output).get('commits') or []
 
     async def find_conversation_on_github(
-            self, thread_id: int,
-            starter_prompt: str) -> tuple[str, dict[str, str]] | None:
-        """The branch and pull requests of a conversation this host has no
-        record of, found on GitHub alone (R3.3). None if nothing matches.
+            self, starter_prompt: str) -> tuple[str, dict[str, str]] | None:
+        """The branch and pull requests of a conversation, from GitHub.
 
-        Candidates are the agent's own pull requests: their head branch
-        carries the agent's prefix and their body the agent's footer. One
-        belongs to this thread if its body names the thread — every pull
-        request opened from this version on does — or, for older ones, if
-        the request that started the thread is quoted in the first commit
-        the agent made on the branch. That second test needs the branch's
-        commits, which are asked for one candidate at a time: a listing
-        that includes them costs GitHub a commit query per pull request
-        and is rejected outright over about forty-five of them.
+        This is how a host holding no record of a conversation finds it
+        again (R3.3). None if nothing matches.
+
+        Candidates are the agent's own pull requests, the ones whose head
+        branch carries the agent's prefix and whose body carries the
+        agent's footer. One belongs to this thread if the first commit the
+        agent made on the branch quotes the request that started the
+        thread. That test needs the branch's commits, asked for one
+        candidate at a time. A listing that includes them costs GitHub a
+        commit query per pull request, and GitHub rejects the query
+        outright over about forty-five of them.
         """
         self.root.mkdir(parents=True, exist_ok=True)
         matches = await asyncio.gather(*(
-            self._find_pull_request(name, thread_id, starter_prompt)
+            self._find_pull_request(name, starter_prompt)
             for name in self.repos))
         found = [(name, match) for name, match in zip(self.repos, matches)
                  if match is not None]
@@ -314,10 +328,9 @@ class AgentWorkspace:
         newest = max(found, key=lambda item: item[1]['createdAt'])
         return newest[1]['headRefName'], pr_urls
 
-    async def _find_pull_request(self, name: str, thread_id: int,
+    async def _find_pull_request(self, name: str,
                                  starter_prompt: str) -> dict | None:
-        """This thread's most recent pull request in one repo, as gh
-        described it."""
+        """This thread's most recent pull request in one repo, per gh."""
         output = await self.run_authed(
             ['gh', 'pr', 'list',
              '--repo', self.repos[name].slug,
@@ -327,9 +340,8 @@ class AgentWorkspace:
              '--limit', '100'],
             cwd=self.root,
         )
-        thread_line = pr_thread_line(thread_id)
         prompt = starter_prompt.strip()
-        # The search is sorted newest first, so the first match is the
+        # The search asks for newest first, so the first match is the
         # live one even when the branch has restarted (R3.4).
         for pull_request in json.loads(output):
             head = pull_request.get('headRefName') or ''
@@ -338,8 +350,6 @@ class AgentWorkspace:
                 continue
             if AGENT_PR_FOOTER not in body:
                 continue
-            if thread_line in body:
-                return pull_request
             if prompt and _quotes_prompt(
                     await self.pull_request_commits(pull_request['url']),
                     prompt):
@@ -347,8 +357,11 @@ class AgentWorkspace:
         return None
 
     def restart_branch(self, branch: str) -> str:
-        """A fresh branch for a conversation GitHub is done with: the same
-        slug, stamped now, so a thread's branches sort together."""
+        """A fresh branch for a conversation GitHub is done with.
+
+        Same slug, stamped with the current time, so a thread's branches
+        sort together.
+        """
         stem = re.sub(r'-[0-9]{8}-[0-9]{6}$', '', branch)
         return f'{stem}-{_timestamp()}'
 
@@ -368,11 +381,11 @@ class AgentWorkspace:
         return f'https://github.com/{self.repos[name].slug}.git'
 
     async def _clone(self, name: str):
-        """Clone a repo, atomically: no half-cloned dir survives.
+        """Clone a repo atomically, leaving no half-cloned directory.
 
-        Full depth on purpose: conversation branches are fetched into these
-        clones later, and a shallow base has no ancestor in common with
-        them, so nothing could ever be merged. Disk is not a concern.
+        Full depth on purpose. Conversation branches get fetched into
+        these clones later, and a shallow base shares no ancestor with
+        them, so no merge could ever succeed. Disk is not a concern.
         """
         partial = self.root / f'{name}.cloning'
         if partial.exists():
@@ -384,25 +397,27 @@ class AgentWorkspace:
         )
         partial.rename(self.root / name)
 
-    def new_checkout(self, root: Path, prompt: str,
-                     thread_id: int | None = None) -> 'ConversationCheckout':
-        """Name a new conversation's checkout: a branch of its own, under
-        root. Nothing is on disk yet; materialize() puts it there."""
+    def new_checkout(self, root: Path, prompt: str) -> 'ConversationCheckout':
+        """Name a new conversation's checkout, with a branch of its own.
+
+        The checkout lives under root. Nothing is on disk yet;
+        materialize() puts it there.
+        """
         branch = f'{AGENT_BRANCH_PREFIX}/{slugify(prompt)}-{_timestamp()}'
-        return ConversationCheckout(root, branch, self, thread_id)
+        return ConversationCheckout(root, branch, self)
 
     async def materialize(self, checkout: 'ConversationCheckout',
                           on_origin: dict[str, bool] | None = None):
         """(Re)create only the worktrees the checkout is missing.
 
-        Repo by repo: a half-built checkout (one repo failed, or the
-        pristine clone of one repo was re-cloned) must not cost the repos
-        that are fine — worse, rebuilding a healthy worktree would throw
-        away edits the agent has not committed yet.
+        Repo by repo. A half-built checkout (one repo failed, or
+        ensure_repos re-cloned one repo's pristine clone) must not cost
+        the repos that are fine, and rebuilding a healthy worktree would
+        throw away edits the agent has not committed yet.
 
-        on_origin says, per repo, whether origin already has the branch; a
-        caller that has just asked (prepare_for_turn) passes its answer so
-        it is not asked twice.
+        on_origin says, per repo, whether origin already has the branch. A
+        caller that has just asked (prepare_for_turn) passes its answer to
+        save a second ls-remote.
         """
         checkout.root.mkdir(parents=True, exist_ok=True)
         await asyncio.gather(*(
@@ -415,9 +430,9 @@ class AgentWorkspace:
         repo_dir = self.root / name
         async with self._repo_locks[name]:
             if path.exists():
-                # Wreckage: a crash mid-creation, or a directory orphaned
-                # by its pristine clone. The branch on origin is the truth,
-                # so the directory is rebuilt from it.
+                # Wreckage from a crash mid-creation, or a directory
+                # orphaned by its pristine clone. The branch on origin is
+                # the truth, so rebuild the directory from it.
                 await asyncio.to_thread(shutil.rmtree, path)
             await _run_git(repo_dir, 'worktree', 'prune')
             start_point = await self._fetch_start_point(name, repo_dir,
@@ -428,15 +443,16 @@ class AgentWorkspace:
     async def _fetch_start_point(self, name: str, repo_dir: Path,
                                  branch: str,
                                  on_origin: bool | None = None) -> str:
-        """Fetch, and return the ref the worktree should start at: the
-        conversation's own branch when origin still has it, else the base.
+        """Fetch, and return the ref the worktree should start at.
 
-        The pristine clones are single-branch, so the conversation's branch
-        needs an explicit refspec to reach them. on_origin, when the caller
-        already knows it, saves an ls-remote.
+        That is the conversation's own branch when origin still has it,
+        otherwise the repo's base. The pristine clones are single-branch,
+        so the conversation's branch needs an explicit refspec to reach
+        them. on_origin, when the caller already knows it, saves an
+        ls-remote.
         """
         base = self.repos[name].base_branch
-        # The repo's lock is already held by the caller, so this fetch goes
+        # The caller already holds the repo's lock, so this fetch goes
         # straight out rather than through fetch().
         await self.run_git_authed(repo_dir, 'fetch', 'origin', '--prune')
         if on_origin is None:
@@ -451,35 +467,35 @@ class AgentWorkspace:
 
 @dataclass
 class ConversationCheckout:
-    """One conversation's working copies: a worktree per repo, all on the
-    conversation's branch. Edits accumulate here across turns — nothing is
-    reset — and every turn's changes are pushed to the same branch, so a
-    repo keeps the same pull request for as long as that branch lives. A
-    repo whose pull request GitHub has finished with starts a fresh branch,
-    and its next edit opens a new one (R3.4).
+    """One conversation's working copies, one worktree per repo.
 
-    The directories are a cache: this object is meaningful without them
-    (root and branch are all the conversation record keeps) and
+    Every worktree sits on the conversation's branch. Edits accumulate
+    here across turns. Nothing resets them, and every turn pushes its
+    changes to the same branch, so a repo keeps the same pull request for
+    as long as that branch lives. A repo whose pull request GitHub has
+    finished with starts a fresh branch, and its next edit opens a new one
+    (R3.4).
+
+    The directories are only a cache. This object means something without
+    them (root and branch are all the conversation record keeps), and
     prepare_for_turn rebuilds them from origin before a turn runs.
-
-    thread_id is the Discord thread the conversation lives in. It is
-    stamped into the pull requests this checkout opens so that a later
-    host, holding no record of the conversation, can find them again
-    (R3.3); conversations from before that line have None."""
+    """
     root: Path
     branch: str
     workspace: AgentWorkspace
-    thread_id: int | None = None
 
     def is_materialized(self) -> bool:
         """Whether every repo has a usable worktree on disk right now."""
         return not self.stale_repos()
 
     def stale_repos(self) -> list[str]:
-        """Repos whose worktree has to be (re)built: never created, deleted,
-        or orphaned. A worktree's `.git` is a file pointing back into its
-        pristine clone, so a clone that was wiped (and possibly re-cloned)
-        leaves directories here pointing at nothing."""
+        """Repos whose worktree has to be (re)built.
+
+        That covers a worktree never created, one deleted, and one
+        orphaned. A worktree's `.git` is a file pointing back into its
+        pristine clone, so wiping that clone (and maybe re-cloning it)
+        leaves directories here pointing at nothing.
+        """
         return [name for name in self.workspace.repos
                 if not _worktree_is_live(self.root / name)]
 
@@ -492,16 +508,17 @@ class ConversationCheckout:
                                pr_urls: dict[str, str]) -> TurnPreparation:
         """Get the checkout ready for one turn, and say what happened.
 
-        In order: a branch GitHub no longer has is restarted from the
-        base (R3.4), the worktrees are rebuilt if they are missing, and
-        every repo catches up — first with its own branch as origin has
-        it, then with its base branch (R3.5). The caller applies the
-        result — dropping the pull request urls of `finished_repos` so the
-        next edit opens new ones — and posts the notes.
+        In order: restart a branch GitHub no longer has from the base
+        (R3.4), rebuild any missing worktrees, then catch every repo up,
+        first with its own branch as origin has it and then with its base
+        branch (R3.5). The caller applies the result, dropping the pull
+        request urls of `finished_repos` so the next edit opens new ones,
+        and posts the notes.
 
-        The branch-presence answer is taken once and reused: a restart
-        already leaves every repo without the (new) branch on origin, so
-        the map stays true for the name the rest of the turn uses.
+        This asks once whether origin has the branch, then reuses the
+        answer. A restart already leaves every repo without the new branch
+        on origin, so the map stays true for the name the rest of the turn
+        uses.
         """
         on_origin = await self._branch_on_origin()
         notes, finished = await self._restart_finished_branch(on_origin,
@@ -521,17 +538,16 @@ class ConversationCheckout:
     async def _restart_finished_branch(
             self, on_origin: dict[str, bool],
             pr_urls: dict[str, str]) -> tuple[list[str], list[str]]:
-        """Start over from the base where GitHub finished with the branch
-        (R3.4): its pull request was merged or closed and the branch
-        deleted with it.
+        """Start over from the base where GitHub finished with the branch.
 
-        A repo that never had a pull request is not "finished" — its
-        branch was simply never pushed — so it is left alone and starts
-        from the base as it always would. The branch name itself only
-        changes when no repo has it any more; while any repo still carries
-        the conversation's work, the name it knows stands and only the
-        finished repos start over (their next push recreates the branch
-        there and opens a new pull request).
+        Finished means GitHub merged or closed the pull request and
+        deleted the branch with it (R3.4). A repo that never had a pull
+        request is not finished, only never pushed, so this leaves it
+        alone and lets it start from the base as it always would. The
+        branch name itself changes only when no repo has it any more.
+        While any repo still carries the conversation's work, the name it
+        knows stands and only the finished repos start over; their next
+        push recreates the branch there and opens a new pull request.
         """
         finished = [name for name, present in on_origin.items()
                     if not present and pr_urls.get(name)]
@@ -544,9 +560,9 @@ class ConversationCheckout:
         restart = list(self.workspace.repos) if nowhere_left else finished
         if nowhere_left:
             self.branch = self.workspace.restart_branch(self.branch)
-        # Drop the worktrees that must start over: the branch they hold is
-        # either finished or renamed, and a stale one is rebuilt from the
-        # base by ensure_materialized.
+        # Drop the worktrees that must start over. The branch they hold
+        # is either finished or renamed, and ensure_materialized rebuilds
+        # a stale worktree from the base.
         for name in restart:
             path = self.root / name
             if path.exists():
@@ -558,7 +574,7 @@ class ConversationCheckout:
         try:
             state = await self.workspace.pull_request_state(pr_url)
         except (WorkspaceError, ValueError) as error:
-            # Never worth failing a turn over: the branch is gone either
+            # Never worth failing a turn over. The branch is gone either
             # way, so say so and start over.
             return (f'-# _Couldn\'t check the pull request for **{name}** '
                     f'({one_line(error)}); starting a fresh branch._')
@@ -572,10 +588,10 @@ class ConversationCheckout:
                 'fresh branch, and a new pull request with the next edit._')
 
     async def _catch_up(self, on_origin: dict[str, bool]) -> list[str]:
-        """Bring every repo up to date before the agent runs (R3.5),
-        returning a note for each repo that could not be caught up.
+        """Bring every repo up to date before the agent runs (R3.5).
 
-        Never raises: a stale branch is worth a muted line, not a dropped
+        Returns a note for each repo that would not catch up. Never
+        raises. A stale branch is worth a muted line, not a dropped
         message (R3.7).
         """
         notes = await asyncio.gather(*(
@@ -584,9 +600,12 @@ class ConversationCheckout:
         return [note for note in notes if note]
 
     async def _catch_up_repo(self, name: str, on_origin: bool) -> str | None:
-        """Catch one repo up: with the branch as origin has it, then with
-        the base branch, pushing the result when the branch is on origin so
-        the pull request stays mergeable."""
+        """Catch one repo up, then push what the merges produced.
+
+        First with the branch as origin has it, then with the base branch.
+        The push happens only when origin has the branch, and it keeps the
+        pull request mergeable.
+        """
         repo_dir = self.root / name
         base = self.workspace.repos[name].base_branch
         try:
@@ -618,12 +637,13 @@ class ConversationCheckout:
         return None
 
     async def _take_in_origin_branch(self, repo_dir: Path) -> list[str]:
-        """Take in whatever origin has on this branch that this worktree
-        does not: the owner resolving a conflict on GitHub, an "Update
-        branch" click, a push from another host. Without it the next push
-        is rejected and the owner's own fix stays invisible.
+        """Take in what origin has on this branch and this worktree lacks.
 
-        Never a reset: uncommitted edits here are a publish that failed
+        That covers the owner resolving a conflict on GitHub, an "Update
+        branch" click, and a push from another host. Skip it and git
+        rejects the next push, leaving the owner's own fix invisible.
+
+        Never a reset. Uncommitted edits here are a publish that failed
         earlier, and the next one still owes them to the pull request. So
         this fast-forwards when it can and merges when the two diverged,
         with the same conflict handling as the base merge.
@@ -639,9 +659,10 @@ class ConversationCheckout:
         return await self._merge(repo_dir, remote)
 
     async def _merge(self, repo_dir: Path, ref: str) -> list[str]:
-        """Merge ref into the checkout with the agent's identity. Returns
-        the conflicting paths, having left the branch exactly as the merge
-        found it (R3.6); an empty list means it merged.
+        """Merge ref into the checkout with the agent's identity.
+
+        Returns the conflicting paths, having left the branch exactly as
+        the merge found it (R3.6). An empty list means the merge landed.
         """
         try:
             await _run_git(
@@ -655,10 +676,11 @@ class ConversationCheckout:
 
     async def _abort_merge(self, repo_dir: Path,
                            error: WorkspaceError) -> list[str]:
-        """Undo a merge that failed, and name the files it stumbled on. A
-        failure that is not a conflict is re-raised for the caller to
-        report as itself — but only once the merge is unwound, since a
-        half-finished merge would be concluded by the next commit.
+        """Undo a merge that failed, and name the files it stumbled on.
+
+        A failure that is not a conflict goes back to the caller as
+        itself, but only once the merge is unwound, since the next commit
+        would otherwise conclude a half-finished merge.
         """
         conflicts = [line for line in (await _run_git(
             repo_dir, 'diff', '--name-only', '--diff-filter=U')).splitlines()
@@ -671,8 +693,11 @@ class ConversationCheckout:
 
     async def publish_turn(self, prompt: str, title: str, body: str,
                            pr_urls: dict[str, str]) -> list[PullRequestUpdate]:
-        """Commit, push, and open or update a pull request for every repo
-        the agent edited, in parallel."""
+        """Publish every repo the agent edited, in parallel.
+
+        Each one gets a commit, a push, and a pull request opened or
+        updated.
+        """
         return await asyncio.gather(*(
             self._publish_repo(name, prompt, title, body,
                                pr_url=pr_urls.get(name))
@@ -689,8 +714,11 @@ class ConversationCheckout:
 
     async def _publish_repo(self, name: str, prompt: str, title: str,
                             body: str, pr_url: str | None) -> PullRequestUpdate:
-        """Commit and push one repo's edits; open the pull request if the
-        conversation doesn't have one for this repo yet."""
+        """Commit and push one repo's edits.
+
+        Opens the pull request as well when the conversation has none for
+        this repo yet.
+        """
         repo_dir = self.root / name
 
         await _run_git(repo_dir, 'add', '-A')
@@ -715,10 +743,6 @@ class ConversationCheckout:
                                    title: str, body: str) -> str:
         body = body[:60000] or '(The agent did not leave a summary.)'
         body += f'\n\n---\n{AGENT_PR_FOOTER}'
-        if self.thread_id is not None:
-            # The tie back to the conversation, for a host that has lost
-            # its record of it (R3.3).
-            body += f'\n{pr_thread_line(self.thread_id)}'
         # --body-file - takes the body on stdin, dodging argv size limits.
         output = await self.workspace.run_authed(
             ['gh', 'pr', 'create',

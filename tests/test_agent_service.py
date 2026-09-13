@@ -1,9 +1,10 @@
 """State loading, recovery, and what one turn does to a conversation.
 
-An identity outlives its checkout directory, and with recover() it
-outlives the state file too: what Discord and GitHub still know is enough
-to put a conversation back. GitHub is a stub here; the workspace's own
-half is exercised in test_agent_workspace_git and test_agent_github.
+A conversation's identity outlives its checkout directory, and with
+recover() it outlives the state file too. What Discord and GitHub still
+know is enough to put it back. GitHub is a stub here;
+test_agent_workspace_git and test_agent_github cover the workspace's own
+half.
 """
 import asyncio
 import json
@@ -87,7 +88,7 @@ def test_v0_entries_load_unchanged(agent_dirs):
 
 
 def test_unknown_and_missing_fields_are_tolerated(agent_dirs):
-    """Only the branch is required: later versions may add fields, and a
+    """Only the branch is required. Later versions may add fields, and a
     half-written v0 entry should not take the table down with it."""
     _, conversations = agent_dirs
     write_state(conversations, {
@@ -138,7 +139,6 @@ class FakeCheckout:
     def __init__(self, root, notes=(), finished=()):
         self.root = root
         self.branch = BRANCH
-        self.thread_id = None
         self.preparation = TurnPreparation(notes=list(notes),
                                            finished_repos=list(finished))
         self.published: list[dict] = []
@@ -168,9 +168,9 @@ def one_turn(agent_dirs, monkeypatch):
 
 @pytest.fixture
 def starting_up(agent_dirs, monkeypatch):
-    """The same, with the real _ready: these tests are about what it
-    readies. Cloning a repo is faked down to making its directory, so
-    ensure_repos' own bookkeeping is what runs."""
+    """The same, but with the real _ready, since these tests are about
+    what it readies. The fake clone only makes the repo's directory, so
+    what runs is ensure_repos' own bookkeeping."""
     service, conversations = _scripted_agent(agent_dirs, monkeypatch)
     service.cloned = []
 
@@ -183,15 +183,15 @@ def starting_up(agent_dirs, monkeypatch):
 
 
 def _scripted_agent(agent_dirs, monkeypatch):
-    """A service whose agent runs are answered from a script."""
+    """A service whose agent runs come from a script."""
     _, conversations = agent_dirs
     service = AgentTaskService()
     service.agent_calls = []
     service.agent_result = AgentRunResult(final_text='done', timed_out=False,
                                           session_id='sess')
-    # Turn-by-turn script for the tests that need one; an exception in it
-    # is raised instead of returned. Empty means every turn answers with
-    # agent_result.
+    # Turn-by-turn script for the tests that need one. fake_run_agent
+    # raises an entry that is an exception rather than returning it. Empty
+    # means every turn answers with agent_result.
     service.agent_results = []
 
     async def fake_run_agent(**kwargs):
@@ -217,7 +217,7 @@ async def test_a_finished_repo_forgets_its_pull_request(one_turn):
     await service.run(42, 'do it', on_progress=_collect([]))
 
     assert service.conversations[42].pr_urls == {'z': OTHER_PR}
-    # ...and the publish step was never offered the stale url.
+    # ...and the publish step never saw the stale url.
     assert checkout.published == [{'z': OTHER_PR}]
     saved = json.loads((conversations / 'state.json').read_text(
         encoding='utf-8'))
@@ -226,8 +226,9 @@ async def test_a_finished_repo_forgets_its_pull_request(one_turn):
 
 async def test_preparation_notes_are_posted_before_the_agent_runs(one_turn,
                                                                   monkeypatch):
-    """R3.7: they are true the moment they are made, and the turn can
-    still fail on its way to a report the owner would never see."""
+    """R3.7: a note is true the moment prepare_for_turn makes it, and the
+    turn can still fail on its way to a report the owner would never
+    see."""
     service, conversations = one_turn
     note = "-# _Couldn't merge main into this branch: conflicts in a.py._"
     service.conversations[42] = Conversation(
@@ -256,7 +257,7 @@ def _collect(sink):
 
 @pytest.fixture
 def recovering(agent_dirs, monkeypatch):
-    """A service whose GitHub lookups are answered from a script."""
+    """A service whose GitHub lookups come from a script."""
     service = AgentTaskService()
     service.asked = []
 
@@ -264,8 +265,8 @@ def recovering(agent_dirs, monkeypatch):
         service.asked.append(('branch_for', url))
         return service.branch_answer
 
-    async def find_conversation_on_github(thread_id, starter_prompt):
-        service.asked.append(('search', thread_id, starter_prompt))
+    async def find_conversation_on_github(starter_prompt):
+        service.asked.append(('search', starter_prompt))
         return service.search_answer
 
     service.branch_answer = BRANCH
@@ -285,7 +286,6 @@ async def test_announced_pull_requests_give_back_the_branch(recovering):
 
     conversation = recovering.conversations[42]
     assert conversation.checkout.branch == BRANCH
-    assert conversation.checkout.thread_id == 42
     assert conversation.pr_urls == {'x': OTHER_PR, 'z': PR_URL}
     # The most recently announced pull request is the live one.
     assert recovering.asked == [('branch_for', PR_URL)]
@@ -296,7 +296,7 @@ async def test_a_thread_with_no_announcements_is_searched_for(recovering):
 
     assert await recovering.recover(42, STARTER, {})
 
-    assert recovering.asked == [('search', 42, STARTER)]
+    assert recovering.asked == [('search', STARTER)]
     assert recovering.conversations[42].pr_urls == {'x': PR_URL}
     assert recovering.conversations[42].checkout.branch == BRANCH
 
@@ -332,7 +332,7 @@ async def test_a_known_conversation_is_left_alone(recovering, agent_dirs):
 
 async def test_two_messages_at_once_recover_one_conversation(recovering):
     """Recovery awaits GitHub before the conversation exists, so without
-    the lock both callers would build one — and the two turns would then
+    the lock both callers would build one, and the two turns would then
     queue on different locks."""
     async def slow_branch(url):
         recovering.asked.append(('branch_for', url))
@@ -354,8 +354,8 @@ async def test_two_messages_at_once_recover_one_conversation(recovering):
 
 
 async def test_a_pristine_clone_deleted_mid_life_comes_back(starting_up):
-    """The clones were only ever made at startup, so a directory that went
-    away afterwards left every later turn without a repo to work in."""
+    """The service only cloned at startup, so a directory that went away
+    afterwards left every later turn without a repo to work in."""
     service, conversations = starting_up
     service.conversations[42] = Conversation(
         checkout=FakeCheckout(conversations / '42'))
@@ -371,7 +371,7 @@ async def test_a_pristine_clone_deleted_mid_life_comes_back(starting_up):
 
 
 async def test_a_startup_with_nothing_to_redo_is_not_repeated(starting_up):
-    """The retry is only for what went missing: a healthy service clones
+    """The retry is only for what went missing. A healthy service clones
     once, however many turns run."""
     service, conversations = starting_up
     service.conversations[42] = Conversation(
@@ -387,7 +387,7 @@ async def test_a_startup_with_nothing_to_redo_is_not_repeated(starting_up):
 
 
 def write_local_transcript(root, session_id: str):
-    """Stand in for the SDK: the transcript this host keeps for a session."""
+    """Writes the transcript this host keeps for a session, as the SDK does."""
     path = local_transcript_path(root, session_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('{"type": "user"}\n', encoding='utf-8')
@@ -425,13 +425,13 @@ async def test_a_local_transcript_is_resumed(one_turn):
 
     assert service.agent_calls[0]['resume'] == 'sess'
     assert service.agent_calls[0]['prompt'] == 'do it'
-    assert rebuilt == []  # the thread was never read
-    assert posted == []   # nothing was lost, so nothing is said (R4.3)
+    assert rebuilt == []  # the turn never read the thread
+    assert posted == []   # nothing was lost, so the turn says nothing (R4.3)
 
 
 async def test_a_failed_publish_keeps_the_session_id(one_turn):
-    """The id is saved the moment the agent answers: a push that fails
-    afterwards must not cost the next turn its transcript."""
+    """The service saves the id the moment the agent answers. A push that
+    fails afterwards must not cost the next turn its transcript."""
     service, conversations = one_turn
     conversation = new_conversation(service, conversations)
     conversation.checkout.publish_error = WorkspaceError('push refused')
@@ -465,8 +465,8 @@ async def test_no_transcript_anywhere_rebuilds_from_the_thread(one_turn):
     assert call['resume'] is None
     assert call['prompt'] == ('Prior history:\n\n[..] Owner:\nhello\n\n'
                               'New message from the owner:\ndo it')
-    # The commit and pull request still describe what was asked, not the
-    # history bolted in front of it.
+    # The commit and pull request still describe what the owner asked,
+    # not the history bolted in front of it.
     assert call['request'] == 'do it'
     assert [path.name for path in call['image_paths']] == ['now.png',
                                                            'then.png']
@@ -529,9 +529,9 @@ async def test_a_history_that_cannot_be_rebuilt_ends_the_turn(one_turn):
 
 async def test_a_second_message_reuses_the_rebuilt_session(one_turn,
                                                            monkeypatch):
-    """R6.2: it queues on the conversation's lock, and the source decision
-    is made inside it, so it resumes what the rebuild made instead of
-    rebuilding the same thread again."""
+    """R6.2: it queues on the conversation's lock and picks its source
+    inside it, so it resumes what the rebuild made instead of rebuilding
+    the same thread again."""
     service, conversations = one_turn
     conversation = new_conversation(service, conversations, session_id='old')
     rebuilt = []
@@ -554,9 +554,9 @@ async def test_a_second_message_reuses_the_rebuilt_session(one_turn,
     posted = []
 
     async def second_message():
-        # Set from inside the task: run() reaches the conversation's lock
-        # without awaiting anything else, so once this is seen the second
-        # message really is queued behind the first.
+        # Set from inside the task. run() reaches the conversation's lock
+        # without awaiting anything else, so by the time the waiter below
+        # sees this, the second message really is queued behind the first.
         queued.set()
         return await service.run(42, 'second', on_progress=_collect(posted),
                                  reconstruct=_thread_history(calls=rebuilt))

@@ -276,10 +276,9 @@ as written.
   start.** It hangs off `on_ready`, which fires on each IDENTIFY and never
   on a RESUME, so exactly the reconnects that could have missed messages
   get a catch-up.
-- **Pull request bodies carry `Discord thread: <id>`**, so R3.3's GitHub
-  search matches a thread to its pull request exactly for every PR opened
-  from this version on. The first-commit-message match remains, for pull
-  requests opened before it.
+- **Pull request bodies do not name their thread.** R3.3's GitHub search
+  matches a thread to its pull request through the agent's first commit,
+  which quotes the starter prompt.
 - **Pull request state is the harness's business, not the model's**, which
   is why R2.3's git context stops at the branch. The harness holds the
   pull request urls and their open/merged/closed state, acts on them
