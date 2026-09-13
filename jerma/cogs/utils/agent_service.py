@@ -49,6 +49,7 @@ from .agent_runner import (
     local_transcript_path,
     run_agent,
 )
+from .agent_title import generate_title
 from .agent_workspace import (
     AgentWorkspace,
     ConversationCheckout,
@@ -233,8 +234,19 @@ class AgentTaskService:
                 # below must not cost the id the next turn resumes from.
                 self._save_state()
 
+            # Only a turn with edits needs a name, and the name comes
+            # from the owner's own words and the reply, not from a
+            # rebuilt history in front of them.
+            edited = await conversation.checkout.dirty_repos()
+            title = ''
+            if edited:
+                title = await generate_title(
+                    request=prompt, reply=result.final_text,
+                    edited_repos=edited,
+                    workspace_root=conversation.checkout.root,
+                    repos=self.workspace.repos)
             pull_requests = await conversation.checkout.publish_turn(
-                prompt, result.title, result.body, conversation.pr_urls)
+                prompt, title, result.final_text, conversation.pr_urls)
             for update in pull_requests:
                 conversation.pr_urls[update.repo_name] = update.url
             self._save_state()
@@ -253,7 +265,6 @@ class AgentTaskService:
         as what it is, and this turn saves its images beside its own so
         the agent reads them all the same way (R2c.2).
         """
-        request = prompt
         if history is not None:
             prompt = (f'{history.text}\n\n'
                       f'New message from the owner:\n{prompt}')
@@ -266,7 +277,6 @@ class AgentTaskService:
             on_progress=on_progress,
             resume=resume,
             image_paths=image_paths,
-            request=request,
         )
 
     def _can_resume(self, conversation: Conversation) -> bool:

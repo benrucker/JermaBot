@@ -6,6 +6,9 @@ directory. agent_workspace runs git and opens the pull requests, not the
 agent, so nothing the agent reads can steer the path from prompt to pull
 request.
 
+The commit message and pull request title are not the agent's to write;
+agent_title names a turn's edits with a call of its own.
+
 Resuming a session the SDK cannot find is a failure of its own kind, so it
 comes back as SessionResumeError and the caller falls through to another
 source of context (R2.4). Checked against SDK 0.2.110: `--resume <id>` for
@@ -63,6 +66,9 @@ from .agent_workspace import WorkspaceError, one_line
 os.environ.pop('ANTHROPIC_API_KEY', None)
 
 AGENT_TOOLS = ['Read', 'Edit', 'Write', 'Glob', 'Grep']
+# Everything the claude_code preset could otherwise hand the agent. Shared
+# with agent_title, whose call runs in the same workspace.
+BLOCKED_TOOLS = ['Bash', 'Task', 'WebFetch', 'WebSearch']
 # No allowed tool takes notebook_path today. The guard checks it anyway,
 # in case NotebookEdit ever joins AGENT_TOOLS.
 _PATH_KEYS = ('file_path', 'path', 'notebook_path')
@@ -94,28 +100,12 @@ def local_transcript_path(workspace_root: Path, session_id: str) -> Path:
 
 @dataclass
 class AgentRunResult:
+    # The agent's reply. For a turn that edited files it is also the pull
+    # request description; see _build_instructions.
     final_text: str
     timed_out: bool
-    # The reply parsed into a PR/commit title and PR body, for turns that
-    # edited files.
-    title: str = ''
-    body: str = ''
     # Pass back as run_agent(resume=...) to continue this conversation.
     session_id: str | None = None
-
-
-def _split_reply(prompt: str, reply: str) -> tuple[str, str]:
-    """Split a file-editing turn's reply into a title and a PR body.
-
-    _build_instructions asks the agent for that shape. When the reply is
-    missing, as after a timed-out turn, the prompt's first line stands in.
-    """
-    first, _, rest = reply.strip().partition('\n')
-    title = first.strip('#*` ')  # tolerate heading/bold markup
-    if title:
-        return title, rest.strip()
-    lines = (prompt.strip() or reply.strip()).splitlines()
-    return (lines[0] if lines else 'untitled'), reply.strip()
 
 
 def _deny(reason: str) -> HookJSONOutput:
@@ -137,12 +127,12 @@ def _allow() -> HookJSONOutput:
     }
 
 
-def _make_path_guard(root: Path):
+def make_path_guard(root: Path, allowed_tools: list[str]):
     """PreToolUse hook: only the allowed tools, only inside the workspace."""
     async def guard(input_data, tool_use_id, context) -> HookJSONOutput:
         tool_name = input_data.get('tool_name', '')
         tool_input = input_data.get('tool_input') or {}
-        if tool_name not in AGENT_TOOLS:
+        if tool_name not in allowed_tools:
             return _deny(f'The {tool_name} tool is not permitted.')
         for key in _PATH_KEYS:
             raw = tool_input.get(key)
@@ -160,26 +150,29 @@ def _make_path_guard(root: Path):
     return guard
 
 
-def _build_instructions(repos: dict[str, AgentRepo]) -> str:
-    repo_lines = '\n'.join(
+def repo_lines(repos: dict[str, AgentRepo]) -> str:
+    """The workspace's checkouts, one line each, for a prompt."""
+    return '\n'.join(
         f'- {name}/ is github.com/{repo.slug}, base branch '
         f'{repo.base_branch}'
         for name, repo in repos.items()
     )
+
+
+def _build_instructions(repos: dict[str, AgentRepo]) -> str:
     return (
         'You are JermaBot, handling requests your owner sends over '
         f'{AGENT_REQUEST_SOURCE}. Your working directory contains checkouts '
         'of:\n'
-        f'{repo_lines}\n\n'
+        f'{repo_lines(repos)}\n\n'
         '- Touch only the repositories the request concerns; questions get '
         'answers, not edits.\n'
         '- You have no Bash, network, or git. After each reply the harness '
         'commits your edits to this conversation\'s branch and opens or '
         'updates its pull request. Edits persist across requests.\n'
-        '- If you edited files, start your reply with a commit-style '
-        'imperative title line (under 70 characters), which becomes the '
-        'commit message and pull request title. After a blank line, write '
-        'the pull request description. Plain Markdown, no preamble.\n'
+        '- If you edited files, your reply is the pull request '
+        'description: what changed and why, in plain Markdown, no '
+        'preamble. The harness names the commit and pull request itself.\n'
         '- Off-topic requests are expected; just answer them.'
     )
 
@@ -196,7 +189,7 @@ def _build_options(workspace_root: Path,
         # instead of the reason.
         stderr=stderr,
         tools=list(AGENT_TOOLS),
-        disallowed_tools=['Bash', 'Task', 'WebFetch', 'WebSearch'],
+        disallowed_tools=list(BLOCKED_TOOLS),
         permission_mode='acceptEdits',
         # [] = ignore all filesystem settings. Without it, a cloned repo's
         # .claude/settings.json could re-grant the tools removed above.
@@ -208,7 +201,8 @@ def _build_options(workspace_root: Path,
             'append': _build_instructions(repos),
         },
         hooks={
-            'PreToolUse': [HookMatcher(hooks=[_make_path_guard(workspace_root)])],
+            'PreToolUse': [HookMatcher(
+                hooks=[make_path_guard(workspace_root, AGENT_TOOLS)])],
         },
     )
 
@@ -243,8 +237,7 @@ async def run_agent(prompt: str, workspace_root: Path,
                     repos: dict[str, AgentRepo],
                     on_progress: OnProgress,
                     resume: str | None = None,
-                    image_paths: list[Path] = (),
-                    request: str | None = None) -> AgentRunResult:
+                    image_paths: list[Path] = ()) -> AgentRunResult:
     """Run one agent turn; interim narration streams, the answer returns.
 
     Pass a previous result's session_id as resume to continue that
@@ -260,11 +253,6 @@ async def run_agent(prompt: str, workspace_root: Path,
     A queue carries narration to on_progress, so slow delivery (Discord
     rate limits, say) neither backpressures the SDK message stream nor
     counts against the session timeout.
-
-    `request` is the owner's own words, for prompts that carry more than
-    them (a history rebuilt from the thread). A turn that ends without a
-    reply takes its commit title from there rather than from the harness's
-    framing.
     """
     result = AgentRunResult(final_text='', timed_out=False)
     outbox: asyncio.Queue[str | None] = asyncio.Queue()
@@ -342,9 +330,5 @@ async def run_agent(prompt: str, workspace_root: Path,
             f'The agent process failed: {process_failure(error)}') from error
     finally:
         await client.disconnect()
-
-    # `request` can be empty for good reason (an image with no words),
-    # and the prompt it would fall back to can carry a rebuilt history.
-    result.title, result.body = _split_reply(
-        prompt if request is None else request, result.final_text)
     return result
+

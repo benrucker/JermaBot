@@ -7,6 +7,11 @@ from pathlib import Path
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
 
+# The call that names a turn's edits (agent_title).
+AGENT_TITLE_MODEL = 'claude-opus-5'
+AGENT_TITLE_MAX_TURNS = 10
+AGENT_TITLE_TIMEOUT_SECONDS = 180
+
 
 @dataclass(frozen=True)
 class AgentRepo:

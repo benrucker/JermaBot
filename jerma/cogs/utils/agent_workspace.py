@@ -701,9 +701,9 @@ class ConversationCheckout:
         return await asyncio.gather(*(
             self._publish_repo(name, prompt, title, body,
                                pr_url=pr_urls.get(name))
-            for name in await self._dirty_repos()))
+            for name in await self.dirty_repos()))
 
-    async def _dirty_repos(self) -> list[str]:
+    async def dirty_repos(self) -> list[str]:
         """Names of repos with uncommitted changes (the agent's edits)."""
         names = list(self.workspace.repos)
         statuses = await asyncio.gather(

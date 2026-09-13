@@ -134,23 +134,28 @@ def test_new_checkout_names_a_branch_without_touching_disk(agent_dirs):
 
 
 class FakeCheckout:
-    """A checkout that answers the two questions run() asks of it."""
+    """A checkout that answers the questions run() asks of it."""
 
-    def __init__(self, root, notes=(), finished=()):
+    def __init__(self, root, notes=(), finished=(), dirty=()):
         self.root = root
         self.branch = BRANCH
         self.preparation = TurnPreparation(notes=list(notes),
                                            finished_repos=list(finished))
+        # Repos the agent's turn left with uncommitted edits.
+        self.dirty = list(dirty)
         self.published: list[dict] = []
         self.publish_error: Exception | None = None
 
     async def prepare_for_turn(self, pr_urls):
         return self.preparation
 
+    async def dirty_repos(self):
+        return list(self.dirty)
+
     async def publish_turn(self, prompt, title, body, pr_urls):
         if self.publish_error is not None:
             raise self.publish_error
-        self.published.append(dict(pr_urls))
+        self.published.append(dict(pr_urls, title=title, body=body))
         return []
 
 
@@ -203,6 +208,16 @@ def _scripted_agent(agent_dirs, monkeypatch):
         return answer
 
     monkeypatch.setattr('cogs.utils.agent_service.run_agent', fake_run_agent)
+
+    # The naming call, recorded rather than run.
+    service.title_calls = []
+
+    async def fake_generate_title(**kwargs):
+        service.title_calls.append(kwargs)
+        return 'Name the change'
+
+    monkeypatch.setattr('cogs.utils.agent_service.generate_title',
+                        fake_generate_title)
     return service, conversations
 
 
@@ -218,7 +233,7 @@ async def test_a_finished_repo_forgets_its_pull_request(one_turn):
 
     assert service.conversations[42].pr_urls == {'z': OTHER_PR}
     # ...and the publish step never saw the stale url.
-    assert checkout.published == [{'z': OTHER_PR}]
+    assert checkout.published[0]['z'] == OTHER_PR
     saved = json.loads((conversations / 'state.json').read_text(
         encoding='utf-8'))
     assert saved['42']['pr_urls'] == {'z': OTHER_PR}
@@ -465,14 +480,64 @@ async def test_no_transcript_anywhere_rebuilds_from_the_thread(one_turn):
     assert call['resume'] is None
     assert call['prompt'] == ('Prior history:\n\n[..] Owner:\nhello\n\n'
                               'New message from the owner:\ndo it')
-    # The commit and pull request still describe what the owner asked,
-    # not the history bolted in front of it.
-    assert call['request'] == 'do it'
     assert [path.name for path in call['image_paths']] == ['now.png',
                                                            'then.png']
     assert posted == [RELOADING_NOTE]
     # The session the rebuilt turn made is what the next one resumes.
     assert service.conversations[42].session_id == 'sess-2'
+
+
+async def test_a_turn_with_edits_is_named_by_the_naming_call(one_turn):
+    """The commit and pull request title come from generate_title, given
+    the owner's own words rather than the history bolted in front of them,
+    and the whole reply is the pull request description."""
+    service, conversations = one_turn
+    conversation = new_conversation(service, conversations)
+    conversation.checkout.dirty = ['jermabot']
+
+    await service.run(42, 'do it', on_progress=_collect([]),
+                      reconstruct=_thread_history(
+                          text='Prior history:\n\n[..] Owner:\nhello'))
+
+    [call] = service.title_calls
+    assert call['request'] == 'do it'
+    assert call['reply'] == 'done'
+    assert call['edited_repos'] == ['jermabot']
+    assert call['workspace_root'] == conversation.checkout.root
+    [published] = conversation.checkout.published
+    assert published['title'] == 'Name the change'
+    assert published['body'] == 'done'
+
+
+async def test_a_turn_without_edits_is_not_named(one_turn):
+    """An answer with nothing to commit costs no second model call."""
+    service, conversations = one_turn
+    new_conversation(service, conversations)
+
+    await service.run(42, 'what is this?', on_progress=_collect([]))
+
+    assert service.title_calls == []
+
+
+async def test_a_naming_failure_ends_the_turn_with_its_cause(one_turn,
+                                                              monkeypatch):
+    """No stand-in title: the failure reaches the thread, and the session
+    id saved before it stays."""
+    service, conversations = one_turn
+    conversation = new_conversation(service, conversations)
+    conversation.checkout.dirty = ['jermabot']
+
+    async def failing_generate_title(**kwargs):
+        raise WorkspaceError('Naming the change failed: no model')
+
+    monkeypatch.setattr('cogs.utils.agent_service.generate_title',
+                        failing_generate_title)
+
+    with pytest.raises(WorkspaceError, match='no model'):
+        await service.run(42, 'do it', on_progress=_collect([]))
+
+    assert conversation.checkout.published == []
+    assert service.conversations[42].session_id == 'sess'
 
 
 async def test_a_brand_new_conversation_says_nothing(one_turn):
