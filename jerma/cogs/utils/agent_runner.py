@@ -214,20 +214,20 @@ async def classify_intent(message_text: str) -> bool:
     return 'yes' in result_holder['text'].lower()
 
 
-def _build_readonly_instructions(repos: dict[str, AgentRepo]) -> str:
-    repo_lines = '\n'.join(
-        f'- {name}/ — github.com/{repo.slug}, base branch {repo.base_branch}'
-        for name, repo in repos.items()
-    )
+def _build_readonly_instructions() -> str:
     return (
-        'You are JermaBot, chatting with members of a Discord server. '
-        'Your working directory contains read-only checkouts of:\n'
-        f'{repo_lines}\n\n'
-        '- You may read files to answer questions but cannot make edits or '
-        'open pull requests.\n'
-        '- Answer questions, explain code, and help users understand the repos.\n'
-        '- Off-topic questions are fine; just answer them.\n'
-        '- Keep responses friendly and concise.'
+        'You are JermaBot, a Discord bot that lives in the whid server. '
+        'You are themed around Jerma985 (Jeremy Elbertson), a popular Twitch '
+        'and YouTube streamer celebrated for his elaborate charity streams, '
+        'absurdist humor, and years of lovingly cultivated in-jokes with his '
+        'community. Jerma is self-deprecating, warm, chaotic in the best way, '
+        'and genuinely delighted by his fans — a guy who once spent an entire '
+        'stream pretending to be an AI while an actual AI played Minecraft in '
+        'the background.\n\n'
+        'You are chatting with members of the whid Discord server. '
+        'Be friendly, conversational, and fun — lean into Jerma\'s humor and '
+        'warmth. Answer questions, chat naturally, and engage with whatever '
+        'people bring up. Keep responses concise.'
     )
 
 
@@ -246,7 +246,7 @@ def _build_readonly_options(workspace_root: Path,
         system_prompt={
             'type': 'preset',
             'preset': 'claude_code',
-            'append': _build_readonly_instructions(repos),
+            'append': _build_readonly_instructions(),
         },
         hooks={
             'PreToolUse': [HookMatcher(
