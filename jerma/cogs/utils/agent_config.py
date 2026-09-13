@@ -1,4 +1,4 @@
-"""Configuration for the owner-only coding agent feature."""
+"""Configuration for the coding agent and whid chat mode."""
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,6 +6,9 @@ from pathlib import Path
 
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
+
+# The whid Discord server. Non-owner members here get the chat mode.
+WHID_GUILD_ID = 173840048343482368
 
 
 @dataclass(frozen=True)
