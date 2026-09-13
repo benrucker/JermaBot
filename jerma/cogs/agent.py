@@ -1,17 +1,25 @@
-"""Owner-only coding agent. Ping JermaBot, get answers or pull requests.
+"""Coding agent (owner) and whid chat mode (non-owner whid members).
 
-When the owner pings the bot with something that isn't a command, the
-message starts a coding-agent conversation. Replies live in a thread
-created just before the first one, and further owner messages in that
-thread continue the conversation with no ping needed, forever.
-Conversations run concurrently, each keeping one branch and at most one
-pull request per repo, updated turn by turn. This cog handles the Discord
-side only: recognition, threads, message chunking, and reporting.
-AgentTaskService runs the conversations themselves.
+Owner mode: Ping JermaBot, get answers or pull requests. When the owner
+pings the bot with something that isn't a command, the message starts a
+coding-agent conversation. Replies live in a thread created just before
+the first one, and further owner messages in that thread continue the
+conversation with no ping needed, forever. Conversations run concurrently,
+each keeping one branch and at most one pull request per repo, updated
+turn by turn. AgentTaskService runs the conversations themselves.
 
-This cog recognizes agent threads from Discord itself, never from local
-state, so a thread keeps working across restarts, evictions, and a wiped
-host. The bot owns the thread, and the thread's id is the id of its
+Whid chat mode: Non-owner members of the whid server may also ping the
+bot. A fast intent classifier decides whether the ping looks like a
+genuine request for a response before anything else runs — this guards
+against accidental invocations such as misspelled commands. When the
+classifier says yes, a conversational agent (no tools, no git, no PRs)
+answers in a thread the same way the owner's mode does. Sessions are
+in-memory only; there is no catch-up on restart and no mutation side
+effects of any kind.
+
+This cog recognizes owner agent threads from Discord itself, never from
+local state, so a thread keeps working across restarts, evictions, and a
+wiped host. The bot owns the thread, and the thread's id is the id of its
 starter message, which is the owner's original ping. Checking that pair
 identifies an agent thread with nothing but Discord. The service's
 conversation table answers first as a fast path, and this cog caches each
@@ -51,19 +59,30 @@ import functools
 import math
 import re
 import traceback
+from pathlib import Path
 
 import aiohttp
 import discord
 from discord.ext import commands
 
 from jermabot import JermaBot
-from .utils.agent_config import AGENT_TIMEOUT_SECONDS
+from .utils.agent_config import (
+    AGENT_TIMEOUT_SECONDS,
+    WHID_GUILD_ID,
+    get_conversations_root,
+)
+from .utils.agent_runner import SessionResumeError
 from .utils.agent_service import (
     AgentTaskService,
     ReconstructedHistory,
     WorkspaceError,
 )
 from .utils.agent_workspace import one_line
+from .utils.chat_runner import (
+    classify_intent,
+    local_chat_transcript_path,
+    run_chat_agent,
+)
 from .utils.split_message import MESSAGE_LIMIT, split_message
 
 
@@ -359,6 +378,11 @@ class Agent(commands.Cog):
         # again. Only the owner's own turns land here, and they stay for
         # the life of the process (see the end of _catch_up).
         self._live_ids: set[int] = set()
+        # Whid chat mode state. Both caches are in-memory only: chat
+        # sessions do not survive restarts (no durability requirement for
+        # the untrusted mode).
+        self._chat_threads: dict[int, bool] = {}   # thread id -> is_chat_thread
+        self._chat_sessions: dict[int, str] = {}   # thread id -> session_id
 
     async def cog_load(self):
         self.service.start()
@@ -373,40 +397,61 @@ class Agent(commands.Cog):
         if message.author.bot or self.bot.user is None:
             return
 
-        # A conversation in a thread the bot created hears every owner
-        # message. Anywhere else, in channels, DMs, and other people's
-        # threads, it takes a ping to start or continue one.
+        # A conversation in a thread the bot created hears every message
+        # from its participants without a ping. Anywhere else it takes a
+        # ping to start or continue one.
         stripped = self._strip_mention(message.content)
         if stripped is None and not self._maybe_thread(message.channel):
             return
 
+        # Determine the caller: owner (coding agent) or whid member (chat).
+        # Recognition can cost Discord round-trips; errors on the owner's
+        # path are reported back, errors on the chat path are swallowed.
+        is_owner = False
         try:
-            # Everything past here can cost an API call, and the bot
-            # answers nobody but the owner anyway.
-            if not await self.bot.is_owner(message.author):
-                return
+            is_owner = await self.bot.is_owner(message.author)
             channel = await self._resolve_channel(message)
-            if stripped is not None:
-                raw = stripped
-            elif (isinstance(channel, discord.Thread)
-                    and await self._is_agent_thread(channel)):
-                raw = message.content
+
+            if is_owner:
+                if stripped is not None:
+                    raw = stripped
+                elif (isinstance(channel, discord.Thread)
+                        and await self._is_agent_thread(channel)):
+                    raw = message.content
+                else:
+                    return
+            elif self._is_whid_message(message):
+                if stripped is not None:
+                    # Intent classifier guards against accidental invocations
+                    # (e.g. misspelled commands). Only a clear yes proceeds.
+                    if not await self._has_chat_intent(stripped):
+                        return
+                    raw = stripped
+                elif (isinstance(channel, discord.Thread)
+                      and await self._is_chat_thread(channel)):
+                    raw = message.content
+                else:
+                    return
             else:
                 return
+
         except (discord.HTTPException, aiohttp.ClientError,
                 asyncio.TimeoutError) as error:
             # Recognition needs Discord, and Discord can be down, forbid
-            # the fetch, or time out. None of that may swallow the owner's
-            # message. Say what happened and cache nothing, so the next
-            # message tries again.
-            await message.reply(f'{UNREACHABLE_DISCORD}{error}')
+            # the fetch, or time out. The owner's message must not vanish
+            # into a console traceback; non-owner failures are silent.
+            if is_owner:
+                await message.reply(f'{UNREACHABLE_DISCORD}{error}')
             return
 
-        # Recorded before the turn rather than after it. A catch-up
-        # running right now must not replay a message this path has
-        # already taken (R6.4).
-        self._live_ids.add(message.id)
-        await self._run_turn(message, channel, raw)
+        if is_owner:
+            # Recorded before the turn rather than after it. A catch-up
+            # running right now must not replay a message this path has
+            # already taken (R6.4).
+            self._live_ids.add(message.id)
+            await self._run_turn(message, channel, raw)
+        else:
+            await self._run_chat_turn(message, channel, raw)
 
     async def _run_turn(self, message: discord.Message, channel,
                         raw: str) -> bool:
@@ -877,6 +922,113 @@ class Agent(commands.Cog):
                 await target.send(_pr_line(
                     PR_OPENED if pull_request.created else PR_UPDATED,
                     pull_request.repo_name, pull_request.url))
+
+    # ------------------------------------------------------------------ #
+    # Whid chat mode                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _is_whid_message(self, message) -> bool:
+        """Whether the message comes from the whid guild."""
+        guild = getattr(message, 'guild', None)
+        return guild is not None and guild.id == WHID_GUILD_ID
+
+    async def _has_chat_intent(self, text: str) -> bool:
+        """Whether a ping from a non-owner whid member wants a response.
+
+        Runs the intent classifier in a dedicated subdirectory so its SDK
+        session state never mixes with any chat conversation's state.
+        """
+        cwd = get_conversations_root() / 'chats' / '_classify'
+        cwd.mkdir(parents=True, exist_ok=True)
+        return await classify_intent(text, cwd)
+
+    async def _is_chat_thread(self, thread: discord.Thread) -> bool:
+        """Whether this thread holds a whid chat conversation.
+
+        A chat thread is one the bot owns in the whid guild whose starter
+        message is a non-owner member's ping. The answer is cached per
+        thread, since like agent threads it can never change.
+        """
+        assert self.bot.user is not None
+        if thread.owner_id != self.bot.user.id:
+            return False
+        guild = getattr(thread, 'guild', None)
+        if guild is None or guild.id != WHID_GUILD_ID:
+            return False
+        cached = self._chat_threads.get(thread.id)
+        if cached is None:
+            cached = await self._starter_is_chat_request(thread)
+            self._chat_threads[thread.id] = cached
+        return cached
+
+    async def _starter_is_chat_request(self, thread: discord.Thread) -> bool:
+        """Whether the thread's starter is a non-owner whid member's ping."""
+        starter = await self._fetch_starter(thread)
+        if starter is None:
+            return False
+        if self._strip_mention(starter.content) is None:
+            return False
+        return not await self.bot.is_owner(starter.author)
+
+    def _chat_session_dir(self, key: int) -> Path:
+        """Working directory for the SDK when running a chat session."""
+        return get_conversations_root() / 'chats' / str(key)
+
+    async def _run_chat_turn(self, message: discord.Message, source,
+                             raw: str) -> None:
+        """One turn of a whid chat conversation.
+
+        Like _handle_prompt but without git, pull requests, or image
+        handling. Errors are printed to the console and swallowed rather
+        than surfaced as detailed tracebacks to non-owner users.
+        """
+        prompt = raw.strip()
+        if not prompt:
+            return
+
+        contained = isinstance(source, (discord.Thread, discord.DMChannel))
+        if not contained and not self._can_create_thread(source):
+            return
+
+        typing = _TypingIndicator(source)
+        key = source.id if contained else message.id
+        channel = source if contained else None
+
+        async def ensure_channel():
+            nonlocal channel
+            if channel is None:
+                channel = await message.create_thread(
+                    name=prompt[:80],
+                    auto_archive_duration=self.THREAD_ARCHIVE_MINUTES)
+                self._chat_threads[channel.id] = True
+                typing.move_to(channel)
+            return channel
+
+        async def send_in_thread(text: str):
+            await self._send_message(await ensure_channel(), text)
+
+        try:
+            async with typing:
+                session_dir = self._chat_session_dir(key)
+                session_dir.mkdir(parents=True, exist_ok=True)
+                resume = self._chat_sessions.get(key)
+                if resume is not None and not local_chat_transcript_path(
+                        session_dir, resume).exists():
+                    resume = None
+                try:
+                    result = await run_chat_agent(prompt, session_dir,
+                                                  send_in_thread, resume)
+                except SessionResumeError:
+                    result = await run_chat_agent(prompt, session_dir,
+                                                  send_in_thread)
+                if result.session_id is not None:
+                    self._chat_sessions[key] = result.session_id
+        except Exception:
+            traceback.print_exc()
+            return
+
+        if result.final_text.strip():
+            await send_in_thread(result.final_text.strip())
 
     def _can_create_thread(self, channel) -> bool:
         """Whether the bot could make a thread here, should a turn need one."""
