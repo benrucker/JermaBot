@@ -74,6 +74,7 @@ from .utils.agent_config import (
 from .utils.agent_runner import SessionResumeError
 from .utils.agent_service import (
     AgentTaskService,
+    RELOADING_NOTE,
     ReconstructedHistory,
     WorkspaceError,
 )
@@ -318,6 +319,32 @@ async def build_thread_history(messages, bot_id: int, owner_id: int,
     return ReconstructedHistory(text=f'{HISTORY_HEADING}\n\n'
                                      + '\n\n'.join(blocks),
                                 images=images)
+
+
+def build_chat_thread_history(messages, bot_id: int) -> str:
+    """Prior messages in a chat thread, as labelled text for the agent.
+
+    Unlike build_thread_history, chat threads have no harness messages
+    (no PR announcements, no workspace errors) — only user turns and
+    agent answers. Bot messages come back as the agent's own words;
+    everyone else is labelled by display name.
+    """
+    blocks: list[str] = []
+    for message in messages:
+        content = message.content.strip() if message.content else ''
+        if not content:
+            continue
+        if message.author.id == bot_id:
+            blocks.append(f'JermaBot:\n{content}')
+        else:
+            name = getattr(message.author, 'display_name',
+                           getattr(message.author, 'name', 'User'))
+            blocks.append(f'{name}:\n{content}')
+    if not blocks:
+        return ''
+    return ('Prior conversation history (reconstructed from the Discord '
+            'thread; some context may be missing):\n\n'
+            + '\n\n'.join(blocks))
 
 
 def parse_pr_announcements(contents: list[str]) -> dict[str, str]:
@@ -974,13 +1001,32 @@ class Agent(commands.Cog):
         """Working directory for the SDK when running a chat session."""
         return get_conversations_root() / 'chats' / str(key)
 
+    async def _chat_thread_history(self, thread: discord.Thread,
+                                    upto: discord.Message) -> str:
+        """Prior messages in a chat thread, for a turn with no transcript.
+
+        The starter message lives in the parent channel (not the thread),
+        so it is fetched separately and prepended. `upto` is the message
+        being answered and is excluded — it belongs at the end of the
+        prompt as the new request, not in the history.
+        """
+        assert self.bot.user is not None
+        starter = await self._fetch_starter(thread)
+        messages = ([] if starter is None or starter.id == upto.id
+                    else [starter])
+        messages += [m async for m in thread.history(
+            limit=None, oldest_first=True, before=upto)]
+        return build_chat_thread_history(messages, self.bot.user.id)
+
     async def _run_chat_turn(self, message: discord.Message, source,
                              raw: str) -> None:
         """One turn of a whid chat conversation.
 
         Like _handle_prompt but without git, pull requests, or image
-        handling. Errors are printed to the console and swallowed rather
-        than surfaced as detailed tracebacks to non-owner users.
+        handling. When the session transcript is gone the thread itself
+        is read back as prior history, the same way the owner mode does
+        it. Errors are printed to the console and swallowed rather than
+        surfaced as detailed tracebacks to non-owner users.
         """
         prompt = raw.strip()
         if not prompt:
@@ -1012,15 +1058,34 @@ class Agent(commands.Cog):
                 session_dir = self._chat_session_dir(key)
                 session_dir.mkdir(parents=True, exist_ok=True)
                 resume = self._chat_sessions.get(key)
+                had_session = resume is not None
                 if resume is not None and not local_chat_transcript_path(
                         session_dir, resume).exists():
                     resume = None
+
+                # When there is no transcript to resume from, read the
+                # thread back as prior history — same idea as the owner
+                # mode's reconstruct path.
+                history = None
+                if resume is None and isinstance(source, discord.Thread):
+                    try:
+                        if await self._is_chat_thread(source):
+                            history = await self._chat_thread_history(
+                                source, message)
+                    except (discord.HTTPException, aiohttp.ClientError,
+                            asyncio.TimeoutError):
+                        pass  # unreadable thread; agent starts fresh
+                if history or (had_session and resume is None):
+                    await send_in_thread(RELOADING_NOTE)
+
                 try:
                     result = await run_chat_agent(prompt, session_dir,
-                                                  send_in_thread, resume)
+                                                  send_in_thread, resume,
+                                                  history)
                 except SessionResumeError:
                     result = await run_chat_agent(prompt, session_dir,
-                                                  send_in_thread)
+                                                  send_in_thread,
+                                                  history=history)
                 if result.session_id is not None:
                     self._chat_sessions[key] = result.session_id
         except Exception:

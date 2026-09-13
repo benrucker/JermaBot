@@ -141,13 +141,20 @@ async def run_chat_agent(
         prompt: str,
         session_dir: Path,
         on_progress: OnProgress,
-        resume: str | None = None) -> ChatRunResult:
+        resume: str | None = None,
+        history: str | None = None) -> ChatRunResult:
     """One conversational turn. No tools, no workspace mutations.
 
     Pass a previous result's session_id as resume to continue that
     conversation; a resume the SDK cannot load raises SessionResumeError
     so the caller can retry without one.
+
+    `history` is prior thread conversation text, prepended to the prompt
+    when the session transcript is gone and the thread is the only source
+    of context left.
     """
+    if history:
+        prompt = f'{history}\n\nNew message:\n{prompt}'
     result = ChatRunResult(final_text='', timed_out=False)
     outbox: asyncio.Queue[str | None] = asyncio.Queue()
     stderr_lines: list[str] = []
