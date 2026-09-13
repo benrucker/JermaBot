@@ -17,3 +17,16 @@ dependencies = [
 [tool.uv]
 # JermaBot is run as an app from the jerma/ directory, not installed as a package.
 package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+# The bot runs as an app from jerma/, so tests import its modules the same
+# way the bot does (cogs.utils.agent_service, not jerma.cogs...).
+pythonpath = ["jerma"]
+testpaths = ["tests"]
+asyncio_mode = "auto"

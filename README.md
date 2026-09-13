@@ -81,11 +81,22 @@ JermaBot includes a minimal agent harness because it seems fun! These instructio
 ```
 # From `claude setup-token` (skippable on a dev machine already logged in to `claude`)
 CLAUDE_CODE_OAUTH_TOKEN=...
-# A fine-grained personal access token for the target repos, with
-# read/write on Contents and Pull requests:
+# A fine-grained personal access token: read/write on Contents and Pull
+# requests for the target repos.
 # https://github.com/settings/personal-access-tokens/new
 GITHUB_TOKEN=...
 ```
+
+The agent's directories can be moved, but the defaults are usually fine:
+
+```
+# Pristine clones of the target repos
+JERMABOT_AGENT_REPOS_DIR=~/jermabot-agent/repos
+# Per-conversation checkouts and the conversation state file
+JERMABOT_AGENT_CONVERSATIONS_DIR=~/jermabot-agent/conversations
+```
+
+A conversation lives in its Discord thread and survives restarts; the design is in `docs/agent-conversation-durability.md`.
 
 ### Running JermaBot:
 
@@ -102,6 +113,14 @@ uv run main.py [ (-mycroft MYCROFT_PATH | -voice VOICE_PATH | -espeak),
 - `-mycroft`, `-voice`, `-espeak`: You **must** include _one_ of these flags on startup to specify which tts engine Jerma will use. If you do mycroft or voice, you must also include the path to the mimic.exe or voice.exe after the flag.
   - e.g. `-mycroft tts/mimic.exe`
 - `-mv PATH_TO_VOICE` allows you to specify which voice you want to use with mycroft mimic. This flag is optional.
+
+### Running the tests:
+
+pytest lives in the `dev` dependency group, so run it through uv:
+
+```
+uv run --group dev pytest
+```
 
 # Usage
 

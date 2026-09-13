@@ -6,11 +6,6 @@ from pathlib import Path
 
 AGENT_TIMEOUT_SECONDS = 900
 AGENT_MAX_TURNS = 50
-# Conversations idle this long lose their checkouts; branches and pull
-# requests live on GitHub, so only local state goes. A background sweep
-# runs at the given interval to enforce it.
-AGENT_CONVERSATION_IDLE_DAYS = 7
-AGENT_EVICTION_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -18,7 +13,8 @@ class AgentRepo:
     """A repository the coding agent may work in.
 
     Its key in AGENT_REPOS is the repo's directory name inside the
-    workspace; see agent_workspace for how the workspace is managed.
+    workspace. See agent_workspace for how the harness manages that
+    workspace.
     """
     slug: str  # "owner/name" on GitHub
     base_branch: str
@@ -33,10 +29,15 @@ AGENT_REPOS: dict[str, AgentRepo] = {
 AGENT_BRANCH_PREFIX = 'jermabot'
 AGENT_COMMIT_NAME = 'JermaBot'
 # Deliberately non-resolving (RFC 2606 reserved TLD). A bare
-# <username>@users.noreply.github.com address links commits to whoever owns that
-# GitHub username -- github.com/Jermabot is a real, unrelated account.
+# <username>@users.noreply.github.com address links commits to whoever owns
+# that GitHub username, and github.com/Jermabot is a real, unrelated account.
 AGENT_COMMIT_EMAIL = 'jermabot@jermabot.invalid'
 AGENT_REQUEST_SOURCE = 'Discord'
+# The last line of every pull request the agent opens. It marks a pull
+# request as the agent's when the identity record is gone and GitHub is
+# all that is left to search (R3.3).
+AGENT_PR_FOOTER = ("Opened by the JermaBot coding agent at the owner's "
+                   f'request via {AGENT_REQUEST_SOURCE}.')
 
 
 def _env_dir(var: str, default: str) -> Path:
