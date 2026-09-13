@@ -96,22 +96,7 @@ JERMABOT_AGENT_REPOS_DIR=~/jermabot-agent/repos
 JERMABOT_AGENT_CONVERSATIONS_DIR=~/jermabot-agent/conversations
 ```
 
-##### How conversations persist
-
-Ping the bot with a request and it replies in a thread; every later message the owner posts in that thread continues the same conversation, no ping needed, forever. Nothing expires one:
-
-- Agent threads are recognized from Discord itself, not from local state, so a thread keeps working across restarts, deleted checkouts, and a wiped host. Archived threads count — posting in one revives it.
-- While this machine still has the conversation's transcript, a turn resumes it, so the agent remembers its own tool calls and file reads however long the gap.
-- With no transcript left — a wiped host, a deleted one, or a thread from before the harness kept them — the history is rebuilt from the thread's own messages and images instead. That's lossy, and the thread says so. Nothing copies a transcript off this machine, so this is the fallback for every conversation whose transcript is gone.
-- A conversation keeps one branch and at most one pull request per repo for its whole life, and those live on GitHub rather than here. A recovered turn continues them — found again from the thread's pull request announcements, or by searching GitHub for the pull request whose first commit quotes the thread's opening request — and the branch is caught up with its base branch before every turn so the PR stays mergeable. A branch GitHub has merged or deleted starts over, and the thread is told why.
-- Messages posted while the bot was offline aren't lost: once it reconnects, a background job finds agent threads on Discord and runs whatever the owner said that never got an answer.
-
-Muted subtext lines (`-# _..._`) in a thread are the harness talking, never the agent:
-
-- `Reloading thread history. Some context might be lost.` — no transcript was available, so this turn's context came from the thread.
-- `Couldn't merge <base> into this branch: ...`, `Couldn't catch <repo> up with its branch on GitHub: ...`, or `Couldn't catch <repo> up: ...` — the turn ran on a stale branch. Resolve it on GitHub and the next turn picks the fix up.
-- `The pull request for <repo> was merged/was closed/is gone from GitHub; starting a fresh branch ...`, or `Couldn't check the pull request for <repo> (...); starting a fresh branch.` — the branch is gone from GitHub, so the next edit opens a new PR.
-- `Couldn't fetch the image link ...` — an image in the message couldn't be downloaded, so the agent didn't see it.
+A conversation lives in its Discord thread and survives restarts; the design is in `docs/agent-conversation-durability.md`.
 
 ### Running JermaBot:
 
