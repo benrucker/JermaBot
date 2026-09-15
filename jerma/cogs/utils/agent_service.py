@@ -238,15 +238,16 @@ class AgentTaskService:
             # from the owner's own words and the reply, not from a
             # rebuilt history in front of them.
             edited = await conversation.checkout.dirty_repos()
-            title = ''
+            pull_requests: list[PullRequestUpdate] = []
             if edited:
                 title = await generate_title(
                     request=prompt, reply=result.final_text,
                     edited_repos=edited,
                     workspace_root=conversation.checkout.root,
                     repos=self.workspace.repos)
-            pull_requests = await conversation.checkout.publish_turn(
-                prompt, title, result.final_text, conversation.pr_urls)
+                pull_requests = await conversation.checkout.publish_turn(
+                    edited, prompt, title, result.final_text,
+                    conversation.pr_urls)
             for update in pull_requests:
                 conversation.pr_urls[update.repo_name] = update.url
             self._save_state()

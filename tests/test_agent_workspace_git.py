@@ -459,7 +459,7 @@ async def test_the_branch_catches_up_with_origin_before_the_turn(workspace,
     # And the next publish lands, rather than origin telling it to fetch
     # first.
     (repo / 'agent.txt').write_text('turn two\n', encoding='utf-8')
-    await checkout.publish_turn('do a thing', 'Do a thing', 'body',
+    await checkout.publish_turn(['demo'], 'do a thing', 'Do a thing', 'body',
                                 {'demo': PR_URL})
 
     assert remote_tip(tmp_path, origin, BRANCH) == \

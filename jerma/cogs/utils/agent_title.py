@@ -29,12 +29,16 @@ from .agent_config import (
     AGENT_TITLE_TIMEOUT_SECONDS,
     AgentRepo,
 )
-from .agent_runner import BLOCKED_TOOLS, make_path_guard, repo_lines
+from .agent_runner import (
+    BLOCKED_TOOLS,
+    make_path_guard,
+    process_failure,
+    repo_lines,
+)
 from .agent_workspace import WorkspaceError, one_line
 
 # May look at the edits, never touch them.
 TITLE_TOOLS = ['Read', 'Glob', 'Grep']
-_STRUCTURED_OUTPUT_TOOL = 'StructuredOutput'
 
 _INSTRUCTIONS = (
     'You name code changes. You are given what the owner asked a coding '
@@ -86,8 +90,9 @@ def _options(workspace_root: Path, stderr) -> ClaudeAgentOptions:
         # The title arrives as structured output, never as prose to parse.
         output_format=_SCHEMA,
         hooks={
+            # StructuredOutput is the CLI's own tool for output_format.
             'PreToolUse': [HookMatcher(hooks=[make_path_guard(
-                workspace_root, [*TITLE_TOOLS, _STRUCTURED_OUTPUT_TOOL])])],
+                workspace_root, [*TITLE_TOOLS, 'StructuredOutput'])])],
         },
     )
 
@@ -105,24 +110,25 @@ async def generate_title(request: str, reply: str, edited_repos: list[str],
     stderr_lines: list[str] = []
     options = _options(workspace_root, stderr_lines.append)
     prompt = _prompt(request, reply, edited_repos, workspace_root, repos)
-    final: ResultMessage | None = None
 
-    async def consume():
-        nonlocal final
+    async def last_result() -> ResultMessage | None:
+        final = None
         async for message in query(prompt=prompt, options=options):
             if isinstance(message, ResultMessage):
                 final = message
+        return final
 
     try:
-        await asyncio.wait_for(consume(), timeout=AGENT_TITLE_TIMEOUT_SECONDS)
+        final = await asyncio.wait_for(last_result(),
+                                       timeout=AGENT_TITLE_TIMEOUT_SECONDS)
     except asyncio.TimeoutError:
         raise WorkspaceError(
             'Naming the change took longer than '
             f'{AGENT_TITLE_TIMEOUT_SECONDS} seconds.') from None
     except ProcessError as error:
-        detail = one_line('\n'.join(stderr_lines) or str(error))
         raise WorkspaceError(
-            f'Naming the change failed: {detail}') from error
+            'Naming the change failed: '
+            f'{process_failure(error, stderr_lines)}') from error
 
     if final is None:
         raise WorkspaceError('Naming the change ended without a result.')
@@ -130,9 +136,7 @@ async def generate_title(request: str, reply: str, edited_repos: list[str],
         detail = one_line('; '.join(final.errors or []) or final.result
                           or final.subtype)
         raise WorkspaceError(f'Naming the change failed: {detail}')
-    output = final.structured_output
-    title = one_line(str(output.get('title', '')) if isinstance(output, dict)
-                     else '').strip()
+    title = one_line((final.structured_output or {}).get('title', ''))
     if not title:
         raise WorkspaceError(
             f'Naming the change returned no title ({final.subtype}).')

@@ -6,7 +6,17 @@ nothing here ever touches the real workspace or the network.
 """
 import pytest
 
+from claude_agent_sdk import ResultMessage
+
 from cogs.utils import agent_config
+
+
+def result_message(text: str, **fields) -> ResultMessage:
+    """The SDK's end-of-turn message, with only what a test cares about."""
+    return ResultMessage(**{
+        'subtype': 'success', 'duration_ms': 1, 'duration_api_ms': 1,
+        'is_error': False, 'num_turns': 1, 'session_id': 's',
+        'result': text, **fields})
 
 
 @pytest.fixture

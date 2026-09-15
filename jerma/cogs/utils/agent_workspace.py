@@ -691,17 +691,19 @@ class ConversationCheckout:
             raise error
         return conflicts
 
-    async def publish_turn(self, prompt: str, title: str, body: str,
+    async def publish_turn(self, edited: list[str], prompt: str, title: str,
+                           body: str,
                            pr_urls: dict[str, str]) -> list[PullRequestUpdate]:
-        """Publish every repo the agent edited, in parallel.
+        """Publish the repos the agent edited, in parallel.
 
-        Each one gets a commit, a push, and a pull request opened or
-        updated.
+        `edited` is dirty_repos()'s answer; the caller already needed it
+        to name the turn. Each one gets a commit, a push, and a pull
+        request opened or updated.
         """
         return await asyncio.gather(*(
             self._publish_repo(name, prompt, title, body,
                                pr_url=pr_urls.get(name))
-            for name in await self.dirty_repos()))
+            for name in edited))
 
     async def dirty_repos(self) -> list[str]:
         """Names of repos with uncommitted changes (the agent's edits)."""

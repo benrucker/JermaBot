@@ -152,10 +152,11 @@ class FakeCheckout:
     async def dirty_repos(self):
         return list(self.dirty)
 
-    async def publish_turn(self, prompt, title, body, pr_urls):
+    async def publish_turn(self, edited, prompt, title, body, pr_urls):
         if self.publish_error is not None:
             raise self.publish_error
-        self.published.append(dict(pr_urls, title=title, body=body))
+        self.published.append(dict(pr_urls, edited=edited, title=title,
+                                   body=body))
         return []
 
 
@@ -225,7 +226,8 @@ async def test_a_finished_repo_forgets_its_pull_request(one_turn):
     """R3.4: the branch is gone and so is the pull request; the next edit
     opens a new one, and the repos still going keep theirs."""
     service, conversations = one_turn
-    checkout = FakeCheckout(conversations / '42', finished=['x'])
+    checkout = FakeCheckout(conversations / '42', finished=['x'],
+                            dirty=['z'])
     service.conversations[42] = Conversation(
         checkout=checkout, pr_urls={'x': PR_URL, 'z': OTHER_PR})
 
@@ -449,6 +451,7 @@ async def test_a_failed_publish_keeps_the_session_id(one_turn):
     fails afterwards must not cost the next turn its transcript."""
     service, conversations = one_turn
     conversation = new_conversation(service, conversations)
+    conversation.checkout.dirty = ['jermabot']
     conversation.checkout.publish_error = WorkspaceError('push refused')
 
     with pytest.raises(WorkspaceError, match='push refused'):

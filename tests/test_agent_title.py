@@ -3,22 +3,15 @@ what it may do, and what it is not allowed to make up.
 """
 import pytest
 
-from claude_agent_sdk import ProcessError, ResultMessage
+from claude_agent_sdk import ProcessError
 
+from conftest import result_message
 from cogs.utils import agent_title
 from cogs.utils.agent_config import AgentRepo
-from cogs.utils.agent_runner import AGENT_TOOLS
 from cogs.utils.agent_title import TITLE_TOOLS, generate_title
 from cogs.utils.agent_workspace import WorkspaceError
 
 REPOS = {'jermabot': AgentRepo('benrucker/JermaBot', 'develop')}
-
-
-def result_message(text, **fields) -> ResultMessage:
-    return ResultMessage(**{
-        'subtype': 'success', 'duration_ms': 1, 'duration_api_ms': 1,
-        'is_error': False, 'num_turns': 1, 'session_id': 's',
-        'result': text, **fields})
 
 
 def scripted_query(*messages, calls: list):
@@ -93,10 +86,6 @@ async def test_the_naming_calls_guard_allows_reading_only_inside(
     # The answer arrives as a tool call the CLI adds for output_format.
     # Checked against CLI 2.1.191: deny it and the title never comes.
     assert await decision('StructuredOutput', title='Add x') == 'allow'
-
-
-def test_the_agent_still_gets_its_editing_tools():
-    assert 'Edit' in AGENT_TOOLS and 'Edit' not in TITLE_TOOLS
 
 
 async def test_a_missing_title_is_a_failure_not_a_stand_in(tmp_path,

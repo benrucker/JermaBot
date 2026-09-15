@@ -10,12 +10,12 @@ import pytest
 from claude_agent_sdk import (
     AssistantMessage,
     ProcessError,
-    ResultMessage,
     SystemMessage,
     TextBlock,
     ToolUseBlock,
 )
 
+from conftest import result_message
 from cogs.utils import agent_runner
 from cogs.utils.agent_workspace import WorkspaceError
 from cogs.utils.agent_runner import (
@@ -41,13 +41,6 @@ def fold(*messages) -> tuple[AgentRunResult, list[str]]:
 
 def assistant(*blocks) -> AssistantMessage:
     return AssistantMessage(content=list(blocks), model='claude')
-
-
-def result_message(text: str, **fields) -> ResultMessage:
-    return ResultMessage(**{
-        'subtype': 'success', 'duration_ms': 1, 'duration_api_ms': 1,
-        'is_error': False, 'num_turns': 1, 'session_id': 's',
-        'result': text, **fields})
 
 
 def test_a_turn_folds_into_its_session_answer_and_narration():
@@ -157,4 +150,3 @@ async def test_a_resume_that_fails_before_the_process_fails_the_turn(
                         on_progress=None, resume='sess')
 
     assert not isinstance(raised.value, SessionResumeError)
-

@@ -150,6 +150,15 @@ def make_path_guard(root: Path, allowed_tools: list[str]):
     return guard
 
 
+def process_failure(error: Exception, stderr_lines: list[str]) -> str:
+    """What actually went wrong with the CLI process.
+
+    ProcessError's own message is a placeholder. The cause is on stderr,
+    "No conversation found with session ID: ..." included.
+    """
+    return one_line('\n'.join(stderr_lines) or str(error))
+
+
 def repo_lines(repos: dict[str, AgentRepo]) -> str:
     """The workspace's checkouts, one line each, for a prompt."""
     return '\n'.join(
@@ -259,14 +268,6 @@ async def run_agent(prompt: str, workspace_root: Path,
     # The CLI's stderr lines, in the order it wrote them.
     stderr_lines: list[str] = []
 
-    def process_failure(error: Exception) -> str:
-        """What actually went wrong with the CLI process.
-
-        ProcessError's own message is a placeholder. The cause is on
-        stderr, "No conversation found with session ID: ..." included.
-        """
-        return one_line('\n'.join(stderr_lines) or str(error))
-
     async def consume(client: ClaudeSDKClient):
         async for message in client.receive_response():
             handle_message(message, result, outbox)
@@ -289,7 +290,7 @@ async def run_agent(prompt: str, workspace_root: Path,
         # to disconnect in that case.
         await client.connect()
     except ProcessError as error:
-        detail = process_failure(error)
+        detail = process_failure(error, stderr_lines)
         if resume is None:
             # Nothing to fall through to, so the turn ends here. The
             # message quotes the CLI rather than "check stderr".
@@ -327,8 +328,8 @@ async def run_agent(prompt: str, workspace_root: Path,
         # The CLI fell over mid-turn. Same treatment, since whatever this
         # says goes straight to the thread.
         raise WorkspaceError(
-            f'The agent process failed: {process_failure(error)}') from error
+            'The agent process failed: '
+            f'{process_failure(error, stderr_lines)}') from error
     finally:
         await client.disconnect()
     return result
-
