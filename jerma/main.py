@@ -44,6 +44,8 @@ if __name__ == '__main__':
                         help='path to voice to use with Japanese TTS')
     parser.add_argument('-jd', '--japanese_dict',
                         help='path to dictionary to use with Japanese TTS')
+    parser.add_argument('--track', choices=['beta', 'production'], default=None,
+                        help='deployment track: beta (develop branch) or production (release branch)')
     args = parser.parse_args()
 
     secret = os.environ.get('DISCORD_TOKEN')
@@ -88,6 +90,7 @@ if __name__ == '__main__':
 
     bot = JermaBot(
         source_path,
+        track=args.track,
         command_prefix=commands.when_mentioned_or('$', '+'),
         intents=intents
     )
