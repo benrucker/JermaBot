@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import hashlib
 import hmac
@@ -118,18 +119,19 @@ class Deploy(commands.Cog):
             return
 
         print(f'[deploy] Push to {pushed_branch}, pulling...')
-        changed = self._git_pull_and_diff()
-        if changed is None:
+        result = self._git_pull_and_diff()
+        if result is None:
             print('[deploy] Already up to date or pull failed.')
             return
 
-        action = self._classify_changes(changed)
-        print(f'[deploy] action={action} files={changed}')
+        files, diff = result
+        action = self._classify_changes(files, diff)
+        print(f'[deploy] action={action} files={files}')
 
         if action == 'none':
             return
         elif action == 'reload':
-            await self._reload_cogs(self._affected_cog_extensions(changed))
+            await self._reload_cogs(self._affected_cog_extensions(files))
         elif action == 'restart':
             if self.track == 'production':
                 self._schedule_4am_restart()
@@ -176,8 +178,8 @@ class Deploy(commands.Cog):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _git_pull_and_diff() -> list[str] | None:
-        """Pull and return changed file paths, or None on failure / no update."""
+    def _git_pull_and_diff() -> tuple[list[str], str] | None:
+        """Pull; return (changed_file_paths, unified_diff) or None on failure / no update."""
         rev = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True)
         if rev.returncode != 0:
             print(f'[deploy] git rev-parse failed: {rev.stderr}')
@@ -191,20 +193,28 @@ class Deploy(commands.Cog):
         if 'Already up to date' in pull.stdout:
             return None
 
-        diff = subprocess.run(
+        names = subprocess.run(
             ['git', 'diff', '--name-only', old_head, 'HEAD'],
             capture_output=True, text=True,
         )
-        return [f for f in diff.stdout.strip().split('\n') if f]
+        files = [f for f in names.stdout.strip().split('\n') if f]
+
+        full_diff = subprocess.run(
+            ['git', 'diff', '--unified=0', old_head, 'HEAD'],
+            capture_output=True, text=True,
+        )
+        return files, full_diff.stdout
 
     @classmethod
-    def _classify_changes(cls, files: list[str]) -> str:
+    def _classify_changes(cls, files: list[str], diff: str) -> str:
         """Return 'none', 'reload', or 'restart'."""
         code_files = [f for f in files if not cls._is_non_code(f)]
         if not code_files:
             return 'none'
         if all(cls._is_top_level_cog(f) for f in code_files):
-            return 'reload'
+            file_diffs = cls._split_diff_by_file(diff)
+            if all(cls._changes_within_cog_class(f, file_diffs.get(f, '')) for f in code_files):
+                return 'reload'
         return 'restart'
 
     @classmethod
@@ -224,3 +234,86 @@ class Deploy(commands.Cog):
     def _is_top_level_cog(cls, path: str) -> bool:
         m = cls._COGS_FILE_RE.match(path)
         return bool(m) and m.group(1) != '__init__'
+
+    @staticmethod
+    def _split_diff_by_file(diff: str) -> dict[str, str]:
+        """Parse a unified diff into a {git_path: diff_block} mapping."""
+        result: dict[str, str] = {}
+        current_file: str | None = None
+        current_lines: list[str] = []
+        for line in diff.split('\n'):
+            if line.startswith('diff --git '):
+                if current_file is not None:
+                    result[current_file] = '\n'.join(current_lines)
+                # "diff --git a/jerma/cogs/admin.py b/jerma/cogs/admin.py"
+                parts = line.split(' ')
+                b_path = parts[-1]
+                current_file = b_path[2:] if b_path.startswith('b/') else b_path
+                current_lines = [line]
+            elif current_file is not None:
+                current_lines.append(line)
+        if current_file is not None:
+            result[current_file] = '\n'.join(current_lines)
+        return result
+
+    @staticmethod
+    def _parse_diff_hunks(diff_block: str) -> list[tuple[int, int]]:
+        """Return (start, end) line ranges added/modified in the new file version."""
+        ranges = []
+        for line in diff_block.split('\n'):
+            if not line.startswith('@@'):
+                continue
+            m = re.search(r'\+(\d+)(?:,(\d+))?', line)
+            if m:
+                start = int(m.group(1))
+                count = int(m.group(2)) if m.group(2) is not None else 1
+                if count > 0:
+                    ranges.append((start, start + count - 1))
+        return ranges
+
+    @staticmethod
+    def _cog_class_ranges(source: str) -> list[tuple[int, int]]:
+        """Return (start_line, end_line) for each class that inherits from commands.Cog."""
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return []
+        ranges = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for base in node.bases:
+                is_cog = (
+                    (isinstance(base, ast.Attribute) and base.attr == 'Cog') or
+                    (isinstance(base, ast.Name) and base.id == 'Cog')
+                )
+                if is_cog:
+                    ranges.append((node.lineno, node.end_lineno or node.lineno))
+                    break
+        return ranges
+
+    @classmethod
+    def _changes_within_cog_class(cls, git_path: str, diff_block: str) -> bool:
+        """Return True only if every changed line in the file falls inside a Cog subclass."""
+        changed_ranges = cls._parse_diff_hunks(diff_block)
+        if not changed_ranges:
+            return True
+
+        # git_path is repo-root-relative ("jerma/cogs/admin.py");
+        # the bot runs from jerma/, so strip the leading "jerma/" to open the file.
+        cwd_path = git_path.removeprefix('jerma/')
+        try:
+            with open(cwd_path) as f:
+                source = f.read()
+        except OSError:
+            return False
+
+        cog_ranges = cls._cog_class_ranges(source)
+        if not cog_ranges:
+            return False
+
+        return all(
+            any(cog_start <= change_start and change_end <= cog_end
+                for cog_start, cog_end in cog_ranges)
+            for change_start, change_end in changed_ranges
+        )
