@@ -1,4 +1,4 @@
-# JermaBot
+# JermaaBoot
 
 <img src="jerma/resources/images/thumbnail.png" width="200" height="250" align="right" />
 
