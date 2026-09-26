@@ -38,6 +38,7 @@ class Deploy(commands.Cog):
 
     def __init__(self, bot: JermaBot):
         self.bot = bot
+        # TODO: narrow JermaBot.track to str (not str | None) so this assignment is type-safe
         self.track: str = bot.track  # type: ignore[assignment]
         self.branch: str = self._TRACK_BRANCH[self.track]
         self._secret: str = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
@@ -131,7 +132,7 @@ class Deploy(commands.Cog):
         if action == 'none':
             return
         elif action == 'reload':
-            await self._reload_cogs(self._affected_cog_extensions(files))
+            await self._reload_cogs(self._get_affected_cog_extensions(files))
         elif action == 'restart':
             if self.track == 'production':
                 self._schedule_4am_restart()
@@ -169,6 +170,7 @@ class Deploy(commands.Cog):
         print('[deploy] Restarting bot...')
         admin = self.bot.get_cog('Admin')
         if admin:
+            # TODO: type the Admin cog properly so shutdown() is visible without suppression
             await admin.shutdown()  # type: ignore[attr-defined]
         else:
             await self.bot.close()
@@ -213,12 +215,12 @@ class Deploy(commands.Cog):
             return 'none'
         if all(cls._is_top_level_cog(f) for f in code_files):
             file_diffs = cls._split_diff_by_file(diff)
-            if all(cls._changes_within_cog_class(f, file_diffs.get(f, '')) for f in code_files):
+            if all(cls._check_changes_within_cog_class(f, file_diffs.get(f, '')) for f in code_files):
                 return 'reload'
         return 'restart'
 
     @classmethod
-    def _affected_cog_extensions(cls, files: list[str]) -> list[str]:
+    def _get_affected_cog_extensions(cls, files: list[str]) -> list[str]:
         exts = []
         for f in files:
             m = cls._COGS_FILE_RE.match(f)
@@ -272,7 +274,7 @@ class Deploy(commands.Cog):
         return ranges
 
     @staticmethod
-    def _cog_class_ranges(source: str) -> list[tuple[int, int]]:
+    def _find_cog_class_ranges(source: str) -> list[tuple[int, int]]:
         """Return (start_line, end_line) for each class that inherits from commands.Cog."""
         try:
             tree = ast.parse(source)
@@ -293,7 +295,7 @@ class Deploy(commands.Cog):
         return ranges
 
     @classmethod
-    def _changes_within_cog_class(cls, git_path: str, diff_block: str) -> bool:
+    def _check_changes_within_cog_class(cls, git_path: str, diff_block: str) -> bool:
         """Return True only if every changed line in the file falls inside a Cog subclass."""
         changed_ranges = cls._parse_diff_hunks(diff_block)
         if not changed_ranges:
@@ -308,7 +310,7 @@ class Deploy(commands.Cog):
         except OSError:
             return False
 
-        cog_ranges = cls._cog_class_ranges(source)
+        cog_ranges = cls._find_cog_class_ranges(source)
         if not cog_ranges:
             return False
 
