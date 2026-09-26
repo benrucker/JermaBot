@@ -14,22 +14,6 @@ from discord.ext import commands
 from jermabot import JermaBot
 
 
-TRACK_BRANCH = {
-    'beta': 'develop',
-    'production': 'release',
-}
-
-# File extensions that never require a restart or reload.
-_NON_CODE_EXTS = {
-    '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
-    '.wav', '.mp3', '.ogg', '.flac', '.bmp', '.svg',
-}
-
-# Matches a top-level cog file, e.g. "jerma/cogs/admin.py".
-# Files under jerma/cogs/utils/ or __init__ are NOT matched here.
-_COGS_FILE_RE = re.compile(r'^jerma/cogs/([^/]+)\.py$')
-
-
 async def setup(bot: JermaBot):
     if not bot.track:
         return
@@ -37,10 +21,25 @@ async def setup(bot: JermaBot):
 
 
 class Deploy(commands.Cog):
+    _TRACK_BRANCH = {
+        'beta': 'develop',
+        'production': 'release',
+    }
+
+    _NON_CODE_EXTS = {
+        '.md', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
+        '.wav', '.mp3', '.ogg', '.flac', '.bmp', '.svg',
+    }
+
+    # Matches a top-level cog file, e.g. "jerma/cogs/admin.py".
+    # Files under jerma/cogs/utils/ or __init__ are NOT matched.
+    _COGS_FILE_RE = re.compile(r'^jerma/cogs/([^/]+)\.py$')
+
     def __init__(self, bot: JermaBot):
         self.bot = bot
         self.track: str = bot.track  # type: ignore[assignment]
-        self.branch: str = TRACK_BRANCH[self.track]
+        self.branch: str = self._TRACK_BRANCH[self.track]
+        self._secret: str = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
         self._webhook_task: asyncio.Task | None = None
         self._runner: web.AppRunner | None = None
         self._restart_task: asyncio.Task | None = None
@@ -64,14 +63,15 @@ class Deploy(commands.Cog):
             except asyncio.CancelledError:
                 pass
 
+    # ------------------------------------------------------------------
+    # Webhook server
+    # ------------------------------------------------------------------
+
     async def _run_webhook_server(self):
-        secret = os.environ.get('GITHUB_WEBHOOK_SECRET', '')
         port = int(os.environ.get('WEBHOOK_PORT', '9000'))
 
         app = web.Application()
-        app['secret'] = secret
-        app['cog'] = self
-        app.router.add_post('/webhook', _handle_webhook)
+        app.router.add_post('/webhook', self._handle_webhook)
 
         runner = web.AppRunner(app)
         self._runner = runner
@@ -88,24 +88,48 @@ class Deploy(commands.Cog):
             self._runner = None
             raise
 
-    async def handle_push(self, ref: str):
+    async def _handle_webhook(self, request: web.Request) -> web.Response:
+        body = await request.read()
+
+        if self._secret:
+            sig = request.headers.get('X-Hub-Signature-256', '')
+            expected = 'sha256=' + hmac.new(self._secret.encode(), body, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected):
+                return web.Response(status=403, text='Forbidden')
+
+        if request.headers.get('X-GitHub-Event', '') != 'push':
+            return web.Response(status=200, text='ok')
+
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return web.Response(status=400, text='Bad JSON')
+
+        asyncio.create_task(self._handle_push(payload.get('ref', '')))
+        return web.Response(status=200, text='ok')
+
+    # ------------------------------------------------------------------
+    # Push handling
+    # ------------------------------------------------------------------
+
+    async def _handle_push(self, ref: str):
         pushed_branch = ref.removeprefix('refs/heads/')
         if pushed_branch != self.branch:
             return
 
         print(f'[deploy] Push to {pushed_branch}, pulling...')
-        changed = _git_pull_and_diff()
+        changed = self._git_pull_and_diff()
         if changed is None:
             print('[deploy] Already up to date or pull failed.')
             return
 
-        action = _classify_changes(changed)
+        action = self._classify_changes(changed)
         print(f'[deploy] action={action} files={changed}')
 
         if action == 'none':
             return
         elif action == 'reload':
-            await self._reload_cogs(_affected_cog_extensions(changed))
+            await self._reload_cogs(self._affected_cog_extensions(changed))
         elif action == 'restart':
             if self.track == 'production':
                 self._schedule_4am_restart()
@@ -147,83 +171,56 @@ class Deploy(commands.Cog):
         else:
             await self.bot.close()
 
+    # ------------------------------------------------------------------
+    # Diff analysis
+    # ------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Webhook HTTP handler (module-level so aiohttp can route to it)
-# ---------------------------------------------------------------------------
+    @staticmethod
+    def _git_pull_and_diff() -> list[str] | None:
+        """Pull and return changed file paths, or None on failure / no update."""
+        rev = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True)
+        if rev.returncode != 0:
+            print(f'[deploy] git rev-parse failed: {rev.stderr}')
+            return None
+        old_head = rev.stdout.strip()
 
-async def _handle_webhook(request: web.Request) -> web.Response:
-    body = await request.read()
-    secret: str = request.app['secret']
+        pull = subprocess.run(['git', 'pull'], capture_output=True, text=True)
+        if pull.returncode != 0:
+            print(f'[deploy] git pull failed: {pull.stderr}')
+            return None
+        if 'Already up to date' in pull.stdout:
+            return None
 
-    if secret:
-        sig = request.headers.get('X-Hub-Signature-256', '')
-        expected = 'sha256=' + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig, expected):
-            return web.Response(status=403, text='Forbidden')
+        diff = subprocess.run(
+            ['git', 'diff', '--name-only', old_head, 'HEAD'],
+            capture_output=True, text=True,
+        )
+        return [f for f in diff.stdout.strip().split('\n') if f]
 
-    if request.headers.get('X-GitHub-Event', '') != 'push':
-        return web.Response(status=200, text='ok')
+    @classmethod
+    def _classify_changes(cls, files: list[str]) -> str:
+        """Return 'none', 'reload', or 'restart'."""
+        code_files = [f for f in files if not cls._is_non_code(f)]
+        if not code_files:
+            return 'none'
+        if all(cls._is_top_level_cog(f) for f in code_files):
+            return 'reload'
+        return 'restart'
 
-    try:
-        payload = json.loads(body)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return web.Response(status=400, text='Bad JSON')
+    @classmethod
+    def _affected_cog_extensions(cls, files: list[str]) -> list[str]:
+        exts = []
+        for f in files:
+            m = cls._COGS_FILE_RE.match(f)
+            if m and m.group(1) != '__init__':
+                exts.append('cogs.' + m.group(1))
+        return exts
 
-    cog: Deploy = request.app['cog']
-    asyncio.create_task(cog.handle_push(payload.get('ref', '')))
-    return web.Response(status=200, text='ok')
+    @classmethod
+    def _is_non_code(cls, path: str) -> bool:
+        return os.path.splitext(path)[1].lower() in cls._NON_CODE_EXTS
 
-
-# ---------------------------------------------------------------------------
-# Pure diff-analysis helpers (easy to unit-test)
-# ---------------------------------------------------------------------------
-
-def _git_pull_and_diff() -> list[str] | None:
-    """Pull and return the list of changed file paths, or None on failure / no update."""
-    rev = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True)
-    if rev.returncode != 0:
-        print(f'[deploy] git rev-parse failed: {rev.stderr}')
-        return None
-    old_head = rev.stdout.strip()
-
-    pull = subprocess.run(['git', 'pull'], capture_output=True, text=True)
-    if pull.returncode != 0:
-        print(f'[deploy] git pull failed: {pull.stderr}')
-        return None
-    if 'Already up to date' in pull.stdout:
-        return None
-
-    diff = subprocess.run(
-        ['git', 'diff', '--name-only', old_head, 'HEAD'],
-        capture_output=True, text=True,
-    )
-    return [f for f in diff.stdout.strip().split('\n') if f]
-
-
-def _classify_changes(files: list[str]) -> str:
-    """Return 'none', 'reload', or 'restart'."""
-    code_files = [f for f in files if not _is_non_code(f)]
-    if not code_files:
-        return 'none'
-    if all(_is_top_level_cog(f) for f in code_files):
-        return 'reload'
-    return 'restart'
-
-
-def _affected_cog_extensions(files: list[str]) -> list[str]:
-    exts = []
-    for f in files:
-        m = _COGS_FILE_RE.match(f)
-        if m and m.group(1) != '__init__':
-            exts.append('cogs.' + m.group(1))
-    return exts
-
-
-def _is_non_code(path: str) -> bool:
-    return os.path.splitext(path)[1].lower() in _NON_CODE_EXTS
-
-
-def _is_top_level_cog(path: str) -> bool:
-    m = _COGS_FILE_RE.match(path)
-    return bool(m) and m.group(1) != '__init__'
+    @classmethod
+    def _is_top_level_cog(cls, path: str) -> bool:
+        m = cls._COGS_FILE_RE.match(path)
+        return bool(m) and m.group(1) != '__init__'
