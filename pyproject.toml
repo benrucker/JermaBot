@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "discord.py[voice]>=2.7.1",
+    "aiohttp>=3.9",
     "colorama",
     "pydub",
     "regex",

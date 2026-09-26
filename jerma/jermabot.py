@@ -11,7 +11,7 @@ class JermaBot(commands.Bot):
     tts_engine: Any
     jtts_engine: Any
 
-    def __init__(self, path: str, **kwargs):
+    def __init__(self, path: str, track: str | None = None, **kwargs):
         """
         Construct JermaBot.
 
@@ -19,6 +19,7 @@ class JermaBot(commands.Bot):
         its superclass's constructor as well.
         """
         self.path = path
+        self.track = track
         self.guild_infos: dict[int, GuildInfo] = dict()
         super().__init__(**kwargs)
 
@@ -34,6 +35,7 @@ class JermaBot(commands.Bot):
         await self.load_extension('cogs.presence')
         await self.load_extension('cogs.guild_sounds')
         await self.load_extension('cogs.agent')
+        await self.load_extension('cogs.deploy')
         return await super().setup_hook()
 
     async def on_ready(self):
