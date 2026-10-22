@@ -16,6 +16,9 @@ dependencies = [
 ]
 
 [tool.uv]
+# discord.py 2.7.1 caps PyNaCl below 1.6, which is where PYSEC-2026-1448 and
+# PYSEC-2026-3002 are fixed; the voice code only uses SecretBox, unchanged in 1.6.
+override-dependencies = ["pynacl>=1.6.2"]
 # JermaBot is run as an app from the jerma/ directory, not installed as a package.
 package = false
 
